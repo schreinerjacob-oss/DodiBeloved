@@ -51,7 +51,7 @@ export default function MemoriesPage() {
         userId,
         partnerId,
         mediaUrl: preview,
-        caption: caption.trim() || undefined,
+        caption: caption.trim() || null,
         mediaType: 'photo',
         timestamp: new Date(),
       };
