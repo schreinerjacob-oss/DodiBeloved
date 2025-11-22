@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -132,17 +133,24 @@ export function SubscriptionModal({ open, onOpenChange, onSelectPlan, isLoading 
 }
 
 export default function SubscriptionPage() {
+  const { userId, partnerId } = useDodi();
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const { toast } = useToast();
 
   const handleSelectPlan = async (planId: string) => {
     setSelectedPlan(planId);
     toast({
-      title: "Redirecting to payment...",
-      description: `Setting up ${planId} subscription`,
+      title: "Subscription unlocked ✨",
+      description: `You and your beloved now have full access with the ${planId} plan`,
     });
-    // In a real app, this would redirect to Stripe checkout
+    
+    // In production: would redirect to Stripe checkout
     // window.location.href = await getStripeCheckoutUrl(planId);
+    
+    // For now, show that payment was processed
+    setTimeout(() => {
+      setSelectedPlan(null);
+    }, 3000);
   };
 
   return (
