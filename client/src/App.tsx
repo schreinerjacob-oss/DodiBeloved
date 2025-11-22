@@ -17,6 +17,7 @@ import SettingsPage from "@/pages/settings";
 import SubscriptionPage from "@/pages/subscription";
 import { MessageSquare, Camera, CalendarDays, Sparkles, Heart, Clock, Phone, Lock, Settings, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MoreMenu } from "@/components/more-menu";
 
 function NavItem({ href, icon: Icon, label, active }: { href: string; icon: any; label: string; active: boolean }) {
   const [, setLocation] = useLocation();
@@ -44,14 +45,18 @@ function MainApp() {
     return <PairingPage />;
   }
 
-  const navItems = [
+  const mainNavItems = [
     { href: "/chat", icon: MessageSquare, label: "Chat" },
     { href: "/calls", icon: Phone, label: "Calls" },
     { href: "/memories", icon: Camera, label: "Memories" },
+    { href: "/calendar", icon: CalendarDays, label: "Calendar" },
+  ];
+
+  const moreItems = [
     { href: "/ritual", icon: Sparkles, label: "Ritual" },
     { href: "/letters", icon: Heart, label: "Letters" },
     { href: "/future", icon: Clock, label: "Future" },
-    { href: "/prayers", icon: Sparkles, label: "Pray" },
+    { href: "/prayers", icon: Sparkles, label: "Prayers" },
     { href: "/settings", icon: Settings, label: "Settings" },
   ];
 
@@ -74,14 +79,17 @@ function MainApp() {
       </div>
 
       <nav className="border-t bg-card/80 backdrop-blur-sm px-2 py-2 flex-shrink-0" style={{ paddingBottom: 'var(--safe-area-inset-bottom)' }}>
-        <div className="flex items-center justify-around max-w-3xl mx-auto">
-          {navItems.map((item) => (
-            <NavItem
-              key={item.href}
-              {...item}
-              active={location === item.href || (location === "/" && item.href === "/chat")}
-            />
-          ))}
+        <div className="flex items-center justify-between max-w-3xl mx-auto px-2">
+          <div className="flex items-center justify-around flex-1">
+            {mainNavItems.map((item) => (
+              <NavItem
+                key={item.href}
+                {...item}
+                active={location === item.href || (location === "/" && item.href === "/chat")}
+              />
+            ))}
+          </div>
+          <MoreMenu items={moreItems} />
         </div>
         <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
           <Lock className="w-3 h-3" />
