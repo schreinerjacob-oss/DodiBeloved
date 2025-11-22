@@ -1,24 +1,92 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { QRCodeSVG } from 'qrcode.react';
-import { Heart, Lock, Copy, Check, Sparkles } from 'lucide-react';
+import { Heart, Lock, Copy, Check, Sparkles, Camera, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeToggle } from '@/components/theme-toggle';
 import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 
 export default function PairingPage() {
   const { initializePairing, completePairing } = useDodi();
   const { toast } = useToast();
-  const [mode, setMode] = useState<'choose' | 'create' | 'join'>('choose');
+  const [mode, setMode] = useState<'choose' | 'create' | 'join' | 'scan'>('choose');
   const [pairingData, setPairingData] = useState<{ userId: string; passphrase: string } | null>(null);
   const [partnerPassphrase, setPartnerPassphrase] = useState('');
   const [partnerId, setPartnerId] = useState('');
   const [qrCodeData, setQrCodeData] = useState('');
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const [scannerInitialized, setScannerInitialized] = useState(false);
+
+  useEffect(() => {
+    if (mode === 'scan' && !scannerInitialized) {
+      initializeScanner();
+    }
+
+    return () => {
+      if (scannerRef.current && mode !== 'scan') {
+        try {
+          scannerRef.current.clear();
+        } catch (e) {
+          console.log('Scanner cleanup:', e);
+        }
+      }
+    };
+  }, [mode, scannerInitialized]);
+
+  const initializeScanner = async () => {
+    try {
+      const scanner = new Html5QrcodeScanner(
+        'qr-reader',
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1,
+        },
+        false
+      );
+
+      scanner.render(
+        (decodedText) => {
+          if (decodedText.startsWith('dodi:')) {
+            handleScanSuccess(decodedText);
+            scanner.clear();
+            setScannerInitialized(false);
+          }
+        },
+        () => {}
+      );
+
+      scannerRef.current = scanner;
+      setScannerInitialized(true);
+    } catch (err) {
+      toast({
+        title: 'Camera Error',
+        description: 'Could not access camera. Please check permissions.',
+        variant: 'destructive',
+      });
+      setMode('join');
+    }
+  };
+
+  const handleScanSuccess = (data: string) => {
+    const parts = data.replace('dodi:', '').split(':');
+    if (parts.length === 2) {
+      setPartnerId(parts[0]);
+      setPartnerPassphrase(parts[1]);
+      setQrCodeData(data);
+      toast({
+        title: 'QR Code Scanned!',
+        description: 'Pairing details loaded. Ready to connect.',
+      });
+      setMode('join');
+    }
+  };
 
   const handleQrCodePaste = (value: string) => {
     setQrCodeData(value);
@@ -39,9 +107,9 @@ export default function PairingPage() {
       setMode('create');
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to create pairing. Please try again.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to create pairing. Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
@@ -53,8 +121,8 @@ export default function PairingPage() {
       navigator.clipboard.writeText(`${pairingData.userId}:${pairingData.passphrase}`);
       setCopied(true);
       toast({
-        title: "Copied!",
-        description: "Share this with your beloved to complete pairing.",
+        title: 'Copied!',
+        description: 'Share this with your beloved to complete pairing.',
       });
       setTimeout(() => setCopied(false), 2000);
     }
@@ -63,9 +131,9 @@ export default function PairingPage() {
   const handleJoinPairing = async () => {
     if (!partnerId || !partnerPassphrase) {
       toast({
-        title: "Missing information",
-        description: "Please enter both partner ID and passphrase.",
-        variant: "destructive",
+        title: 'Missing information',
+        description: 'Please enter both partner ID and passphrase.',
+        variant: 'destructive',
       });
       return;
     }
@@ -74,14 +142,14 @@ export default function PairingPage() {
     try {
       await completePairing(partnerId, partnerPassphrase);
       toast({
-        title: "Paired! 💕",
-        description: "Welcome to your private sanctuary.",
+        title: 'Paired!',
+        description: 'Welcome to your private sanctuary.',
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to complete pairing. Please check your details.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to complete pairing. Please check your details.',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
@@ -147,7 +215,7 @@ export default function PairingPage() {
               <Heart className="w-8 h-8 mx-auto text-accent animate-gentle-bounce" />
               <h2 className="text-xl font-light">Share With Your Beloved</h2>
               <p className="text-sm text-muted-foreground">
-                Scan this QR code or share the passphrase
+                Have them scan this QR code with their phone camera
               </p>
             </div>
 
@@ -184,8 +252,42 @@ export default function PairingPage() {
             </div>
 
             <p className="text-xs text-center text-muted-foreground leading-relaxed">
-              Once your beloved enters this information, your private space will be ready.
+              Once your beloved scans this or enters the details, your private space will be ready.
             </p>
+          </Card>
+        )}
+
+        {mode === 'scan' && (
+          <Card className="p-8 space-y-6 border-sage/30">
+            <div className="text-center space-y-2">
+              <Camera className="w-8 h-8 mx-auto text-accent animate-pulse-glow" />
+              <h2 className="text-xl font-light">Scan QR Code</h2>
+              <p className="text-sm text-muted-foreground">
+                Point your camera at the QR code
+              </p>
+            </div>
+
+            <div id="qr-reader" className="w-full rounded-lg overflow-hidden bg-muted"></div>
+
+            <Button
+              onClick={() => {
+                if (scannerRef.current) {
+                  try {
+                    scannerRef.current.clear();
+                  } catch (e) {
+                    console.log('Scanner cleanup:', e);
+                  }
+                }
+                setScannerInitialized(false);
+                setMode('join');
+              }}
+              variant="ghost"
+              className="w-full"
+              data-testid="button-cancel-scan"
+            >
+              <X className="w-4 h-4 mr-2" />
+              Cancel
+            </Button>
           </Card>
         )}
 
@@ -195,26 +297,42 @@ export default function PairingPage() {
               <Heart className="w-8 h-8 mx-auto text-accent" />
               <h2 className="text-xl font-light">Join Your Beloved</h2>
               <p className="text-sm text-muted-foreground">
-                Paste the QR code or enter details they shared
+                Scan their QR code or enter details manually
               </p>
             </div>
 
             <div className="space-y-4">
+              <Button
+                onClick={() => setMode('scan')}
+                variant="outline"
+                className="w-full h-12 text-base"
+                data-testid="button-open-camera"
+              >
+                <Camera className="w-5 h-5 mr-2" />
+                Scan QR Code with Camera
+              </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-muted"></div>
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">Or enter manually</span>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label htmlFor="qr-code" className="text-sm font-medium">
-                  Scan QR Code or Paste String
+                  Paste QR Data
                 </label>
                 <Input
                   id="qr-code"
-                  placeholder="dodi:userId:passphrase or scan camera"
+                  placeholder="dodi:userId:passphrase"
                   value={qrCodeData}
                   onChange={(e) => handleQrCodePaste(e.target.value)}
                   className="font-mono"
                   data-testid="input-qr-code"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Auto-fills Partner ID and Passphrase when QR code is detected
-                </p>
               </div>
 
               <div className="space-y-2">
@@ -223,7 +341,7 @@ export default function PairingPage() {
                 </label>
                 <Input
                   id="partner-id"
-                  placeholder="Enter their ID"
+                  placeholder="Their user ID"
                   value={partnerId}
                   onChange={(e) => setPartnerId(e.target.value)}
                   className="font-mono"
