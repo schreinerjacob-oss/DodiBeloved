@@ -1,0 +1,41 @@
+Build an ultra-private couples app called “Dodi” — Hebrew for “my beloved.”  
+A completely enclosed, encrypted space that belongs only to two people forever. Nothing ever leaves your two devices.
+
+Visual style:
+- Name: Dodi (lowercase in the app, title-case on icon)
+- Primary palette: soft sage green (#A7C9B0), warm cream (#F8F1E9), gentle blush (#F4C2C2), subtle gold (#D4AF37) accents
+- Logo options (show me mockups of all four):
+  1. Two vines intertwining into a subtle heart
+  2. Two mirrored flame curves forming a heart/ember
+  3. Two thin gold rings interlocking into an infinity-heart
+  4. Elegant Hebrew דּוֹדִי with tiny vine underline
+- Overall feel: warm, intimate, handwritten love-note meets secret garden. Subtle glows and gentle animations when something new arrives from your beloved.
+
+Features (everything encrypted on-device only):
+1. One-time pairing via QR code or shared passphrase
+2. Real-time chat: text, photos, videos, voice notes, disappearing messages
+3. Private encrypted memory timeline (never touches phone gallery)
+4. Shared calendar with love-day/anniversary counters and soft reminders
+5. Daily ritual: emotion wheel + three gentle questions (“What made you feel most loved today?”, “One thing I’m grateful for in you”, “Tomorrow I need…”)
+6. Private notes & love letters vault
+7. “Thinking of you” one-tap reactions with soft chime (only when both online)
+
+Technical – privacy is sacred:
+- Pure React + TypeScript + Vite PWA first (we’ll wrap in Capacitor later)
+- All data encrypted with Web Crypto API AES-GCM 256 before ever hitting IndexedDB
+- Key derived from shared passphrase + per-device salt (PBKDF2 600k iterations)
+- Sync only when both online: one device becomes temporary secure WebSocket server (auto-detect best host), fallback PeerJS/WebRTC
+- Never write unencrypted media, never use camera roll
+- Full offline support, installable PWA on iOS/Android
+
+Monetization (gentle, honest, built to last a lifetime):
+- 30-day full-featured free trial — no payment method required upfront
+- After trial: warm screen that says “Your private garden is blooming. A small fee keeps Dodi completely yours and ad-free forever.”
+- Three plans only:
+  • Monthly: $2.99 USD
+  • Yearly: $29.99 USD ($2.50/mo – label “Most Popular” with a little heart badge)
+  • Lifetime: $79 USD one-time – label “Forever” with a subtle gold infinity symbol
+- Use Stripe + Apple/Google in-app purchases
+- All plans unlock everything forever — no tiers, no ads, no data collection ever
+
+First show detailed plan + all four logo mockups, then build step-by-step with checkpoints. Deploy as PWA when ready.
