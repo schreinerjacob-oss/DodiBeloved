@@ -51,8 +51,8 @@ function MainApp() {
   ];
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      <div className="flex-1 overflow-hidden">
+    <div className="h-full w-full flex flex-col bg-background" style={{ height: '100vh', width: '100vw' }}>
+      <div className="flex-1 overflow-hidden overflow-y-auto">
         <Switch>
           <Route path="/chat" component={ChatPage} />
           <Route path="/memories" component={MemoriesPage} />

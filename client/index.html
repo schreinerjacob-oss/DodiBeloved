@@ -2,9 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="description" content="dodi - An ultra-private encrypted space for two hearts to connect, share, and grow together" />
     <meta name="theme-color" content="#A7C9B0" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="dodi" />
     <link rel="icon" type="image/png" href="/dodi-icon.png" />
     <link rel="apple-touch-icon" href="/dodi-icon.png" />
     <link rel="manifest" href="/manifest.json" />
@@ -12,6 +15,23 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Architects+Daughter&display=swap" rel="stylesheet">
+    <style>
+      * {
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+      html, body, #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      body {
+        touch-action: manipulation;
+        overscroll-behavior: none;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
