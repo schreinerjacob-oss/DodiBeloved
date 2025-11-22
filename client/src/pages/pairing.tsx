@@ -7,7 +7,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Heart, Lock, Copy, Check, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeToggle } from '@/components/theme-toggle';
-import intertwiningVinesLogo from '@assets/generated_images/intertwining_vines_heart_logo.png';
+import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
 
 export default function PairingPage() {
   const { initializePairing, completePairing } = useDodi();
@@ -85,8 +85,8 @@ export default function PairingPage() {
       </div>
       <div className="w-full max-w-md space-y-8 animate-fade-in">
         <div className="text-center space-y-3">
-          <div className="inline-block p-4 rounded-full bg-sage/20 mb-2">
-            <img src={intertwiningVinesLogo} alt="dodi" className="w-16 h-16" />
+          <div className="inline-block mb-2">
+            <img src={dodiTypographyLogo} alt="dodi" className="h-20" />
           </div>
           <h1 className="text-4xl font-light tracking-wide text-foreground">dodi</h1>
           <p className="text-muted-foreground font-light">my beloved</p>
