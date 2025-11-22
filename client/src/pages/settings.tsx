@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle } from 'lucide-react';
+import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -19,9 +20,35 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function SettingsPage() {
-  const { userId, logout, isOnline, isTrialActive, trialDaysRemaining } = useDodi();
+  const { userId, passphrase, logout, isOnline, isTrialActive, trialDaysRemaining } = useDodi();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [copiedUserId, setCopiedUserId] = useState(false);
+  const [copiedPassphrase, setCopiedPassphrase] = useState(false);
+
+  const handleCopyUserId = () => {
+    if (userId) {
+      navigator.clipboard.writeText(userId);
+      setCopiedUserId(true);
+      toast({
+        title: "Copied!",
+        description: "Your ID has been copied to clipboard.",
+      });
+      setTimeout(() => setCopiedUserId(false), 2000);
+    }
+  };
+
+  const handleCopyPassphrase = () => {
+    if (passphrase) {
+      navigator.clipboard.writeText(passphrase);
+      setCopiedPassphrase(true);
+      toast({
+        title: "Copied!",
+        description: "Your passphrase has been copied to clipboard.",
+      });
+      setTimeout(() => setCopiedPassphrase(false), 2000);
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -114,19 +141,58 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <Heart className="w-5 h-5 text-accent" />
               <div>
-                <h3 className="font-medium">About dodi</h3>
+                <h3 className="font-medium">Reconnection Details</h3>
                 <p className="text-xs text-muted-foreground mt-1">
-                  A completely private, encrypted space for two hearts
+                  Share these with your partner if they need to reconnect
                 </p>
               </div>
             </div>
-            {userId && (
-              <div className="pt-3 border-t">
-                <p className="text-xs text-muted-foreground">
-                  Your ID: <span className="font-mono">{userId}</span>
-                </p>
-              </div>
-            )}
+            <div className="pt-3 space-y-3 border-t">
+              {userId && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">YOUR ID</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono flex-1 break-all bg-muted/50 p-2 rounded text-foreground">
+                      {userId}
+                    </p>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handleCopyUserId}
+                      data-testid="button-copy-user-id"
+                    >
+                      {copiedUserId ? (
+                        <Check className="w-4 h-4 text-accent" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {passphrase && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">SHARED PASSPHRASE</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono flex-1 break-all bg-muted/50 p-2 rounded text-foreground">
+                      {passphrase}
+                    </p>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handleCopyPassphrase}
+                      data-testid="button-copy-passphrase"
+                    >
+                      {copiedPassphrase ? (
+                        <Check className="w-4 h-4 text-accent" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </Card>
 
           <AlertDialog>
