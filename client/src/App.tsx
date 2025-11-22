@@ -12,9 +12,10 @@ import DailyRitualPage from "@/pages/daily-ritual";
 import LoveLettersPage from "@/pages/love-letters";
 import FutureLettersPage from "@/pages/future-letters";
 import PrayersPage from "@/pages/prayers";
+import CallsPage from "@/pages/calls";
 import SettingsPage from "@/pages/settings";
 import SubscriptionPage from "@/pages/subscription";
-import { MessageSquare, Camera, CalendarDays, Sparkles, Heart, Clock, Lock, Settings, Zap } from "lucide-react";
+import { MessageSquare, Camera, CalendarDays, Sparkles, Heart, Clock, Phone, Lock, Settings, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function NavItem({ href, icon: Icon, label, active }: { href: string; icon: any; label: string; active: boolean }) {
@@ -45,6 +46,7 @@ function MainApp() {
 
   const navItems = [
     { href: "/chat", icon: MessageSquare, label: "Chat" },
+    { href: "/calls", icon: Phone, label: "Calls" },
     { href: "/memories", icon: Camera, label: "Memories" },
     { href: "/ritual", icon: Sparkles, label: "Ritual" },
     { href: "/letters", icon: Heart, label: "Letters" },
@@ -58,6 +60,7 @@ function MainApp() {
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <Switch>
           <Route path="/chat" component={ChatPage} />
+          <Route path="/calls" component={CallsPage} />
           <Route path="/memories" component={MemoriesPage} />
           <Route path="/calendar" component={CalendarPage} />
           <Route path="/ritual" component={DailyRitualPage} />
