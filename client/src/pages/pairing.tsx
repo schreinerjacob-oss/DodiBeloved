@@ -22,6 +22,45 @@ export default function PairingPage() {
   const [loading, setLoading] = useState(false);
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const [scannerInitialized, setScannerInitialized] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  // Listen for partner joining when in create mode
+  useEffect(() => {
+    if (mode === 'create' && pairingData) {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          type: 'register',
+          data: { userId: pairingData.userId },
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'partner-joined') {
+            const joinedUserId = message.data.joinedUserId;
+            toast({
+              title: 'Partner Connected!',
+              description: 'Your beloved has joined. Welcome to your sanctuary.',
+            });
+            // Complete the pairing on this end
+            completePairing(joinedUserId, pairingData.passphrase);
+          }
+        } catch (e) {
+          console.log('WebSocket message error:', e);
+        }
+      };
+
+      return () => {
+        if (ws) ws.close();
+      };
+    }
+  }, [mode, pairingData, completePairing, toast]);
 
   useEffect(() => {
     if (mode === 'scan' && !scannerInitialized) {
