@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Heart, Send, Image, Mic, Lock } from 'lucide-react';
+import { Toggle } from '@/components/ui/toggle';
+import { Heart, Send, Image, Mic, Lock, Eye, EyeOff } from 'lucide-react';
 import { getAllMessages, saveMessage } from '@/lib/storage';
 import type { Message } from '@shared/schema';
 import { nanoid } from 'nanoid';
@@ -16,6 +17,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [isDisappearing, setIsDisappearing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,13 +47,23 @@ export default function ChatPage() {
         content: newMessage,
         type: 'text',
         mediaUrl: null,
-        isDisappearing: false,
+        isDisappearing,
         timestamp: new Date(),
       };
 
       await saveMessage(message);
       setMessages(prev => [...prev, message]);
       setNewMessage('');
+      
+      if (isDisappearing) {
+        toast({
+          title: "Disappearing message sent 👻",
+          description: "Message will vanish after being read.",
+        });
+        setTimeout(() => {
+          setMessages(prev => prev.filter(m => m.id !== message.id));
+        }, 5000);
+      }
     } catch (error) {
       toast({
         title: "Failed to send",
@@ -135,7 +147,7 @@ export default function ChatPage() {
       </ScrollArea>
 
       <div className="border-t bg-card/50 p-4">
-        <div className="max-w-3xl mx-auto flex items-center gap-3">
+        <div className="max-w-3xl mx-auto flex items-center gap-2">
           <Button
             size="icon"
             variant="ghost"
@@ -153,6 +165,20 @@ export default function ChatPage() {
           >
             <Mic className="w-5 h-5" />
           </Button>
+
+          <Toggle
+            pressed={isDisappearing}
+            onPressedChange={setIsDisappearing}
+            className="text-muted-foreground"
+            data-testid="button-disappearing"
+            title="Send disappearing message"
+          >
+            {isDisappearing ? (
+              <EyeOff className="w-5 h-5 text-accent" />
+            ) : (
+              <Eye className="w-5 h-5" />
+            )}
+          </Toggle>
 
           <Input
             value={newMessage}

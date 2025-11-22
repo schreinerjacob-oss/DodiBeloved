@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { generatePassphrase, generateSalt, deriveKey, arrayBufferToBase64 } from '@/lib/crypto';
 import { saveSetting, getSetting, initDB } from '@/lib/storage';
+import { getTrialStatus } from '@/lib/storage-subscription';
 import { nanoid } from 'nanoid';
 
 interface DodiContextType {
@@ -9,6 +10,8 @@ interface DodiContextType {
   passphrase: string | null;
   isPaired: boolean;
   isOnline: boolean;
+  isTrialActive: boolean;
+  trialDaysRemaining: number;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
   completePairing: (partnerId: string, passphrase: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -22,6 +25,8 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const [passphrase, setPassphrase] = useState<string | null>(null);
   const [isPaired, setIsPaired] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isTrialActive, setIsTrialActive] = useState(true);
+  const [trialDaysRemaining, setTrialDaysRemaining] = useState(30);
 
   useEffect(() => {
     const loadPairingData = async () => {
@@ -36,6 +41,10 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         setPassphrase(storedPassphrase);
         setIsPaired(true);
       }
+
+      const trialStatus = await getTrialStatus();
+      setIsTrialActive(trialStatus.isActive);
+      setTrialDaysRemaining(trialStatus.daysRemaining);
     };
 
     loadPairingData();
@@ -96,6 +105,8 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         passphrase,
         isPaired,
         isOnline,
+        isTrialActive,
+        trialDaysRemaining,
         initializePairing,
         completePairing,
         logout,

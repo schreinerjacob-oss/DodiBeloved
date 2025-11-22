@@ -11,7 +11,8 @@ import CalendarPage from "@/pages/calendar";
 import DailyRitualPage from "@/pages/daily-ritual";
 import LoveLettersPage from "@/pages/love-letters";
 import SettingsPage from "@/pages/settings";
-import { MessageSquare, Camera, CalendarDays, Sparkles, Heart, Lock, Settings } from "lucide-react";
+import SubscriptionPage from "@/pages/subscription";
+import { MessageSquare, Camera, CalendarDays, Sparkles, Heart, Lock, Settings, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function NavItem({ href, icon: Icon, label, active }: { href: string; icon: any; label: string; active: boolean }) {
@@ -45,6 +46,7 @@ function MainApp() {
     { href: "/memories", icon: Camera, label: "Memories" },
     { href: "/ritual", icon: Sparkles, label: "Ritual" },
     { href: "/letters", icon: Heart, label: "Letters" },
+    { href: "/subscription", icon: Zap, label: "Plans" },
     { href: "/settings", icon: Settings, label: "Settings" },
   ];
 
@@ -57,6 +59,7 @@ function MainApp() {
           <Route path="/calendar" component={CalendarPage} />
           <Route path="/ritual" component={DailyRitualPage} />
           <Route path="/letters" component={LoveLettersPage} />
+          <Route path="/subscription" component={SubscriptionPage} />
           <Route path="/settings" component={SettingsPage} />
           <Route path="/" component={ChatPage} />
         </Switch>

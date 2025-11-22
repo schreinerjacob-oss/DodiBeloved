@@ -63,6 +63,18 @@ export const reactions = pgTable("reactions", {
   timestamp: timestamp("timestamp").notNull(),
 });
 
+export const subscriptions = pgTable("subscriptions", {
+  id: varchar("id").primaryKey(),
+  pairingId: text("pairing_id").notNull(),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  plan: text("plan").notNull(),
+  status: text("status").notNull(),
+  trialEndsAt: timestamp("trial_ends_at"),
+  renewsAt: timestamp("renews_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, timestamp: true });
 export const insertMemorySchema = createInsertSchema(memories).omit({ id: true, timestamp: true });
 export const insertCalendarEventSchema = createInsertSchema(calendarEvents).omit({ id: true, createdAt: true });
@@ -87,6 +99,10 @@ export type InsertLoveLetter = z.infer<typeof insertLoveLetterSchema>;
 
 export type Reaction = typeof reactions.$inferSelect;
 export type InsertReaction = z.infer<typeof insertReactionSchema>;
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true });
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 
 export interface PairingData {
   userId: string;

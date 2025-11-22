@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Lock, LogOut, Shield, Heart, Sparkles } from 'lucide-react';
+import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle } from 'lucide-react';
+import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -18,8 +19,9 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function SettingsPage() {
-  const { userId, logout, isOnline } = useDodi();
+  const { userId, logout, isOnline, isTrialActive, trialDaysRemaining } = useDodi();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   const handleLogout = async () => {
     await logout();
@@ -40,6 +42,28 @@ export default function SettingsPage() {
 
       <ScrollArea className="flex-1 p-6">
         <div className="max-w-2xl mx-auto space-y-6">
+          {isTrialActive && trialDaysRemaining <= 7 && (
+            <Card className="p-4 bg-accent/10 border-accent/30">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="font-medium text-sm">Trial Ending Soon</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    You have {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''} left of your free trial.
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={() => setLocation('/subscription')}
+                    className="mt-2"
+                    variant="default"
+                    data-testid="button-view-plans"
+                  >
+                    View Plans
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          )}
           <Card className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
