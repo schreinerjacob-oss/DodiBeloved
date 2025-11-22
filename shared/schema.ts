@@ -63,6 +63,29 @@ export const reactions = pgTable("reactions", {
   timestamp: timestamp("timestamp").notNull(),
 });
 
+export const futureLetters = pgTable("future_letters", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  authorId: text("author_id").notNull(),
+  recipientId: text("recipient_id").notNull(),
+  title: text("title"),
+  content: text("content").notNull(),
+  unlockDate: timestamp("unlock_date").notNull(),
+  isUnlocked: boolean("is_unlocked").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const prayers = pgTable("prayers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pairingId: text("pairing_id").notNull(),
+  userId: text("user_id").notNull(),
+  partnerId: text("partner_id").notNull(),
+  gratitudeEntry: text("gratitude_entry").notNull(),
+  prayerEntry: text("prayer_entry"),
+  participantIds: text("participant_ids").notNull(),
+  isRevealed: boolean("is_revealed").default(false),
+  prayerDate: timestamp("prayer_date").defaultNow().notNull(),
+});
+
 export const subscriptions = pgTable("subscriptions", {
   id: varchar("id").primaryKey(),
   pairingId: text("pairing_id").notNull(),
@@ -80,6 +103,8 @@ export const insertMemorySchema = createInsertSchema(memories).omit({ id: true, 
 export const insertCalendarEventSchema = createInsertSchema(calendarEvents).omit({ id: true, createdAt: true });
 export const insertDailyRitualSchema = createInsertSchema(dailyRituals).omit({ id: true, ritualDate: true });
 export const insertLoveLetterSchema = createInsertSchema(loveLetters).omit({ id: true, createdAt: true });
+export const insertFutureLetterSchema = createInsertSchema(futureLetters).omit({ id: true, createdAt: true });
+export const insertPrayerSchema = createInsertSchema(prayers).omit({ id: true, prayerDate: true });
 export const insertReactionSchema = createInsertSchema(reactions).omit({ id: true, timestamp: true });
 
 export type Message = typeof messages.$inferSelect;
@@ -96,6 +121,12 @@ export type InsertDailyRitual = z.infer<typeof insertDailyRitualSchema>;
 
 export type LoveLetter = typeof loveLetters.$inferSelect;
 export type InsertLoveLetter = z.infer<typeof insertLoveLetterSchema>;
+
+export type FutureLetter = typeof futureLetters.$inferSelect;
+export type InsertFutureLetter = z.infer<typeof insertFutureLetterSchema>;
+
+export type Prayer = typeof prayers.$inferSelect;
+export type InsertPrayer = z.infer<typeof insertPrayerSchema>;
 
 export type Reaction = typeof reactions.$inferSelect;
 export type InsertReaction = z.infer<typeof insertReactionSchema>;

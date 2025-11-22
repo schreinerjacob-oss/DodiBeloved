@@ -10,9 +10,11 @@ import MemoriesPage from "@/pages/memories";
 import CalendarPage from "@/pages/calendar";
 import DailyRitualPage from "@/pages/daily-ritual";
 import LoveLettersPage from "@/pages/love-letters";
+import FutureLettersPage from "@/pages/future-letters";
+import PrayersPage from "@/pages/prayers";
 import SettingsPage from "@/pages/settings";
 import SubscriptionPage from "@/pages/subscription";
-import { MessageSquare, Camera, CalendarDays, Sparkles, Heart, Lock, Settings, Zap } from "lucide-react";
+import { MessageSquare, Camera, CalendarDays, Sparkles, Heart, Clock, Lock, Settings, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function NavItem({ href, icon: Icon, label, active }: { href: string; icon: any; label: string; active: boolean }) {
@@ -46,7 +48,8 @@ function MainApp() {
     { href: "/memories", icon: Camera, label: "Memories" },
     { href: "/ritual", icon: Sparkles, label: "Ritual" },
     { href: "/letters", icon: Heart, label: "Letters" },
-    { href: "/subscription", icon: Zap, label: "Plans" },
+    { href: "/future", icon: Clock, label: "Future" },
+    { href: "/prayers", icon: Sparkles, label: "Pray" },
     { href: "/settings", icon: Settings, label: "Settings" },
   ];
 
@@ -59,6 +62,8 @@ function MainApp() {
           <Route path="/calendar" component={CalendarPage} />
           <Route path="/ritual" component={DailyRitualPage} />
           <Route path="/letters" component={LoveLettersPage} />
+          <Route path="/future" component={FutureLettersPage} />
+          <Route path="/prayers" component={PrayersPage} />
           <Route path="/subscription" component={SubscriptionPage} />
           <Route path="/settings" component={SettingsPage} />
           <Route path="/" component={ChatPage} />

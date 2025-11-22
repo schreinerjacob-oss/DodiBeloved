@@ -1,5 +1,5 @@
 import { openDB, type IDBPDatabase } from 'idb';
-import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, Reaction } from '@shared/schema';
+import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction } from '@shared/schema';
 
 const DB_NAME = 'dodi-encrypted-storage';
 const DB_VERSION = 1;
@@ -10,6 +10,8 @@ interface DodiDB {
   calendarEvents: CalendarEvent;
   dailyRituals: DailyRitual;
   loveLetters: LoveLetter;
+  futureLetters: FutureLetter;
+  prayers: Prayer;
   reactions: Reaction;
   settings: { key: string; value: string };
 }
@@ -44,6 +46,16 @@ export async function initDB(): Promise<IDBPDatabase<DodiDB>> {
       if (!db.objectStoreNames.contains('loveLetters')) {
         const lettersStore = db.createObjectStore('loveLetters', { keyPath: 'id' });
         lettersStore.createIndex('createdAt', 'createdAt');
+      }
+      
+      if (!db.objectStoreNames.contains('futureLetters')) {
+        const futureLettersStore = db.createObjectStore('futureLetters', { keyPath: 'id' });
+        futureLettersStore.createIndex('unlockDate', 'unlockDate');
+      }
+
+      if (!db.objectStoreNames.contains('prayers')) {
+        const prayersStore = db.createObjectStore('prayers', { keyPath: 'id' });
+        prayersStore.createIndex('prayerDate', 'prayerDate');
       }
       
       if (!db.objectStoreNames.contains('reactions')) {
@@ -130,4 +142,24 @@ export async function getSetting(key: string): Promise<string | undefined> {
   const db = await initDB();
   const result = await db.get('settings', key);
   return result?.value;
+}
+
+export async function saveFutureLetter(letter: FutureLetter): Promise<void> {
+  const db = await initDB();
+  await db.put('futureLetters', letter);
+}
+
+export async function getAllFutureLetters(): Promise<FutureLetter[]> {
+  const db = await initDB();
+  return db.getAllFromIndex('futureLetters', 'unlockDate');
+}
+
+export async function savePrayer(prayer: Prayer): Promise<void> {
+  const db = await initDB();
+  await db.put('prayers', prayer);
+}
+
+export async function getAllPrayers(): Promise<Prayer[]> {
+  const db = await initDB();
+  return db.getAllFromIndex('prayers', 'prayerDate');
 }
