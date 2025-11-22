@@ -1,16 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Camera, Lock, Calendar, Heart } from 'lucide-react';
-import { getAllMemories } from '@/lib/storage';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Camera, Lock, Calendar, Heart, X } from 'lucide-react';
+import { getAllMemories, saveMemory } from '@/lib/storage';
 import type { Memory } from '@shared/schema';
 import { format } from 'date-fns';
+import { nanoid } from 'nanoid';
+import { useToast } from '@/hooks/use-toast';
 
 export default function MemoriesPage() {
   const { userId, partnerId } = useDodi();
+  const { toast } = useToast();
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [caption, setCaption] = useState<string>('');
+  const [preview, setPreview] = useState<string>('');
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadMemories();
@@ -19,6 +29,50 @@ export default function MemoriesPage() {
   const loadMemories = async () => {
     const allMemories = await getAllMemories();
     setMemories(allMemories);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setPreview(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveMemory = async () => {
+    if (!preview || !userId || !partnerId) return;
+    setSaving(true);
+    try {
+      const memory: Memory = {
+        id: nanoid(),
+        userId,
+        partnerId,
+        mediaUrl: preview,
+        caption: caption.trim() || undefined,
+        mediaType: 'photo',
+        timestamp: new Date(),
+      };
+      await saveMemory(memory);
+      setMemories(prev => [...prev, memory]);
+      setCaption('');
+      setPreview('');
+      setDialogOpen(false);
+      toast({
+        title: "Memory saved 📸",
+        description: "Your precious moment is preserved.",
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to save",
+        description: "Could not save memory. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -32,10 +86,64 @@ export default function MemoriesPage() {
           </p>
         </div>
 
-        <Button data-testid="button-add-memory">
-          <Camera className="w-4 h-4 mr-2" />
-          Add Memory
-        </Button>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button data-testid="button-add-memory">
+              <Camera className="w-4 h-4 mr-2" />
+              Add Memory
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="font-light">Capture a Memory</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              <div className="border-2 border-dashed border-sage/30 rounded-lg p-6 text-center hover-elevate cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  data-testid="input-memory-file"
+                />
+                {preview ? (
+                  <div className="relative">
+                    <img src={preview} alt="Preview" className="max-h-64 mx-auto rounded-lg" />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={(e) => { e.stopPropagation(); setPreview(''); }}
+                      className="absolute top-2 right-2"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Camera className="w-12 h-12 mx-auto text-sage/50" />
+                    <p className="text-sm text-muted-foreground">Click to select a photo or video</p>
+                  </div>
+                )}
+              </div>
+              <Input
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                placeholder="Add a caption (optional)"
+                data-testid="input-memory-caption"
+              />
+              <Button
+                onClick={handleSaveMemory}
+                disabled={!preview || saving}
+                className="w-full"
+                data-testid="button-save-memory"
+              >
+                {saving ? 'Saving...' : 'Save Memory'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <ScrollArea className="flex-1 p-6">
