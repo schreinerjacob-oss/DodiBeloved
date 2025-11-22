@@ -60,10 +60,20 @@ export default function ChatPage() {
   };
 
   const handleSend = async () => {
-    if (!newMessage.trim() || !userId || !partnerId) return;
+    if (!newMessage.trim() || !userId || !partnerId || !ws) {
+      if (!ws) {
+        toast({
+          title: "Connection error",
+          description: "WebSocket not connected. Please refresh.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
 
     setSending(true);
     try {
+      const now = new Date();
       const message: Message = {
         id: nanoid(),
         senderId: userId,
@@ -72,17 +82,23 @@ export default function ChatPage() {
         type: 'text',
         mediaUrl: null,
         isDisappearing,
-        timestamp: new Date(),
+        timestamp: now,
       };
 
+      // Save to IndexedDB first
       await saveMessage(message);
+      
+      // Add to local state immediately
       setMessages(prev => [...prev, message]);
       setNewMessage('');
 
+      // Send via WebSocket
       sendWS({
         type: 'message',
         data: message,
       });
+
+      console.log('Message sent successfully:', message.id);
       
       if (isDisappearing) {
         toast({
@@ -94,11 +110,13 @@ export default function ChatPage() {
         }, 5000);
       }
     } catch (error) {
+      console.error('Send error:', error);
       toast({
         title: "Failed to send",
-        description: "Could not send message. Please try again.",
+        description: error instanceof Error ? error.message : "Could not send message. Please try again.",
         variant: "destructive",
       });
+      setSending(false);
     } finally {
       setSending(false);
     }

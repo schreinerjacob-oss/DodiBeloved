@@ -75,7 +75,14 @@ export function useWebSocket() {
 
   const send = (message: WSMessage) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message));
+      try {
+        wsRef.current.send(JSON.stringify(message));
+        console.log('WebSocket message sent:', message.type);
+      } catch (error) {
+        console.error('WebSocket send error:', error);
+      }
+    } else {
+      console.warn('WebSocket not ready. State:', wsRef.current?.readyState, 'Connected:', connected);
     }
   };
 
