@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { Phone, Video, PhoneOff, Mic, MicOff, Camera, CameraOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+// @ts-ignore - simple-peer doesn't have type definitions
 import SimplePeer from 'simple-peer';
 
 export default function CallsPage() {
@@ -71,20 +72,20 @@ export default function CallsPage() {
 
       peerRef.current = peer;
 
-      peer.on('signal', (signal) => {
+      peer.on('signal', (signal: any) => {
         sendWS({
           type: 'call-signal',
           data: { signal, callType: type },
         });
       });
 
-      peer.on('stream', (remoteStream) => {
+      peer.on('stream', (remoteStream: MediaStream) => {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStream;
         }
       });
 
-      peer.on('error', (err) => {
+      peer.on('error', (err: Error) => {
         console.error('Peer error:', err);
         toast({
           title: 'Connection error',
