@@ -1,0 +1,45 @@
+You are now the final Quality & Privacy Auditor for “Dodi” – the ultra-private couples app.
+
+Resume from the current project (or rebuild from scratch if needed) and perform a complete audit + finish.
+
+MANDATORY PRIVACY RULES (fail the build if any are broken):
+- ZERO third-party servers ever. Sync only via temporary WebSocket on one device or PeerJS/WebRTC peer-to-peer.
+- All data (messages, photos, videos, letters, prayers, everything) encrypted with Web Crypto API AES-GCM 256 + PBKDF2 600k iterations BEFORE ever hitting IndexedDB.
+- Encryption key derived only from shared passphrase + per-device salt. Key never stored.
+- Never write unencrypted files or touch the phone camera roll / gallery.
+- No Firebase, Supabase, AWS, or any external service except optional self-hosted TURN for video calls.
+
+REQUIRED FEATURES (add any that are missing):
+1. One-time pairing via QR code or passphrase
+2. Real-time encrypted chat (text, photos, videos, voice notes, disappearing messages)
+3. Private encrypted memory timeline
+4. Shared calendar + love-day/anniversary counters
+5. Daily ritual: emotion wheel + exact three questions (“What made you feel most loved today?”, “One thing I’m grateful for in you”, “Tomorrow I need…”)
+6. Private notes & love letters vault
+7. Future Letters (write today, unlock on chosen future date)
+8. Shared Prayers / Gratitude Log (both must write before it reveals that day’s entries)
+9. Private voice & video calls (WebRTC + Simple-Peer, signaling via the same temporary WebSocket, optional TURN config)
+10. “Thinking of you” one-tap reactions
+
+MONETIZATION (exactly as written):
+- 30-day full-featured free trial (no card required)
+- After trial: warm screen with three options only:
+  • Monthly: $2.99
+  • Yearly: $29.99 ($2.50/mo) – “Most Popular”
+  • Lifetime: $79 one-time – “Forever” with gold infinity symbol
+- Use Stripe + Apple/Google in-app purchases
+
+VISUAL STYLE (must match):
+- Name: Dodi
+- Palette: soft sage green (#A7C9B0), warm cream (#F8F1E9), blush (#F4C2C2), subtle gold (#D4AF37)
+- Logo: two vines intertwining into a subtle heart (or show me the four options again and pick the best)
+
+FINAL TASKS:
+1. Run a full privacy audit and show me proof (screenshots or code snippets) that encryption, peer-to-peer sync, and no camera-roll usage are working perfectly.
+2. Add/fix any missing features above.
+3. Test pairing, chat, calls, and future-letter scheduling on two simulated devices.
+4. Confirm the exact monetization screen appears with our wording and three tiers.
+5. Deploy the final PWA (always-on) and give me the live URL.
+
+Do not proceed to the next step until the current one is 100% verified. Show me evidence at every stage.
+Begin now.
