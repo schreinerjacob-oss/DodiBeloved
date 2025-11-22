@@ -9,9 +9,9 @@ import { useToast } from '@/hooks/use-toast';
 import SimplePeer from 'simple-peer';
 
 export default function CallsPage() {
-  const { userId, partnerId, isOnline } = useDodi();
+  const { userId, partnerId } = useDodi();
   const { toast } = useToast();
-  const { send: sendWS, ws } = useWebSocket();
+  const { send: sendWS, ws, connected } = useWebSocket();
   const [callActive, setCallActive] = useState(false);
   const [callType, setCallType] = useState<'audio' | 'video' | null>(null);
   const [incomingCall, setIncomingCall] = useState(false);
@@ -112,11 +112,20 @@ export default function CallsPage() {
   };
 
   const startCall = async (type: 'audio' | 'video') => {
-    if (!partnerId || !isOnline) {
+    if (!partnerId) {
       toast({
-        title: 'Not connected',
-        description: 'Partner is offline or not paired',
+        title: 'Not paired',
+        description: 'You need to pair with your beloved first',
         variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!connected || !ws || ws.readyState !== WebSocket.OPEN) {
+      toast({
+        title: 'Connecting...',
+        description: 'WebSocket connection establishing. Try again in a moment.',
+        variant: 'default',
       });
       return;
     }
@@ -304,7 +313,7 @@ export default function CallsPage() {
       <div className="px-6 py-4 border-b bg-card/50">
         <h2 className="text-xl font-light text-foreground">Voice & Video</h2>
         <p className="text-xs text-muted-foreground mt-1">
-          {isOnline ? 'Ready to connect' : 'Offline'}
+          {connected ? '✓ Connected & ready' : '⏳ Connecting...'}
         </p>
       </div>
 
@@ -317,11 +326,11 @@ export default function CallsPage() {
           <p className="text-xs text-center text-muted-foreground">Voice only</p>
           <Button
             onClick={() => startCall('audio')}
-            disabled={!isOnline}
+            disabled={!connected}
             className="w-full"
             data-testid="button-start-audio"
           >
-            Start
+            {connected ? 'Start' : 'Connecting...'}
           </Button>
         </Card>
 
@@ -333,11 +342,11 @@ export default function CallsPage() {
           <p className="text-xs text-center text-muted-foreground">See each other</p>
           <Button
             onClick={() => startCall('video')}
-            disabled={!isOnline}
+            disabled={!connected}
             className="w-full"
             data-testid="button-start-video"
           >
-            Start
+            {connected ? 'Start' : 'Connecting...'}
           </Button>
         </Card>
       </div>
