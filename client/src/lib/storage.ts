@@ -134,14 +134,36 @@ export async function getRecentReactions(limit: number = 10): Promise<Reaction[]
 }
 
 export async function saveSetting(key: string, value: string): Promise<void> {
+  // Always save to both IndexedDB and localStorage for persistence
+  // localStorage is more reliable for PWA pairing data
+  try {
+    localStorage.setItem(`dodi-${key}`, value);
+  } catch (e) {
+    console.warn('localStorage unavailable:', e);
+  }
+  
   const db = await initDB();
   await db.put('settings', { key, value });
 }
 
 export async function getSetting(key: string): Promise<string | undefined> {
-  const db = await initDB();
-  const result = await db.get('settings', key);
-  return result?.value;
+  // Try localStorage first (faster, more reliable for PWA)
+  try {
+    const value = localStorage.getItem(`dodi-${key}`);
+    if (value) return value;
+  } catch (e) {
+    console.warn('localStorage unavailable:', e);
+  }
+
+  // Fall back to IndexedDB
+  try {
+    const db = await initDB();
+    const result = await db.get('settings', key);
+    return result?.value;
+  } catch (e) {
+    console.error('Failed to get setting from IndexedDB:', e);
+    return undefined;
+  }
 }
 
 export async function saveFutureLetter(letter: FutureLetter): Promise<void> {

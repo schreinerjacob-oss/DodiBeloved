@@ -14,9 +14,13 @@ export function useWebSocket() {
 
   useEffect(() => {
     // Connect for unpaired users waiting for partner, or paired users
-    if (!userId || !isOnline) return;
+    if (!userId) {
+      console.log('WebSocket: No userId yet');
+      return;
+    }
 
     const connect = () => {
+      console.log('WebSocket: Attempting to connect for userId:', userId);
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const wsUrl = `${protocol}//${window.location.host}/ws`;
       
@@ -24,6 +28,7 @@ export function useWebSocket() {
       wsRef.current = ws;
 
       ws.onopen = () => {
+        console.log('WebSocket: Connected');
         setConnected(true);
         ws.send(JSON.stringify({
           type: 'register',
@@ -31,6 +36,7 @@ export function useWebSocket() {
         }));
 
         if (isPaired) {
+          console.log('WebSocket: Sending sync request for paired user');
           ws.send(JSON.stringify({
             type: 'sync',
             data: {},
@@ -43,6 +49,7 @@ export function useWebSocket() {
           const message: WSMessage = JSON.parse(event.data);
           
           if (message.type === 'partner-joined' && !isPaired) {
+            console.log('WebSocket: Partner joined, reloading');
             // Partner has joined, trigger a page reload to refresh context
             window.location.reload();
           }
@@ -52,11 +59,13 @@ export function useWebSocket() {
       };
 
       ws.onclose = () => {
+        console.log('WebSocket: Disconnected, reconnecting in 3s');
         setConnected(false);
         reconnectTimeoutRef.current = setTimeout(connect, 3000);
       };
 
-      ws.onerror = () => {
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
         setConnected(false);
       };
     };
@@ -71,7 +80,7 @@ export function useWebSocket() {
         wsRef.current.close();
       }
     };
-  }, [userId, isPaired, isOnline]);
+  }, [userId, isPaired]);
 
   const send = (message: WSMessage) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {

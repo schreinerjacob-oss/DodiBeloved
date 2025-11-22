@@ -30,27 +30,40 @@ export function DodiProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const loadPairingData = async () => {
-      await initDB();
-      const storedUserId = await getSetting('userId');
-      const storedPartnerId = await getSetting('partnerId');
-      const storedPassphrase = await getSetting('passphrase');
+      try {
+        await initDB();
+        const storedUserId = await getSetting('userId');
+        const storedPartnerId = await getSetting('partnerId');
+        const storedPassphrase = await getSetting('passphrase');
 
-      if (storedUserId && storedPartnerId && storedPassphrase) {
-        setUserId(storedUserId);
-        setPartnerId(storedPartnerId);
-        setPassphrase(storedPassphrase);
-        setIsPaired(true);
+        console.log('Loaded pairing data:', { userId: !!storedUserId, partnerId: !!storedPartnerId, passphrase: !!storedPassphrase });
+
+        if (storedUserId && storedPartnerId && storedPassphrase) {
+          setUserId(storedUserId);
+          setPartnerId(storedPartnerId);
+          setPassphrase(storedPassphrase);
+          setIsPaired(true);
+          console.log('Pairing restored successfully');
+        }
+
+        const trialStatus = await getTrialStatus();
+        setIsTrialActive(trialStatus.isActive);
+        setTrialDaysRemaining(trialStatus.daysRemaining);
+      } catch (error) {
+        console.error('Error loading pairing data:', error);
       }
-
-      const trialStatus = await getTrialStatus();
-      setIsTrialActive(trialStatus.isActive);
-      setTrialDaysRemaining(trialStatus.daysRemaining);
     };
 
     loadPairingData();
 
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const handleOnline = () => {
+      setIsOnline(true);
+      console.log('Device online');
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      console.log('Device offline');
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
