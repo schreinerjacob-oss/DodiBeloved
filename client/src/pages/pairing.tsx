@@ -16,8 +16,20 @@ export default function PairingPage() {
   const [pairingData, setPairingData] = useState<{ userId: string; passphrase: string } | null>(null);
   const [partnerPassphrase, setPartnerPassphrase] = useState('');
   const [partnerId, setPartnerId] = useState('');
+  const [qrCodeData, setQrCodeData] = useState('');
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const handleQrCodePaste = (value: string) => {
+    setQrCodeData(value);
+    if (value.startsWith('dodi:')) {
+      const parts = value.replace('dodi:', '').split(':');
+      if (parts.length === 2) {
+        setPartnerId(parts[0]);
+        setPartnerPassphrase(parts[1]);
+      }
+    }
+  };
 
   const handleCreatePairing = async () => {
     setLoading(true);
@@ -183,11 +195,28 @@ export default function PairingPage() {
               <Heart className="w-8 h-8 mx-auto text-accent" />
               <h2 className="text-xl font-light">Join Your Beloved</h2>
               <p className="text-sm text-muted-foreground">
-                Enter the pairing details they shared with you
+                Paste the QR code or enter details they shared
               </p>
             </div>
 
             <div className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="qr-code" className="text-sm font-medium">
+                  Scan QR Code or Paste String
+                </label>
+                <Input
+                  id="qr-code"
+                  placeholder="dodi:userId:passphrase or scan camera"
+                  value={qrCodeData}
+                  onChange={(e) => handleQrCodePaste(e.target.value)}
+                  className="font-mono"
+                  data-testid="input-qr-code"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Auto-fills Partner ID and Passphrase when QR code is detected
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <label htmlFor="partner-id" className="text-sm font-medium">
                   Partner ID
@@ -226,7 +255,12 @@ export default function PairingPage() {
               </Button>
 
               <Button
-                onClick={() => setMode('choose')}
+                onClick={() => {
+                  setMode('choose');
+                  setQrCodeData('');
+                  setPartnerId('');
+                  setPartnerPassphrase('');
+                }}
                 variant="ghost"
                 className="w-full"
                 data-testid="button-back"
