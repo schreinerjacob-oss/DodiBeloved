@@ -7,6 +7,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,11 +21,13 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function SettingsPage() {
-  const { userId, passphrase, logout, isOnline, isTrialActive, trialDaysRemaining } = useDodi();
+  const { userId, partnerId, passphrase, logout, isOnline, isTrialActive, trialDaysRemaining } = useDodi();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [copiedUserId, setCopiedUserId] = useState(false);
   const [copiedPassphrase, setCopiedPassphrase] = useState(false);
+  const [copiedPartnerId, setCopiedPartnerId] = useState(false);
+  const [copiedReconnect, setCopiedReconnect] = useState(false);
 
   const handleCopyUserId = () => {
     if (userId) {
@@ -47,6 +50,31 @@ export default function SettingsPage() {
         description: "Your passphrase has been copied to clipboard.",
       });
       setTimeout(() => setCopiedPassphrase(false), 2000);
+    }
+  };
+
+  const handleCopyPartnerId = () => {
+    if (partnerId) {
+      navigator.clipboard.writeText(partnerId);
+      setCopiedPartnerId(true);
+      toast({
+        title: "Copied!",
+        description: "Partner ID has been copied to clipboard.",
+      });
+      setTimeout(() => setCopiedPartnerId(false), 2000);
+    }
+  };
+
+  const handleCopyReconnect = () => {
+    if (userId && partnerId && passphrase) {
+      const reconnectData = `dodi:${userId}:${partnerId}:${passphrase}`;
+      navigator.clipboard.writeText(reconnectData);
+      setCopiedReconnect(true);
+      toast({
+        title: "Copied!",
+        description: "Reconnection details have been copied to clipboard.",
+      });
+      setTimeout(() => setCopiedReconnect(false), 2000);
     }
   };
 
@@ -143,11 +171,38 @@ export default function SettingsPage() {
               <div>
                 <h3 className="font-medium">Reconnection Details</h3>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Share these with your partner if they need to reconnect
+                  Share these details if you need to reconnect your devices
                 </p>
               </div>
             </div>
-            <div className="pt-3 space-y-3 border-t">
+            <div className="pt-3 space-y-4 border-t">
+              {userId && partnerId && passphrase && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">RECONNECTION QR CODE</p>
+                  <div className="flex justify-center p-4 bg-white rounded-lg">
+                    <QRCodeSVG
+                      value={`dodi:${userId}:${partnerId}:${passphrase}`}
+                      size={180}
+                      level="H"
+                      includeMargin
+                      data-testid="qr-reconnect-code"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleCopyReconnect}
+                    data-testid="button-copy-reconnect"
+                  >
+                    {copiedReconnect ? (
+                      <Check className="w-4 h-4 mr-2 text-accent" />
+                    ) : (
+                      <Copy className="w-4 h-4 mr-2" />
+                    )}
+                    {copiedReconnect ? 'Copied!' : 'Copy Reconnection String'}
+                  </Button>
+                </div>
+              )}
               {userId && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground">YOUR ID</p>
@@ -162,6 +217,28 @@ export default function SettingsPage() {
                       data-testid="button-copy-user-id"
                     >
                       {copiedUserId ? (
+                        <Check className="w-4 h-4 text-accent" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {partnerId && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">PARTNER ID</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono flex-1 break-all bg-muted/50 p-2 rounded text-foreground">
+                      {partnerId}
+                    </p>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handleCopyPartnerId}
+                      data-testid="button-copy-partner-id"
+                    >
+                      {copiedPartnerId ? (
                         <Check className="w-4 h-4 text-accent" />
                       ) : (
                         <Copy className="w-4 h-4" />
