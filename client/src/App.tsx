@@ -51,8 +51,8 @@ function MainApp() {
   ];
 
   return (
-    <div className="h-full w-full flex flex-col bg-background" style={{ height: '100vh', width: '100vw' }}>
-      <div className="flex-1 overflow-hidden overflow-y-auto">
+    <div className="w-screen flex flex-col bg-background" style={{ minHeight: '100dvh' }}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <Switch>
           <Route path="/chat" component={ChatPage} />
           <Route path="/memories" component={MemoriesPage} />
@@ -65,7 +65,7 @@ function MainApp() {
         </Switch>
       </div>
 
-      <nav className="border-t bg-card/80 backdrop-blur-sm px-2 py-2 safe-area-bottom">
+      <nav className="border-t bg-card/80 backdrop-blur-sm px-2 py-2 flex-shrink-0" style={{ paddingBottom: 'var(--safe-area-inset-bottom)' }}>
         <div className="flex items-center justify-around max-w-3xl mx-auto">
           {navItems.map((item) => (
             <NavItem
