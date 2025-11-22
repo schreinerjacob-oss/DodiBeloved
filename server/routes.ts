@@ -17,6 +17,7 @@ interface WSMessage {
 }
 
 const connectedClients = new Map<string, WebSocket>();
+const userPairings = new Map<string, string>(); // userId -> partnerId
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -36,6 +37,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (userId) {
               connectedClients.set(userId, ws);
             }
+            break;
+
+          case 'partner-joined':
+            // When a partner completes pairing, notify the creator
+            const partnerId = message.data.partnerId;
+            const joinedUserId = message.data.joinedUserId;
+            
+            // Store the pairing relationship
+            userPairings.set(partnerId, joinedUserId);
+            userPairings.set(joinedUserId, partnerId);
+            
+            // Send notification to the creator that partner joined
+            broadcast(partnerId, {
+              type: 'partner-joined',
+              data: { joinedUserId },
+            });
             break;
 
           case 'message':

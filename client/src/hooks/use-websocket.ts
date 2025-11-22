@@ -7,13 +7,14 @@ interface WSMessage {
 }
 
 export function useWebSocket() {
-  const { userId, isPaired, isOnline } = useDodi();
+  const { userId, partnerId, isPaired, isOnline } = useDodi();
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
-    if (!isPaired || !userId || !isOnline) return;
+    // Connect for unpaired users waiting for partner, or paired users
+    if (!userId || !isOnline) return;
 
     const connect = () => {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -29,10 +30,25 @@ export function useWebSocket() {
           data: { userId },
         }));
 
-        ws.send(JSON.stringify({
-          type: 'sync',
-          data: {},
-        }));
+        if (isPaired) {
+          ws.send(JSON.stringify({
+            type: 'sync',
+            data: {},
+          }));
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message: WSMessage = JSON.parse(event.data);
+          
+          if (message.type === 'partner-joined' && !isPaired) {
+            // Partner has joined, trigger a page reload to refresh context
+            window.location.reload();
+          }
+        } catch (e) {
+          console.log('WebSocket message parse error:', e);
+        }
       };
 
       ws.onclose = () => {
@@ -55,7 +71,7 @@ export function useWebSocket() {
         wsRef.current.close();
       }
     };
-  }, [isPaired, userId, isOnline]);
+  }, [userId, isPaired, isOnline]);
 
   const send = (message: WSMessage) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {

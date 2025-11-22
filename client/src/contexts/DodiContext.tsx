@@ -85,6 +85,27 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setPartnerId(newPartnerId);
     setPassphrase(sharedPassphrase);
     setIsPaired(true);
+
+    // Notify partner that we've completed pairing
+    setTimeout(() => {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          type: 'register',
+          data: { userId },
+        }));
+        
+        ws.send(JSON.stringify({
+          type: 'partner-joined',
+          data: { partnerId: newPartnerId, joinedUserId: userId },
+        }));
+        
+        ws.close();
+      };
+    }, 100);
   };
 
   const logout = async () => {
