@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
 import { Heart, Send, Image, Mic, Lock, Eye, EyeOff } from 'lucide-react';
 import { getAllMessages, saveMessage } from '@/lib/storage';
+import { useWebSocket } from '@/hooks/use-websocket';
 import type { Message } from '@shared/schema';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
@@ -14,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 export default function ChatPage() {
   const { userId, partnerId, isOnline } = useDodi();
   const { toast } = useToast();
+  const { send: sendWS, ws } = useWebSocket();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -23,6 +25,27 @@ export default function ChatPage() {
   useEffect(() => {
     loadMessages();
   }, []);
+
+  useEffect(() => {
+    if (!ws) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'message') {
+          const incomingMessage = data.data;
+          if (incomingMessage.senderId === partnerId) {
+            setMessages(prev => [...prev, incomingMessage]);
+          }
+        }
+      } catch (error) {
+        console.error('Error handling WebSocket message:', error);
+      }
+    };
+
+    ws.addEventListener('message', handleMessage);
+    return () => ws.removeEventListener('message', handleMessage);
+  }, [ws, partnerId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -54,10 +77,15 @@ export default function ChatPage() {
       await saveMessage(message);
       setMessages(prev => [...prev, message]);
       setNewMessage('');
+
+      sendWS({
+        type: 'message',
+        data: message,
+      });
       
       if (isDisappearing) {
         toast({
-          title: "Disappearing message sent 👻",
+          title: "Disappearing message sent",
           description: "Message will vanish after being read.",
         });
         setTimeout(() => {
@@ -77,8 +105,8 @@ export default function ChatPage() {
 
   const handleThinkingOfYou = async () => {
     toast({
-      title: "💕",
-      description: "Thinking of you sent",
+      title: "Thinking of you",
+      description: "Heart sent to your beloved",
     });
   };
 
