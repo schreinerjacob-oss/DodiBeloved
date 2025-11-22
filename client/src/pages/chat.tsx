@@ -27,7 +27,7 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (!ws) return;
+    if (!ws || !partnerId) return;
 
     const handleMessage = (event: MessageEvent) => {
       try {
@@ -36,6 +36,7 @@ export default function ChatPage() {
           const incomingMessage = data.data;
           if (incomingMessage.senderId === partnerId) {
             setMessages(prev => [...prev, incomingMessage]);
+            saveMessage(incomingMessage).catch(err => console.error('Failed to save message:', err));
           }
         }
       } catch (error) {
@@ -111,8 +112,8 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-background">
-      <div className="flex items-center justify-between px-6 py-4 border-b bg-card/50">
+    <div className="w-screen flex flex-col bg-background" style={{ minHeight: '100dvh' }}>
+      <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b bg-card/50">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sage to-blush flex items-center justify-center">
             <Heart className="w-5 h-5 text-white" />
@@ -130,14 +131,14 @@ export default function ChatPage() {
           onClick={handleThinkingOfYou}
           size="icon"
           variant="ghost"
-          className="text-accent hover:text-accent"
+          className="text-accent hover:text-accent flex-shrink-0"
           data-testid="button-thinking-of-you"
         >
           <Heart className="w-5 h-5 animate-pulse-glow" />
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 p-6" ref={scrollRef as any}>
+      <div className="flex-1 overflow-y-auto p-6" ref={scrollRef}>
         <div className="space-y-4 max-w-3xl mx-auto">
           {messages.length === 0 && (
             <div className="text-center py-12 space-y-3">
@@ -172,14 +173,14 @@ export default function ChatPage() {
             );
           })}
         </div>
-      </ScrollArea>
+      </div>
 
-      <div className="border-t bg-card/50 p-4">
+      <div className="flex-shrink-0 border-t bg-card/50 p-4">
         <div className="max-w-3xl mx-auto flex items-center gap-2">
           <Button
             size="icon"
             variant="ghost"
-            className="text-muted-foreground"
+            className="flex-shrink-0 text-muted-foreground"
             data-testid="button-attach-image"
           >
             <Image className="w-5 h-5" />
@@ -188,7 +189,7 @@ export default function ChatPage() {
           <Button
             size="icon"
             variant="ghost"
-            className="text-muted-foreground"
+            className="flex-shrink-0 text-muted-foreground"
             data-testid="button-voice-note"
           >
             <Mic className="w-5 h-5" />
@@ -197,7 +198,7 @@ export default function ChatPage() {
           <Toggle
             pressed={isDisappearing}
             onPressedChange={setIsDisappearing}
-            className="text-muted-foreground"
+            className="flex-shrink-0 text-muted-foreground"
             data-testid="button-disappearing"
             title="Send disappearing message"
           >
@@ -222,6 +223,7 @@ export default function ChatPage() {
             onClick={handleSend}
             disabled={!newMessage.trim() || sending}
             size="icon"
+            className="flex-shrink-0"
             data-testid="button-send"
           >
             <Send className="w-4 h-4" />
