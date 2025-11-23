@@ -138,14 +138,14 @@ export default function ChatPage() {
       console.log('Message sent successfully:', message.id);
       
       if (isDisappearing) {
-        console.log('Disappearing message enabled, will delete after 5 seconds');
+        console.log('Disappearing message enabled, will delete after 30 seconds');
         toast({
           title: "Disappearing message sent",
-          description: "Message will vanish after being read.",
+          description: "Message will vanish after 30 seconds.",
         });
         setTimeout(() => {
           setMessages(prev => prev.filter(m => m.id !== message.id));
-        }, 5000);
+        }, 30000);
       }
     } catch (error) {
       console.error('Send error:', error);
