@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
 import { Heart, Send, Image, Mic, Lock, Eye, EyeOff } from 'lucide-react';
-import { getAllMessages, saveMessage } from '@/lib/storage-encrypted';
+import { getAllMessages, saveMessage } from '@/lib/storage';
 import { useWebSocket } from '@/hooks/use-websocket';
 import type { Message } from '@shared/schema';
 import { nanoid } from 'nanoid';
