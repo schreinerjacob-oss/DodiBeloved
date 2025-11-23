@@ -21,6 +21,7 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [isDisappearing, setIsDisappearing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadMessages();
@@ -148,6 +149,90 @@ export default function ChatPage() {
     });
   };
 
+  const handleImageClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file is an image
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid file",
+        description: "Please select an image",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Max 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Image must be under 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSending(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64 = event.target?.result as string;
+        const messageId = nanoid();
+        const now = new Date();
+
+        const message: Message = {
+          id: messageId,
+          senderId: userId!,
+          recipientId: partnerId!,
+          content: file.name,
+          type: 'image',
+          mediaUrl: base64,
+          isDisappearing,
+          timestamp: now,
+        };
+
+        // Add to local state
+        setMessages(prev => [...prev, message]);
+
+        // Send via WebSocket
+        sendWS({
+          type: 'message',
+          data: message,
+        });
+
+        toast({
+          title: "Image sent",
+        });
+
+        if (isDisappearing) {
+          setTimeout(() => {
+            setMessages(prev => prev.filter(m => m.id !== messageId));
+          }, 30000);
+        }
+
+        setSending(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Image send error:', error);
+      toast({
+        title: "Failed to send image",
+        variant: "destructive",
+      });
+      setSending(false);
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   return (
     <div className="w-screen flex flex-col bg-background" style={{ minHeight: '100dvh' }}>
       <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b bg-card/50">
@@ -188,6 +273,7 @@ export default function ChatPage() {
 
           {messages.map((message) => {
             const isSent = message.senderId === userId;
+            const isImage = message.type === 'image';
             return (
               <div
                 key={message.id}
@@ -195,16 +281,32 @@ export default function ChatPage() {
                 data-testid={`message-${message.id}`}
               >
                 <Card
-                  className={`max-w-[70%] p-4 ${
+                  className={`max-w-[70%] ${isImage ? 'p-0 overflow-hidden' : 'p-4'} ${
                     isSent
                       ? 'bg-sage/30 border-sage/40'
                       : 'bg-card border-card-border'
                   }`}
                 >
-                  <p className="text-sm leading-relaxed">{message.content}</p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
+                  {isImage && message.mediaUrl ? (
+                    <div className="space-y-2">
+                      <img
+                        src={message.mediaUrl}
+                        alt={message.content}
+                        className="w-full h-auto rounded-md"
+                        data-testid="message-image"
+                      />
+                      <p className="text-xs text-muted-foreground px-3 pb-2">
+                        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm leading-relaxed">{message.content}</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </>
+                  )}
                 </Card>
               </div>
             );
@@ -214,10 +316,20 @@ export default function ChatPage() {
 
       <div className="flex-shrink-0 border-t bg-card/50 p-4">
         <div className="max-w-3xl mx-auto flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageChange}
+            className="hidden"
+            data-testid="input-image-file"
+          />
           <Button
             size="icon"
             variant="ghost"
             className="flex-shrink-0 text-muted-foreground"
+            onClick={handleImageClick}
+            disabled={sending}
             data-testid="button-attach-image"
           >
             <Image className="w-5 h-5" />
