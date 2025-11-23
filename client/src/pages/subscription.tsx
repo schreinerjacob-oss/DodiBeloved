@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Check, Heart, Zap } from 'lucide-react';
+import { Check, Heart, Zap, Infinity } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -49,6 +49,8 @@ const plans: SubscriptionPlan[] = [
     name: 'Forever',
     price: 79,
     period: 'one-time',
+    badge: 'Forever',
+    icon: Infinity,
     description: 'Own your space forever',
     features: ['Everything forever', 'One payment only', 'Lifetime updates', 'Our heartfelt gratitude'],
   },
@@ -89,8 +91,13 @@ export function SubscriptionModal({ open, onOpenChange, onSelectPlan, isLoading 
                 }`}
               >
                 {plan.badge && (
-                  <Badge className="absolute top-3 right-3 bg-gold/20 text-gold border-gold/30">
-                    {plan.badge} <Heart className="w-3 h-3 ml-1" />
+                  <Badge className={`absolute top-3 right-3 ${
+                    plan.id === 'lifetime' 
+                      ? 'bg-gold/30 text-gold border-gold/40' 
+                      : 'bg-gold/20 text-gold border-gold/30'
+                  }`}>
+                    {plan.badge}
+                    {PlanIcon && <PlanIcon className="w-3 h-3 ml-1 text-gold" />}
                   </Badge>
                 )}
                 <div className="mb-4">
