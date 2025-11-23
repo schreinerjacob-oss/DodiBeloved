@@ -23,6 +23,7 @@ const DodiContext = createContext<DodiContextType | undefined>(undefined);
 
 export function DodiProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [passphrase, setPassphrase] = useState<string | null>(null);
   const [isPaired, setIsPaired] = useState(false);
@@ -34,19 +35,23 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     const loadPairingData = async () => {
       try {
         const db = await initDB();
-        const [storedUserId, storedPartnerId, storedPassphrase] = await Promise.all([
+        const [storedUserId, storedDisplayName, storedPartnerId, storedPassphrase] = await Promise.all([
           db.get('settings', 'userId'),
+          db.get('settings', 'displayName'),
           db.get('settings', 'partnerId'),
           db.get('settings', 'passphrase'),
         ]);
 
-        if (storedUserId?.value && storedPartnerId?.value && storedPassphrase?.value) {
+        if (storedUserId?.value) {
           setUserId(storedUserId.value);
+          setDisplayName(storedDisplayName?.value || null);
+        }
+
+        if (storedUserId?.value && storedPartnerId?.value && storedPassphrase?.value) {
           setPartnerId(storedPartnerId.value);
           setPassphrase(storedPassphrase.value);
           setIsPaired(true);
         } else if (storedUserId?.value) {
-          setUserId(storedUserId.value);
           setPassphrase(storedPassphrase?.value || null);
           setPartnerId(null);
         }
@@ -150,11 +155,23 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     }, 100);
   };
 
+  const initializeProfile = async (name: string) => {
+    const newUserId = nanoid();
+    await saveSetting('userId', newUserId);
+    await saveSetting('displayName', name);
+    
+    setUserId(newUserId);
+    setDisplayName(name);
+    
+    return newUserId;
+  };
+
   const logout = async () => {
     const db = await initDB();
     await db.clear('settings');
     
     setUserId(null);
+    setDisplayName(null);
     setPartnerId(null);
     setPassphrase(null);
     setIsPaired(false);
@@ -164,12 +181,14 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     <DodiContext.Provider
       value={{
         userId,
+        displayName,
         partnerId,
         passphrase,
         isPaired,
         isOnline,
         isTrialActive,
         trialDaysRemaining,
+        initializeProfile,
         initializePairing,
         completePairing,
         logout,
