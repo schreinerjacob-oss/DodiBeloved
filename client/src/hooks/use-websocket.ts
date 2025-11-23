@@ -47,6 +47,7 @@ export function useWebSocket() {
       ws.onmessage = (event) => {
         try {
           const message: WSMessage = JSON.parse(event.data);
+          console.log('WebSocket received:', message.type, message.data);
           
           if (message.type === 'partner-joined' && !isPaired) {
             console.log('WebSocket: Partner joined, reloading');
@@ -54,7 +55,7 @@ export function useWebSocket() {
             window.location.reload();
           }
         } catch (e) {
-          console.log('WebSocket message parse error:', e);
+          console.error('WebSocket message parse error:', e, 'Raw data:', event.data);
         }
       };
 

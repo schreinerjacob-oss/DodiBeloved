@@ -27,16 +27,32 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (!ws || !partnerId) return;
+    if (!ws || !partnerId) {
+      console.log('Chat: Waiting for ws or partnerId', { hasWs: !!ws, partnerId });
+      return;
+    }
+
+    console.log('Chat: Setting up message listener for partnerId:', partnerId);
 
     const handleMessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
+        console.log('Chat: Received WebSocket message:', { type: data.type, senderId: data.data?.senderId, partnerId });
+        
         if (data.type === 'message') {
           const incomingMessage = data.data;
+          console.log('Chat: Processing incoming message:', { 
+            senderId: incomingMessage.senderId, 
+            partnerId,
+            isFromPartner: incomingMessage.senderId === partnerId 
+          });
+          
           if (incomingMessage.senderId === partnerId) {
+            console.log('Chat: Message is from partner, adding to state');
             setMessages(prev => [...prev, incomingMessage]);
             saveMessage(incomingMessage).catch(err => console.error('Failed to save message:', err));
+          } else {
+            console.log('Chat: Message is NOT from partner, ignoring');
           }
         }
       } catch (error) {
@@ -45,7 +61,12 @@ export default function ChatPage() {
     };
 
     ws.addEventListener('message', handleMessage);
-    return () => ws.removeEventListener('message', handleMessage);
+    console.log('Chat: Message listener attached');
+    
+    return () => {
+      console.log('Chat: Cleaning up message listener');
+      ws.removeEventListener('message', handleMessage);
+    };
   }, [ws, partnerId]);
 
   useEffect(() => {
