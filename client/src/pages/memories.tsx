@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Camera, Lock, Calendar, Heart, X } from 'lucide-react';
-import { getAllMemories, saveMemory } from '@/lib/storage';
+import { getAllMemories, saveMemory } from '@/lib/storage-encrypted';
 import type { Memory } from '@shared/schema';
 import { format } from 'date-fns';
 import { nanoid } from 'nanoid';

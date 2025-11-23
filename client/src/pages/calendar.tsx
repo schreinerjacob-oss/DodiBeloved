@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Calendar as CalendarIcon, Heart, Plus, Sparkles } from 'lucide-react';
-import { getAllCalendarEvents } from '@/lib/storage';
+import { getAllCalendarEvents } from '@/lib/storage-encrypted';
 import type { CalendarEvent } from '@shared/schema';
 import { format, differenceInDays } from 'date-fns';
 

@@ -1,22 +1,30 @@
 import { encrypt, decrypt, deriveKey, base64ToArrayBuffer } from '@/lib/crypto';
-import { getSetting } from '@/lib/storage';
+import { initDB as initDBRaw, getSetting as getSettingRaw, saveSetting as saveSettingRaw } from '@/lib/storage';
 import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction, EncryptedData } from '@shared/schema';
 
 let cachedKey: CryptoKey | null = null;
 
+export const initDB = initDBRaw;
+export const getSetting = getSettingRaw;
+export const saveSetting = saveSettingRaw;
+
 export async function getEncryptionKey(): Promise<CryptoKey> {
   if (cachedKey) return cachedKey;
-
-  const storedPassphrase = await getSetting('passphrase');
-  const storedSalt = await getSetting('salt');
+  
+  const storedPassphrase = await getSettingRaw('passphrase');
+  const storedSalt = await getSettingRaw('salt');
 
   if (!storedPassphrase || !storedSalt) {
-    throw new Error('No encryption key available');
+    throw new Error('No encryption credentials available');
   }
 
   const salt = base64ToArrayBuffer(storedSalt);
   cachedKey = await deriveKey(storedPassphrase, salt);
   return cachedKey;
+}
+
+export function clearEncryptionCache(): void {
+  cachedKey = null;
 }
 
 async function encryptObject<T>(obj: T): Promise<EncryptedData> {
@@ -93,4 +101,127 @@ export async function encryptReaction(reaction: Reaction): Promise<EncryptedData
 
 export async function decryptReaction(encrypted: EncryptedData): Promise<Reaction> {
   return decryptObject(encrypted);
+}
+
+export async function saveMessage(message: Message): Promise<void> {
+  const db = await initDB();
+  const encrypted = await encryptMessage(message);
+  await db.put('messages', encrypted);
+}
+
+export async function getAllMessages(): Promise<Message[]> {
+  const db = await initDB();
+  const encryptedMessages = await db.getAll('messages');
+  return Promise.all(encryptedMessages.map(enc => decryptMessage(enc)));
+}
+
+export async function saveMemory(memory: Memory): Promise<void> {
+  const db = await initDB();
+  const encrypted = await encryptMemory(memory);
+  await db.put('memories', encrypted);
+}
+
+export async function getAllMemories(): Promise<Memory[]> {
+  const db = await initDB();
+  const encryptedMemories = await db.getAll('memories');
+  return Promise.all(encryptedMemories.map(enc => decryptMemory(enc)));
+}
+
+export async function saveCalendarEvent(event: CalendarEvent): Promise<void> {
+  const db = await initDB();
+  const encrypted = await encryptCalendarEvent(event);
+  await db.put('calendarEvents', encrypted);
+}
+
+export async function getAllCalendarEvents(): Promise<CalendarEvent[]> {
+  const db = await initDB();
+  const encryptedEvents = await db.getAll('calendarEvents');
+  return Promise.all(encryptedEvents.map(enc => decryptCalendarEvent(enc)));
+}
+
+export async function saveDailyRitual(ritual: DailyRitual): Promise<void> {
+  const db = await initDB();
+  const encrypted = await encryptDailyRitual(ritual);
+  await db.put('dailyRituals', encrypted);
+}
+
+export async function getAllDailyRituals(): Promise<DailyRitual[]> {
+  const db = await initDB();
+  const encryptedRituals = await db.getAll('dailyRituals');
+  return Promise.all(encryptedRituals.map(enc => decryptDailyRitual(enc)));
+}
+
+export async function saveLoveLetter(letter: LoveLetter): Promise<void> {
+  const db = await initDB();
+  const encrypted = await encryptLoveLetter(letter);
+  await db.put('loveLetters', encrypted);
+}
+
+export async function getAllLoveLetters(): Promise<LoveLetter[]> {
+  const db = await initDB();
+  const encryptedLetters = await db.getAll('loveLetters');
+  return Promise.all(encryptedLetters.map(enc => decryptLoveLetter(enc)));
+}
+
+export async function saveFutureLetter(letter: FutureLetter): Promise<void> {
+  const db = await initDB();
+  const encrypted = await encryptFutureLetter(letter);
+  const withId = { ...encrypted, id: letter.id };
+  await db.put('loveLetters', withId);
+}
+
+export async function getAllFutureLetters(): Promise<FutureLetter[]> {
+  const db = await initDB();
+  const allEncrypted = await db.getAll('loveLetters');
+  const decrypted = await Promise.all(
+    allEncrypted.map(async (enc) => {
+      try {
+        return await decryptFutureLetter(enc);
+      } catch {
+        return null;
+      }
+    })
+  );
+  return decrypted.filter((letter): letter is FutureLetter => 
+    letter !== null && 'unlockDate' in letter
+  );
+}
+
+export async function savePrayer(prayer: Prayer): Promise<void> {
+  const db = await initDB();
+  const encrypted = await encryptPrayer(prayer);
+  const withId = { ...encrypted, id: prayer.id };
+  await db.put('loveLetters', withId);
+}
+
+export async function getAllPrayers(): Promise<Prayer[]> {
+  const db = await initDB();
+  const allEncrypted = await db.getAll('loveLetters');
+  const decrypted = await Promise.all(
+    allEncrypted.map(async (enc) => {
+      try {
+        return await decryptPrayer(enc);
+      } catch {
+        return null;
+      }
+    })
+  );
+  return decrypted.filter((item): item is Prayer => 
+    item !== null && 'gratitude' in item
+  );
+}
+
+export async function saveReaction(reaction: Reaction): Promise<void> {
+  const db = await initDB();
+  const encrypted = await encryptReaction(reaction);
+  await db.put('reactions', encrypted);
+}
+
+export async function getRecentReactions(limit: number = 10): Promise<Reaction[]> {
+  const db = await initDB();
+  const encryptedReactions = await db.getAll('reactions');
+  const allReactions = await Promise.all(encryptedReactions.map(enc => decryptReaction(enc)));
+  return allReactions
+    .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
+    .slice(0, limit);
 }

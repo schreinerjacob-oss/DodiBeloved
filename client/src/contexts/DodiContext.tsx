@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { generatePassphrase, generateSalt, deriveKey, arrayBufferToBase64 } from '@/lib/crypto';
-import { saveSetting, getSetting, initDB } from '@/lib/storage';
+import { saveSetting, getSetting, initDB } from '@/lib/storage-encrypted';
 import { getTrialStatus } from '@/lib/storage-subscription';
 import { nanoid } from 'nanoid';
 
