@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 export default function ChatPage() {
   const { userId, partnerId, isOnline } = useDodi();
   const { toast } = useToast();
-  const { send: sendWS, ws } = useWebSocket();
+  const { send: sendWS, ws, connected } = useWebSocket();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -60,14 +60,20 @@ export default function ChatPage() {
   };
 
   const handleSend = async () => {
-    if (!newMessage.trim() || !userId || !partnerId || !ws) {
-      if (!ws) {
-        toast({
-          title: "Connection error",
-          description: "WebSocket not connected. Please refresh.",
-          variant: "destructive",
-        });
-      }
+    console.log('handleSend called:', { text: newMessage.trim(), userId, partnerId, connected });
+    
+    if (!newMessage.trim()) {
+      console.log('No message text');
+      return;
+    }
+
+    if (!userId || !partnerId) {
+      console.log('Missing userId or partnerId');
+      toast({
+        title: "Not paired",
+        description: "Please pair with your beloved first",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -85,13 +91,19 @@ export default function ChatPage() {
         timestamp: now,
       };
 
+      console.log('Saving message to IndexedDB:', message.id);
+      
       // Save to IndexedDB first
       await saveMessage(message);
+      
+      console.log('Adding message to state');
       
       // Add to local state immediately
       setMessages(prev => [...prev, message]);
       setNewMessage('');
 
+      console.log('Sending message via WebSocket:', message.id);
+      
       // Send via WebSocket
       sendWS({
         type: 'message',
@@ -101,6 +113,7 @@ export default function ChatPage() {
       console.log('Message sent successfully:', message.id);
       
       if (isDisappearing) {
+        console.log('Disappearing message enabled, will delete after 5 seconds');
         toast({
           title: "Disappearing message sent",
           description: "Message will vanish after being read.",
@@ -116,7 +129,6 @@ export default function ChatPage() {
         description: error instanceof Error ? error.message : "Could not send message. Please try again.",
         variant: "destructive",
       });
-      setSending(false);
     } finally {
       setSending(false);
     }
