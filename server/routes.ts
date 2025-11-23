@@ -36,6 +36,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             userId = message.data.userId;
             if (userId) {
               connectedClients.set(userId, ws);
+              console.log('User registered:', userId, 'Total connected:', connectedClients.size);
             }
             break;
 
@@ -56,7 +57,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
 
           case 'message':
+            console.log('Server received message:', { 
+              senderId: message.data.senderId, 
+              recipientId: message.data.recipientId,
+              messageId: message.data.id,
+              connectedClientsCount: connectedClients.size,
+              connectedClientIds: Array.from(connectedClients.keys()),
+            });
             const savedMessage = await storage.saveMessage(message.data);
+            console.log('Message saved, attempting to broadcast to:', message.data.recipientId);
             broadcast(message.data.recipientId, {
               type: 'message',
               data: savedMessage,
@@ -134,8 +143,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   function broadcast(recipientId: string, message: WSMessage) {
     const client = connectedClients.get(recipientId);
+    console.log('Broadcast attempt:', { 
+      recipientId, 
+      messageType: message.type,
+      clientExists: !!client,
+      clientState: client?.readyState,
+      wsOpenState: WebSocket.OPEN 
+    });
     if (client && client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(message));
+      try {
+        client.send(JSON.stringify(message));
+        console.log('Message broadcast successfully to:', recipientId);
+      } catch (error) {
+        console.error('Broadcast send error:', error);
+      }
+    } else {
+      console.warn('Could not broadcast - client not found or not open:', { recipientId, exists: !!client, state: client?.readyState });
     }
   }
 
