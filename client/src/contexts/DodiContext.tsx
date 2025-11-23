@@ -31,19 +31,29 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const loadPairingData = async () => {
       try {
-        await initDB();
-        const storedUserId = await getSetting('userId');
-        const storedPartnerId = await getSetting('partnerId');
-        const storedPassphrase = await getSetting('passphrase');
+        const db = await initDB();
+        const storedUserId = await db.get('settings', 'userId');
+        const storedPartnerId = await db.get('settings', 'partnerId');
+        const storedPassphrase = await db.get('settings', 'passphrase');
 
-        console.log('Loaded pairing data:', { userId: !!storedUserId, partnerId: !!storedPartnerId, passphrase: !!storedPassphrase });
+        console.log('Loaded pairing data:', { 
+          userId: storedUserId?.value, 
+          partnerId: storedPartnerId?.value, 
+          hasPassphrase: !!storedPassphrase?.value 
+        });
 
-        if (storedUserId && storedPartnerId && storedPassphrase) {
-          setUserId(storedUserId);
-          setPartnerId(storedPartnerId);
-          setPassphrase(storedPassphrase);
+        if (storedUserId?.value && storedPartnerId?.value && storedPassphrase?.value) {
+          setUserId(storedUserId.value);
+          setPartnerId(storedPartnerId.value);
+          setPassphrase(storedPassphrase.value);
           setIsPaired(true);
           console.log('Pairing restored successfully');
+        } else if (storedUserId?.value) {
+          // User created pairing but not joined yet
+          setUserId(storedUserId.value);
+          setPassphrase(storedPassphrase?.value || null);
+          setPartnerId(null);
+          console.log('Unpaired user loaded');
         }
 
         const trialStatus = await getTrialStatus();
@@ -127,15 +137,21 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       throw new Error(`Cannot pair with yourself. Your ID: ${currentUserId}, Partner ID: ${newPartnerId}`);
     }
     
-    // Save the partnerId and shared passphrase
-    await saveSetting('partnerId', newPartnerId);
-    await saveSetting('passphrase', sharedPassphrase);
+    // Save the partnerId and shared passphrase - wait for DB to confirm
+    const db = await initDB();
+    await db.put('settings', { key: 'partnerId', value: newPartnerId });
+    await db.put('settings', { key: 'passphrase', value: sharedPassphrase });
     
+    // Verify the save succeeded
+    const saved = await db.get('settings', 'partnerId');
+    console.log('Verified partnerId saved:', saved);
+    
+    // Update context state
     setPartnerId(newPartnerId);
     setPassphrase(sharedPassphrase);
     setIsPaired(true);
     
-    console.log('Pairing saved successfully');
+    console.log('Pairing saved and verified successfully');
 
     // Notify partner that we've completed pairing
     setTimeout(() => {
