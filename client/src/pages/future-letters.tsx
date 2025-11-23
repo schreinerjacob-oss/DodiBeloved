@@ -172,10 +172,18 @@ export default function FutureLettersPage() {
                       {format(new Date(letter.unlockDate), 'MMM d, yyyy')}
                     </p>
                   </div>
-                  {isUnlocked && <Heart className="w-4 h-4 text-sage flex-shrink-0" />}
+                  {isUnlocked ? (
+                    <Heart className="w-4 h-4 text-sage flex-shrink-0" />
+                  ) : (
+                    <Lock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  )}
                 </div>
-                {isUnlocked && (
+                {isUnlocked ? (
                   <p className="text-sm mt-3 pt-3 border-t">{letter.content}</p>
+                ) : (
+                  <p className="text-sm mt-3 pt-3 border-t text-muted-foreground italic">
+                    This letter will be revealed on {format(new Date(letter.unlockDate), 'MMMM d, yyyy')}
+                  </p>
                 )}
               </Card>
             );

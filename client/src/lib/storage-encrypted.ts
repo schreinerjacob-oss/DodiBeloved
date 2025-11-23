@@ -217,11 +217,14 @@ export async function saveReaction(reaction: Reaction): Promise<void> {
   await db.put('reactions', encrypted);
 }
 
-export async function getRecentReactions(limit: number = 10): Promise<Reaction[]> {
+export async function getAllReactions(): Promise<Reaction[]> {
   const db = await initDB();
   const encryptedReactions = await db.getAll('reactions');
   const allReactions = await Promise.all(encryptedReactions.map(enc => decryptReaction(enc)));
-  return allReactions
-    .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
-    .slice(0, limit);
+  return allReactions.sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+}
+
+export async function getRecentReactions(limit: number = 10): Promise<Reaction[]> {
+  const allReactions = await getAllReactions();
+  return allReactions.slice(0, limit);
 }

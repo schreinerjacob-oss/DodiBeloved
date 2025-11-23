@@ -28,6 +28,23 @@ export default function PrayersPage() {
 
   const loadPrayers = async () => {
     const allPrayers = await getAllPrayers();
+    
+    const prayersByDate = allPrayers.reduce((acc, prayer) => {
+      const dateKey = format(new Date(prayer.prayerDate), 'yyyy-MM-dd');
+      if (!acc[dateKey]) acc[dateKey] = [];
+      acc[dateKey].push(prayer);
+      return acc;
+    }, {} as Record<string, Prayer[]>);
+
+    Object.keys(prayersByDate).forEach(dateKey => {
+      const dayPrayers = prayersByDate[dateKey];
+      if (dayPrayers.length === 2) {
+        dayPrayers.forEach(p => {
+          if (!p.isRevealed) p.isRevealed = true;
+        });
+      }
+    });
+
     setPrayers(allPrayers);
 
     const today = format(new Date(), 'yyyy-MM-dd');
@@ -86,6 +103,8 @@ export default function PrayersPage() {
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const todayPrayers = prayers.filter(p => format(new Date(p.prayerDate), 'yyyy-MM-dd') === today);
+  const bothSubmittedToday = todayPrayers.length === 2;
+  const revealedPrayers = prayers.filter(p => p.isRevealed && format(new Date(p.prayerDate), 'yyyy-MM-dd') !== today);
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -155,42 +174,76 @@ export default function PrayersPage() {
 
       <ScrollArea className="flex-1 p-6">
         <div className="max-w-2xl mx-auto space-y-6">
-          {todaySubmitted && todayPrayers.length > 0 && (
-            <Card className="p-6 bg-gradient-to-br from-sage/10 to-blush/10 border-sage/30">
+          {todaySubmitted && !bothSubmittedToday && (
+            <Card className="p-6 bg-gradient-to-br from-blush/10 to-gold/10 border-blush/30">
               <div className="flex items-start gap-3">
-                <Sparkles className="w-5 h-5 text-sage mt-0.5" />
+                <Lock className="w-5 h-5 text-blush mt-0.5" />
                 <div>
                   <h3 className="font-medium">Today's Gratitude Shared</h3>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Waiting to reveal both entries together...
+                    Waiting for your beloved to share theirs...
                   </p>
                 </div>
               </div>
             </Card>
           )}
 
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-3">Past Gratitudes</h3>
-            {prayers.length === 0 ? (
-              <Card className="p-8 text-center">
-                <Sparkles className="w-12 h-12 mx-auto text-muted-foreground mb-3 opacity-50" />
-                <p className="text-muted-foreground">No entries yet</p>
-              </Card>
-            ) : (
-              <div className="space-y-3">
-                {prayers.map((entry) => (
-                  <Card
-                    key={entry.id}
-                    className="p-4 space-y-2"
-                    data-testid={`card-prayer-${entry.id}`}
-                  >
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(entry.prayerDate), 'MMM d, yyyy')}
+          {bothSubmittedToday && (
+            <Card className="p-6 bg-gradient-to-br from-sage/10 to-blush/10 border-sage/30">
+              <div className="flex items-start gap-3 mb-4">
+                <Sparkles className="w-5 h-5 text-sage mt-0.5" />
+                <h3 className="font-medium">Today's Shared Gratitude</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {todayPrayers.map((entry) => (
+                  <div key={entry.id} className="space-y-2 p-3 rounded-md bg-background/40">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {entry.userId === userId ? 'You' : 'Your beloved'}
                     </p>
                     <p className="text-sm">{entry.gratitudeEntry}</p>
                     {entry.prayerEntry && (
-                      <p className="text-sm italic text-muted-foreground">{entry.prayerEntry}</p>
+                      <p className="text-sm italic text-muted-foreground mt-2">{entry.prayerEntry}</p>
                     )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">Past Gratitudes</h3>
+            {revealedPrayers.length === 0 ? (
+              <Card className="p-8 text-center">
+                <Sparkles className="w-12 h-12 mx-auto text-muted-foreground mb-3 opacity-50" />
+                <p className="text-muted-foreground">No past entries yet</p>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {Object.entries(
+                  revealedPrayers.reduce((acc, prayer) => {
+                    const dateKey = format(new Date(prayer.prayerDate), 'yyyy-MM-dd');
+                    if (!acc[dateKey]) acc[dateKey] = [];
+                    acc[dateKey].push(prayer);
+                    return acc;
+                  }, {} as Record<string, Prayer[]>)
+                ).map(([dateKey, dayPrayers]) => (
+                  <Card key={dateKey} className="p-4 space-y-3">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {format(new Date(dateKey), 'MMM d, yyyy')}
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {dayPrayers.map((entry) => (
+                        <div key={entry.id} className="p-3 rounded-md bg-sage/5 border border-sage/20 space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {entry.userId === userId ? 'You' : 'Your beloved'}
+                          </p>
+                          <p className="text-sm">{entry.gratitudeEntry}</p>
+                          {entry.prayerEntry && (
+                            <p className="text-sm italic text-muted-foreground mt-2">{entry.prayerEntry}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </Card>
                 ))}
               </div>

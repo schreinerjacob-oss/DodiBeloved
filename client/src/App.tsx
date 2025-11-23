@@ -12,6 +12,7 @@ import DailyRitualPage from "@/pages/daily-ritual";
 import LoveLettersPage from "@/pages/love-letters";
 import FutureLettersPage from "@/pages/future-letters";
 import PrayersPage from "@/pages/prayers";
+import ReactionsPage from "@/pages/reactions";
 import CallsPage from "@/pages/calls";
 import SettingsPage from "@/pages/settings";
 import SubscriptionPage from "@/pages/subscription";
@@ -56,7 +57,8 @@ function MainApp() {
     { href: "/ritual", icon: Sparkles, label: "Ritual" },
     { href: "/letters", icon: Heart, label: "Letters" },
     { href: "/future", icon: Clock, label: "Future" },
-    { href: "/prayers", icon: Sparkles, label: "Prayers" },
+    { href: "/prayers", icon: Lock, label: "Prayers" },
+    { href: "/reactions", icon: Zap, label: "Reactions" },
     { href: "/settings", icon: Settings, label: "Settings" },
   ];
 
@@ -72,6 +74,7 @@ function MainApp() {
           <Route path="/letters" component={LoveLettersPage} />
           <Route path="/future" component={FutureLettersPage} />
           <Route path="/prayers" component={PrayersPage} />
+          <Route path="/reactions" component={ReactionsPage} />
           <Route path="/subscription" component={SubscriptionPage} />
           <Route path="/settings" component={SettingsPage} />
           <Route path="/" component={ChatPage} />
