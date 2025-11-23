@@ -61,6 +61,10 @@ export default function ChatPage() {
 
   const handleSend = async () => {
     console.log('handleSend called:', { text: newMessage.trim(), userId, partnerId, connected });
+    toast({
+      title: "Sending...",
+      description: newMessage,
+    });
     
     if (!newMessage.trim()) {
       console.log('No message text');
