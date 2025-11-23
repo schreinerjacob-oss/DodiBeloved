@@ -15,12 +15,14 @@ interface MoreMenuItem {
   label: string;
 }
 
-export function MoreMenu({ items }: { items: MoreMenuItem[] }) {
+export function MoreMenu({ items, disabled }: { items: MoreMenuItem[]; disabled?: boolean }) {
   const [, setLocation] = useLocation();
   const [location] = useLocation();
 
-  const handleNavigate = (href: string) => {
-    setLocation(href);
+  const handleNavigate = (href: string, itemDisabled: boolean) => {
+    if (!itemDisabled) {
+      setLocation(href);
+    }
   };
 
   return (
@@ -39,11 +41,18 @@ export function MoreMenu({ items }: { items: MoreMenuItem[] }) {
         {items.map((item) => {
           const Icon = item.icon;
           const isActive = location === item.href;
+          const isAllowedWhenDisabled = item.href === '/settings' || item.href === '/subscription';
+          const itemDisabled = (disabled || false) && !isAllowedWhenDisabled;
           return (
             <DropdownMenuItem
               key={item.href}
-              onClick={() => handleNavigate(item.href)}
-              className={cn('cursor-pointer', isActive && 'bg-accent')}
+              onClick={() => handleNavigate(item.href, itemDisabled)}
+              className={cn(
+                'cursor-pointer',
+                isActive && 'bg-accent',
+                itemDisabled && 'opacity-40 cursor-not-allowed'
+              )}
+              disabled={itemDisabled}
               data-testid={`menu-${item.label.toLowerCase()}`}
             >
               <Icon className="w-4 h-4 mr-2" />

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Route, Switch, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -20,27 +21,36 @@ import { MessageSquare, Camera, CalendarDays, Sparkles, Heart, Clock, Phone, Loc
 import { cn } from "@/lib/utils";
 import { MoreMenu } from "@/components/more-menu";
 
-function NavItem({ href, icon: Icon, label, active }: { href: string; icon: any; label: string; active: boolean }) {
+function NavItem({ href, icon: Icon, label, active, disabled }: { href: string; icon: any; label: string; active: boolean; disabled?: boolean }) {
   const [, setLocation] = useLocation();
   
   return (
     <button
-      onClick={() => setLocation(href)}
+      onClick={() => !disabled && setLocation(href)}
+      disabled={disabled}
       className={cn(
-        "flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-all hover-elevate",
+        "flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-all",
+        !disabled && "hover-elevate",
+        disabled && "opacity-40 cursor-not-allowed",
         active ? "text-primary" : "text-muted-foreground"
       )}
       data-testid={`nav-${label.toLowerCase()}`}
     >
-      <Icon className={cn("w-5 h-5", active && "animate-gentle-bounce")} />
+      <Icon className={cn("w-5 h-5", active && !disabled && "animate-gentle-bounce")} />
       <span className="text-xs font-medium">{label}</span>
     </button>
   );
 }
 
 function MainApp() {
-  const { isPaired, isOnline } = useDodi();
-  const [location] = useLocation();
+  const { isPaired, isOnline, isTrialActive } = useDodi();
+  const [location, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (isPaired && !isTrialActive && location !== '/subscription' && location !== '/settings') {
+      setLocation('/subscription');
+    }
+  }, [isPaired, isTrialActive, location, setLocation]);
 
   if (!isPaired) {
     return <PairingPage />;
@@ -89,10 +99,11 @@ function MainApp() {
                 key={item.href}
                 {...item}
                 active={location === item.href || (location === "/" && item.href === "/chat")}
+                disabled={!isTrialActive}
               />
             ))}
           </div>
-          <MoreMenu items={moreItems} />
+          <MoreMenu items={moreItems} disabled={!isTrialActive} />
         </div>
         <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
           <Lock className="w-3 h-3" />
