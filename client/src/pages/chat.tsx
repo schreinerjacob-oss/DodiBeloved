@@ -81,15 +81,11 @@ export default function ChatPage() {
   };
 
   const handleSend = async () => {
-    console.log('handleSend called:', { text: newMessage.trim(), userId, partnerId, connected });
-    
     if (!newMessage.trim()) {
-      console.log('No message text');
       return;
     }
 
     if (!userId || !partnerId) {
-      console.log('Missing userId or partnerId');
       toast({
         title: "Not paired",
         description: "Please pair with your beloved first",
@@ -100,66 +96,44 @@ export default function ChatPage() {
 
     setSending(true);
     try {
+      const messageId = nanoid();
       const now = new Date();
-      const messageObj: any = {
-        id: nanoid(),
+      
+      const message: Message = {
+        id: messageId,
         senderId: userId,
         recipientId: partnerId,
         content: newMessage,
         type: 'text',
         mediaUrl: null,
         isDisappearing,
-        timestamp: now.getTime(), // Convert to milliseconds for proper IDB storage
-      };
-
-      console.log('Saving message to IndexedDB:', messageObj.id);
-      
-      // Save to IndexedDB first
-      try {
-        await saveMessage(messageObj);
-      } catch (dbError) {
-        console.error('IDB save error:', dbError);
-        // Continue anyway - we can still send via WebSocket
-      }
-      
-      console.log('Adding message to state');
-      
-      // Add to local state immediately with proper timestamp
-      const displayMessage: Message = {
-        ...messageObj,
         timestamp: now,
       };
-      setMessages(prev => [...prev, displayMessage]);
+
+      // Add to local state immediately
+      setMessages(prev => [...prev, message]);
       setNewMessage('');
 
-      console.log('Sending message via WebSocket:', messageObj.id);
-      
-      // Send via WebSocket with numeric timestamp
+      // Send via WebSocket
       sendWS({
         type: 'message',
-        data: messageObj,
+        data: message,
       });
 
       toast({
         title: "Message sent",
       });
-
-      console.log('Message sent successfully:', messageObj.id);
       
       if (isDisappearing) {
-        console.log('Disappearing message enabled, will delete after 30 seconds');
-        toast({
-          title: "Message will disappear in 30 seconds",
-        });
         setTimeout(() => {
-          setMessages(prev => prev.filter(m => m.id !== messageObj.id));
+          setMessages(prev => prev.filter(m => m.id !== messageId));
         }, 30000);
       }
     } catch (error) {
       console.error('Send error:', error);
       toast({
         title: "Failed to send",
-        description: error instanceof Error ? error.message : "Could not send message. Please try again.",
+        description: "Could not send message. Please try again.",
         variant: "destructive",
       });
     } finally {
