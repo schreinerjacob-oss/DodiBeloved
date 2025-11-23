@@ -6,12 +6,14 @@ import { nanoid } from 'nanoid';
 
 interface DodiContextType {
   userId: string | null;
+  displayName: string | null;
   partnerId: string | null;
   passphrase: string | null;
   isPaired: boolean;
   isOnline: boolean;
   isTrialActive: boolean;
   trialDaysRemaining: number;
+  initializeProfile: (displayName: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
   completePairing: (partnerId: string, passphrase: string) => Promise<void>;
   logout: () => Promise<void>;
