@@ -141,10 +141,13 @@ export default function PairingPage() {
   const handleCreatePairing = async () => {
     setLoading(true);
     try {
+      console.log('Creating new pairing...');
       const data = await initializePairing();
+      console.log('New pairing created with userId:', data.userId);
       setPairingData(data);
       setMode('create');
     } catch (error) {
+      console.error('Create pairing error:', error);
       toast({
         title: 'Error',
         description: 'Failed to create pairing. Please try again.',
@@ -179,15 +182,17 @@ export default function PairingPage() {
 
     setLoading(true);
     try {
+      console.log('Joining pairing with partner ID:', partnerId);
       await completePairing(partnerId, partnerPassphrase);
       toast({
         title: 'Paired!',
         description: 'Welcome to your private sanctuary.',
       });
     } catch (error) {
+      console.error('Complete pairing error:', error);
       toast({
         title: 'Error',
-        description: 'Failed to complete pairing. Please check your details.',
+        description: error instanceof Error ? error.message : 'Failed to complete pairing. Please check your details.',
         variant: 'destructive',
       });
     } finally {

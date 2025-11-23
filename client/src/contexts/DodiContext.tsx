@@ -81,41 +81,61 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     const salt = generateSalt();
     const saltBase64 = arrayBufferToBase64(salt);
     
+    console.log('initializePairing: Creating new user:', newUserId);
+    
     await saveSetting('userId', newUserId);
     await saveSetting('passphrase', newPassphrase);
     await saveSetting('salt', saltBase64);
+    // Clear any old partner data when creating new pairing
+    await saveSetting('partnerId', '');
     
     setUserId(newUserId);
     setPassphrase(newPassphrase);
+    setPartnerId(null);
+    
+    console.log('initializePairing complete:', { userId: newUserId });
     
     return { userId: newUserId, passphrase: newPassphrase };
   };
 
   const completePairing = async (newPartnerId: string, sharedPassphrase: string) => {
-    console.log('completePairing called with:', { newPartnerId, currentUserId: userId });
+    console.log('completePairing called with:', { newPartnerId, currentUserId: userId, sharedPassphrase });
     
-    // If joining (no userId yet), create one
+    // Always create a new userId for the joining user
+    // This ensures each device has a unique ID
     let currentUserId = userId;
-    if (!currentUserId) {
+    
+    // If this is a join operation (userId is null OR we're explicitly joining with a different partner)
+    // create a fresh userId
+    if (!currentUserId || currentUserId === newPartnerId) {
+      const oldUserId = currentUserId;
       currentUserId = nanoid();
+      console.log('Creating new userId for join:', { oldUserId, newUserId: currentUserId });
       await saveSetting('userId', currentUserId);
       setUserId(currentUserId);
-      console.log('Created new userId for joining user:', currentUserId);
     }
     
-    console.log('Saving pairing:', { myUserId: currentUserId, partnerId: newPartnerId, areDifferent: currentUserId !== newPartnerId });
+    console.log('Final pairing setup:', { 
+      myUserId: currentUserId, 
+      partnerId: newPartnerId, 
+      areEqual: currentUserId === newPartnerId,
+      passphrase: sharedPassphrase 
+    });
     
-    // Ensure partnerId is different from our userId
+    // Final safety check
     if (currentUserId === newPartnerId) {
-      throw new Error('Partner ID cannot be the same as your ID');
+      throw new Error(`Cannot pair with yourself. Your ID: ${currentUserId}, Partner ID: ${newPartnerId}`);
     }
     
+    // Save the partnerId and shared passphrase
     await saveSetting('partnerId', newPartnerId);
     await saveSetting('passphrase', sharedPassphrase);
     
     setPartnerId(newPartnerId);
     setPassphrase(sharedPassphrase);
     setIsPaired(true);
+    
+    console.log('Pairing saved successfully');
 
     // Notify partner that we've completed pairing
     setTimeout(() => {
@@ -124,7 +144,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       const ws = new WebSocket(wsUrl);
       
       ws.onopen = () => {
-        console.log('Notifying partner of pairing completion');
+        console.log('Notifying partner of pairing completion:', { myUserId: currentUserId, theirUserId: newPartnerId });
         ws.send(JSON.stringify({
           type: 'register',
           data: { userId: currentUserId },
