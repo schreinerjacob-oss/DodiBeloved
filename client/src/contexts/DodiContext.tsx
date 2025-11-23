@@ -92,6 +92,24 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   };
 
   const completePairing = async (newPartnerId: string, sharedPassphrase: string) => {
+    console.log('completePairing called with:', { newPartnerId, currentUserId: userId });
+    
+    // If joining (no userId yet), create one
+    let currentUserId = userId;
+    if (!currentUserId) {
+      currentUserId = nanoid();
+      await saveSetting('userId', currentUserId);
+      setUserId(currentUserId);
+      console.log('Created new userId for joining user:', currentUserId);
+    }
+    
+    console.log('Saving pairing:', { myUserId: currentUserId, partnerId: newPartnerId, areDifferent: currentUserId !== newPartnerId });
+    
+    // Ensure partnerId is different from our userId
+    if (currentUserId === newPartnerId) {
+      throw new Error('Partner ID cannot be the same as your ID');
+    }
+    
     await saveSetting('partnerId', newPartnerId);
     await saveSetting('passphrase', sharedPassphrase);
     
@@ -106,14 +124,15 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       const ws = new WebSocket(wsUrl);
       
       ws.onopen = () => {
+        console.log('Notifying partner of pairing completion');
         ws.send(JSON.stringify({
           type: 'register',
-          data: { userId },
+          data: { userId: currentUserId },
         }));
         
         ws.send(JSON.stringify({
           type: 'partner-joined',
-          data: { partnerId: newPartnerId, joinedUserId: userId },
+          data: { partnerId: newPartnerId, joinedUserId: currentUserId },
         }));
         
         ws.close();
