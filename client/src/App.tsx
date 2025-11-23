@@ -5,6 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DodiProvider, useDodi } from "@/contexts/DodiContext";
+import ProfileSetupPage from "@/pages/profile-setup";
 import PairingPage from "@/pages/pairing";
 import ChatPage from "@/pages/chat";
 import MemoriesPage from "@/pages/memories";
@@ -43,7 +44,7 @@ function NavItem({ href, icon: Icon, label, active, disabled }: { href: string; 
 }
 
 function MainApp() {
-  const { isPaired, isOnline, isTrialActive } = useDodi();
+  const { userId, isPaired, isOnline, isTrialActive } = useDodi();
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
@@ -51,6 +52,10 @@ function MainApp() {
       setLocation('/subscription');
     }
   }, [isPaired, isTrialActive, location, setLocation]);
+
+  if (!userId) {
+    return <ProfileSetupPage />;
+  }
 
   if (!isPaired) {
     return <PairingPage />;
