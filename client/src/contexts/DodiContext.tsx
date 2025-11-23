@@ -57,12 +57,33 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    const updateTrialStatus = async () => {
+      try {
+        const trialStatus = await getTrialStatus();
+        setIsTrialActive(trialStatus.isActive);
+        setTrialDaysRemaining(trialStatus.daysRemaining);
+      } catch (error) {
+        console.error('Failed to update trial status:', error);
+      }
+    };
+
     loadPairingData();
+
+    const trialCheckInterval = setInterval(updateTrialStatus, 60000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        updateTrialStatus();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     window.addEventListener('online', () => setIsOnline(true));
     window.addEventListener('offline', () => setIsOnline(false));
 
     return () => {
+      clearInterval(trialCheckInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('online', () => setIsOnline(true));
       window.removeEventListener('offline', () => setIsOnline(false));
     };
@@ -88,10 +109,17 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   };
 
   const completePairing = async (newPartnerId: string, sharedPassphrase: string) => {
+    if (!newPartnerId || !sharedPassphrase) {
+      throw new Error('Partner ID and passphrase are required');
+    }
+    
     let currentUserId = userId;
     
     if (!currentUserId || currentUserId === newPartnerId) {
-      currentUserId = nanoid();
+      do {
+        currentUserId = nanoid();
+      } while (currentUserId === newPartnerId);
+      
       await saveSetting('userId', currentUserId);
       setUserId(currentUserId);
     }

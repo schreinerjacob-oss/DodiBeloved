@@ -15,14 +15,24 @@
 - **Disappearing messages** with auto-delete timers (NEW)
 - **30-day free trial** with subscription plans (NEW)
 
-## Recent Updates (Current Session)
+## Recent Updates (Latest Session - Nov 23, 2025)
 
-### Features Completed:
-1. **Disappearing Messages** - Added toggle button in chat interface to send messages that auto-delete after 5 seconds
+### Critical Fixes Completed:
+1. **Global Polyfill Fix** - Added `window.global = window` in index.html to fix "global is not defined" error from Simple-Peer library
+2. **Subscription UI** - Added explicit `text-gold` class to Infinity icon for Lifetime plan visibility
+3. **Trial Enforcement** - Complete implementation:
+   - useEffect redirect guard (redirects to /subscription when trial expires)
+   - Periodic trial status checking (every 60 seconds)
+   - Visibility change listener (re-checks when app becomes visible)
+   - Navigation disabled for expired trials (except Settings/Subscription)
+4. **Pairing Logic** - Improved unique ID generation with do-while loop to prevent ID collisions
+
+### Previous Session Features:
+1. **Disappearing Messages** - Toggle button in chat interface to send messages that auto-delete after 5 seconds
 2. **Monetization System** - Complete subscription tier structure:
    - Monthly: $2.99 USD
    - Yearly: $29.99 USD (Best value - labeled "Most Popular")
-   - Lifetime: $79 USD one-time (labeled "Forever")
+   - Lifetime: $79 USD one-time (labeled "Forever" with gold infinity symbol)
 3. **Memory Upload System** - Full file selection, preview, and caption functionality for memories vault
 4. **Subscription Context** - Trial tracking (30-day default) with countdown in settings
 5. **Subscription Page** - Beautiful pricing page with plan cards, features list, and Stripe integration ready
@@ -34,6 +44,8 @@
 - Integrated trial countdown in `DodiContext` and settings page
 - Disappearing message toggle uses Eye/EyeOff icons for visual clarity
 - Auto-delete timer on disappearing messages (5-second demo timeout)
+- Global polyfill for Simple-Peer WebRTC library
+- Trial enforcement with React useEffect (no render violations)
 
 ## User Preferences
 
