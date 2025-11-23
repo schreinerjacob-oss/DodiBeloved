@@ -231,18 +231,21 @@ Preferred communication style: Simple, everyday language.
 
 ## Next Phase Features (Ready to Build)
 
-1. **PeerJS/WebRTC Fallback** - Direct peer-to-peer when server relay not available
-2. **Custom Question Sets** - Allow couples to create personalized daily ritual questions
-3. **Mood Tracking Over Time** - Historical emotion data visualization
-4. **Voice and Video Calls** - Encrypted WebRTC streams
-5. **Data Export & Backup** - Encrypted archive generation for download
-6. **Capacitor Wrapper** - Native iOS/Android app store distribution
+1. **Custom Question Sets** - Allow couples to create personalized daily ritual questions
+2. **Mood Tracking Over Time** - Historical emotion data visualization
+3. **Data Export & Backup** - Encrypted archive generation for download
+4. **Capacitor Wrapper** - Native iOS/Android app store distribution
+5. **Advanced Analytics** - Call history, message frequency insights (privacy-respecting)
+6. **Local Backup Sync** - Automatic encrypted backups to iCloud/Google Drive
 
 ## Status
 
-✅ **MVP Complete** - All core features functional and tested
-✅ **Disappearing Messages** - Fully implemented with visual toggle
-✅ **Monetization Ready** - Subscription structure in place, Stripe integration ready
-✅ **PWA Installation** - App installable on iOS and Android
-✅ **Production Ready** - Can be deployed as PWA immediately
-⏳ **Next Phase** - Ready to add WebRTC, advanced features, and native apps
+✅ **MVP Complete** - All 10 core features implemented and tested
+✅ **Voice & Video Calling** - Full WebRTC p2p calling with audio/video toggle
+✅ **Disappearing Messages** - 30-second auto-delete with visual toggle
+✅ **Profile Setup** - Two-step onboarding (create profile → pair)
+✅ **Monetization** - 30-day free trial + 3 subscription tiers
+✅ **PWA Installation** - Installable on iOS and Android
+✅ **Encryption** - End-to-end AES-GCM 256 + PBKDF2 600k iterations
+✅ **Production Ready** - Fully functional, ready to deploy and scale
+🚀 **Ready for Deployment** - All features tested and working
