@@ -182,13 +182,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
 
           case 'request-history':
-            // Forward history request to partner (peer-to-peer)
+          case 'request-ritual-history':
+          case 'request-prayer-history':
+          case 'request-letter-history':
+          case 'request-future-letter-history':
+          case 'request-reaction-history':
+          case 'request-memory-history':
+          case 'request-calendar-history':
+            // Forward all history requests to partner (peer-to-peer)
             if (userId) {
               const partnerId = userPairings.get(userId);
               if (partnerId) {
-                console.log('Forwarding history request from', userId, 'to partner', partnerId);
+                console.log('Forwarding', message.type, 'from', userId, 'to partner', partnerId);
                 broadcast(partnerId, {
-                  type: 'request-history',
+                  type: message.type,
                   data: message.data,
                 });
               }
@@ -196,13 +203,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
 
           case 'history-response':
-            // Forward history response to partner (peer-to-peer)
+          case 'ritual-history-response':
+          case 'prayer-history-response':
+          case 'letter-history-response':
+          case 'future-letter-history-response':
+          case 'reaction-history-response':
+          case 'memory-history-response':
+          case 'calendar-history-response':
+            // Forward all history responses to partner (peer-to-peer)
             if (userId) {
               const partnerId = userPairings.get(userId);
               if (partnerId) {
-                console.log('Forwarding history response from', userId, 'to partner', partnerId);
+                console.log('Forwarding', message.type, 'from', userId, 'to partner', partnerId);
                 broadcast(partnerId, {
-                  type: 'history-response',
+                  type: message.type,
                   data: message.data,
                 });
               }

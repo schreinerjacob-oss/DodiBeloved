@@ -39,25 +39,57 @@ export default function DailyRitualPage() {
     loadRituals();
   }, []);
 
-  // Listen for incoming rituals from partner
+  // Listen for incoming rituals from partner and handle history sync
   useEffect(() => {
     if (!ws || !partnerId) return;
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
+        
         if (data.type === 'ritual') {
           console.log('Received ritual from partner:', data.data);
           const incomingRitual = data.data;
           
           if (incomingRitual.partnerId === userId && incomingRitual.userId === partnerId) {
-            saveDailyRitual(incomingRitual).then(() => {
-              setRituals(prev => {
-                if (prev.some(r => r.id === incomingRitual.id)) {
-                  return prev;
-                }
-                return [...prev, incomingRitual];
-              });
+            await saveDailyRitual(incomingRitual);
+            setRituals(prev => {
+              if (prev.some(r => r.id === incomingRitual.id)) {
+                return prev;
+              }
+              return [...prev, incomingRitual];
+            });
+          }
+        } else if (data.type === 'request-ritual-history') {
+          console.log('Partner requesting ritual history, sending...');
+          const allRituals = await getAllDailyRituals();
+          const relevantRituals = allRituals.filter(
+            r => (r.userId === userId && r.partnerId === partnerId) ||
+                 (r.userId === partnerId && r.partnerId === userId)
+          );
+          
+          sendWS({
+            type: 'ritual-history-response',
+            data: { rituals: relevantRituals, partnerId: partnerId },
+          });
+        } else if (data.type === 'ritual-history-response') {
+          console.log('Received ritual history from partner');
+          const partnerRituals: DailyRitual[] = data.data.rituals || [];
+          
+          for (const ritual of partnerRituals) {
+            try {
+              await saveDailyRitual(ritual);
+            } catch (err) {
+              console.error('Error saving partner ritual:', err);
+            }
+          }
+          
+          await loadRituals();
+          
+          if (partnerRituals.length > 0) {
+            toast({
+              title: "Rituals synced",
+              description: `Synced ${partnerRituals.length} rituals with your beloved`,
             });
           }
         }
@@ -67,7 +99,20 @@ export default function DailyRitualPage() {
     };
 
     ws.addEventListener('message', handleMessage);
+    
+    // Request partner's ritual history on connection
+    const requestHistoryTimeout = setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN && partnerId) {
+        console.log('Requesting partner ritual history...');
+        sendWS({
+          type: 'request-ritual-history',
+          data: { requesterId: userId },
+        });
+      }
+    }, 500);
+    
     return () => {
+      clearTimeout(requestHistoryTimeout);
       ws.removeEventListener('message', handleMessage);
     };
   }, [ws, partnerId, userId]);

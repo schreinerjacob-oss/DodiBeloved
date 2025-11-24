@@ -17,18 +17,27 @@
 
 ## Recent Updates (Latest Session - Nov 24, 2025)
 
-### Complete Peer-to-Peer Sync Implementation:
-1. **All Features Now Sync** - Complete WebSocket sync for ALL app features (peer-to-peer, server as relay only):
+### Complete Peer-to-Peer Sync Implementation with History:
+1. **All Features Now Sync with History** - Complete WebSocket sync for ALL app features with automatic history sync on device refresh:
    - Chat messages with history sync
-   - Memories (photos/videos)
-   - Calendar events and anniversaries
-   - Daily rituals (3 questions)
-   - Love letters
-   - Future letters (time-locked)
-   - Gratitude & Prayers (renamed from "Prayers")
-   - Quick reactions
-2. **Navigation Update** - Renamed "Prayers" to "Gratitude" in bottom nav (full name: "Gratitude & Prayers")
-3. **Server Architecture** - Updated all message types (prayer, ritual, letter, reaction, future-letter) to peer-to-peer relay (no storage)
+   - Memories (photos/videos) with history sync
+   - Calendar events and anniversaries with history sync
+   - Daily rituals (3 questions) with history sync
+   - Love letters with history sync
+   - Future letters (time-locked) with history sync
+   - Gratitude & Prayers (renamed from "Prayers") with history sync
+   - Quick reactions with history sync
+2. **History Sync Architecture** - On device connection or refresh:
+   - Device loads its own local IndexedDB data
+   - Requests partner's history via WebSocket
+   - Partner sends all their data back
+   - Device saves partner's data to local IndexedDB
+   - Combined history displayed from both devices
+3. **Navigation Update** - Renamed "Prayers" to "Gratitude" in bottom nav (full name: "Gratitude & Prayers")
+4. **Server Architecture** - Server relays all message types and history requests/responses (no data storage):
+   - Real-time sync: `message`, `memory`, `calendar`, `ritual`, `letter`, `future-letter`, `prayer`, `reaction`
+   - History requests: `request-*-history` (8 types)
+   - History responses: `*-history-response` (8 types)
 
 ### Previous Critical Fixes (Same Session):
 1. **Chat Button Fixes** - Replaced shadcn Button components with native HTML buttons in chat input bar

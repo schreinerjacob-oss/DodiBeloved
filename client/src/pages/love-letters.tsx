@@ -29,25 +29,57 @@ export default function LoveLettersPage() {
     loadLetters();
   }, []);
 
-  // Listen for incoming letters from partner
+  // Listen for incoming letters from partner and handle history sync
   useEffect(() => {
     if (!ws || !partnerId) return;
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
+        
         if (data.type === 'letter') {
           console.log('Received letter from partner:', data.data);
           const incomingLetter = data.data;
           
           if (incomingLetter.recipientId === userId && incomingLetter.authorId === partnerId) {
-            saveLoveLetter(incomingLetter).then(() => {
-              setLetters(prev => {
-                if (prev.some(l => l.id === incomingLetter.id)) {
-                  return prev;
-                }
-                return [...prev, incomingLetter];
-              });
+            await saveLoveLetter(incomingLetter);
+            setLetters(prev => {
+              if (prev.some(l => l.id === incomingLetter.id)) {
+                return prev;
+              }
+              return [...prev, incomingLetter];
+            });
+          }
+        } else if (data.type === 'request-letter-history') {
+          console.log('Partner requesting letter history, sending...');
+          const allLetters = await getAllLoveLetters();
+          const relevantLetters = allLetters.filter(
+            l => (l.authorId === userId && l.recipientId === partnerId) ||
+                 (l.authorId === partnerId && l.recipientId === userId)
+          );
+          
+          sendWS({
+            type: 'letter-history-response',
+            data: { letters: relevantLetters, partnerId: partnerId },
+          });
+        } else if (data.type === 'letter-history-response') {
+          console.log('Received letter history from partner');
+          const partnerLetters: LoveLetter[] = data.data.letters || [];
+          
+          for (const letter of partnerLetters) {
+            try {
+              await saveLoveLetter(letter);
+            } catch (err) {
+              console.error('Error saving partner letter:', err);
+            }
+          }
+          
+          await loadLetters();
+          
+          if (partnerLetters.length > 0) {
+            toast({
+              title: "Letters synced",
+              description: `Synced ${partnerLetters.length} letters with your beloved`,
             });
           }
         }
@@ -57,7 +89,20 @@ export default function LoveLettersPage() {
     };
 
     ws.addEventListener('message', handleMessage);
+    
+    // Request partner's letter history on connection
+    const requestHistoryTimeout = setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN && partnerId) {
+        console.log('Requesting partner letter history...');
+        sendWS({
+          type: 'request-letter-history',
+          data: { requesterId: userId },
+        });
+      }
+    }, 500);
+    
     return () => {
+      clearTimeout(requestHistoryTimeout);
       ws.removeEventListener('message', handleMessage);
     };
   }, [ws, partnerId, userId]);

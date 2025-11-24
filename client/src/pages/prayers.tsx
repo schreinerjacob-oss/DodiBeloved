@@ -28,26 +28,57 @@ export default function PrayersPage() {
     loadPrayers();
   }, []);
 
-  // Listen for incoming prayers from partner
+  // Listen for incoming prayers from partner and handle history sync
   useEffect(() => {
     if (!ws || !partnerId) return;
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
+        
         if (data.type === 'prayer') {
           console.log('Received prayer from partner:', data.data);
           const incomingPrayer = data.data;
           
-          // Only accept prayers where we are the partner
           if (incomingPrayer.partnerId === userId && incomingPrayer.userId === partnerId) {
-            savePrayer(incomingPrayer).then(() => {
-              setPrayers(prev => {
-                if (prev.some(p => p.id === incomingPrayer.id)) {
-                  return prev;
-                }
-                return [...prev, incomingPrayer];
-              });
+            await savePrayer(incomingPrayer);
+            setPrayers(prev => {
+              if (prev.some(p => p.id === incomingPrayer.id)) {
+                return prev;
+              }
+              return [...prev, incomingPrayer];
+            });
+          }
+        } else if (data.type === 'request-prayer-history') {
+          console.log('Partner requesting prayer history, sending...');
+          const allPrayers = await getAllPrayers();
+          const relevantPrayers = allPrayers.filter(
+            p => (p.userId === userId && p.partnerId === partnerId) ||
+                 (p.userId === partnerId && p.partnerId === userId)
+          );
+          
+          sendWS({
+            type: 'prayer-history-response',
+            data: { prayers: relevantPrayers, partnerId: partnerId },
+          });
+        } else if (data.type === 'prayer-history-response') {
+          console.log('Received prayer history from partner');
+          const partnerPrayers: Prayer[] = data.data.prayers || [];
+          
+          for (const prayer of partnerPrayers) {
+            try {
+              await savePrayer(prayer);
+            } catch (err) {
+              console.error('Error saving partner prayer:', err);
+            }
+          }
+          
+          await loadPrayers();
+          
+          if (partnerPrayers.length > 0) {
+            toast({
+              title: "Gratitude synced",
+              description: `Synced ${partnerPrayers.length} entries with your beloved`,
             });
           }
         }
@@ -57,7 +88,20 @@ export default function PrayersPage() {
     };
 
     ws.addEventListener('message', handleMessage);
+    
+    // Request partner's prayer history on connection
+    const requestHistoryTimeout = setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN && partnerId) {
+        console.log('Requesting partner prayer history...');
+        sendWS({
+          type: 'request-prayer-history',
+          data: { requesterId: userId },
+        });
+      }
+    }, 500);
+    
     return () => {
+      clearTimeout(requestHistoryTimeout);
       ws.removeEventListener('message', handleMessage);
     };
   }, [ws, partnerId, userId]);

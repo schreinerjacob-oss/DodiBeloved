@@ -28,29 +28,57 @@ export default function MemoriesPage() {
     loadMemories();
   }, []);
 
-  // Listen for incoming memories from partner
+  // Listen for incoming memories from partner and handle history sync
   useEffect(() => {
     if (!ws || !partnerId) return;
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
+        
         if (data.type === 'memory') {
           console.log('Received memory from partner:', data.data);
           const incomingMemory = data.data;
           
-          // Only accept memories where we are the partner
           if (incomingMemory.partnerId === userId && incomingMemory.userId === partnerId) {
-            // Save to local storage
-            saveMemory(incomingMemory).then(() => {
-              // Add to local state
-              setMemories(prev => {
-                // Avoid duplicates
-                if (prev.some(m => m.id === incomingMemory.id)) {
-                  return prev;
-                }
-                return [...prev, incomingMemory];
-              });
+            await saveMemory(incomingMemory);
+            setMemories(prev => {
+              if (prev.some(m => m.id === incomingMemory.id)) {
+                return prev;
+              }
+              return [...prev, incomingMemory];
+            });
+          }
+        } else if (data.type === 'request-memory-history') {
+          console.log('Partner requesting memory history, sending...');
+          const allMemories = await getAllMemories();
+          const relevantMemories = allMemories.filter(
+            m => (m.userId === userId && m.partnerId === partnerId) ||
+                 (m.userId === partnerId && m.partnerId === userId)
+          );
+          
+          sendWS({
+            type: 'memory-history-response',
+            data: { memories: relevantMemories, partnerId: partnerId },
+          });
+        } else if (data.type === 'memory-history-response') {
+          console.log('Received memory history from partner');
+          const partnerMemories: Memory[] = data.data.memories || [];
+          
+          for (const memory of partnerMemories) {
+            try {
+              await saveMemory(memory);
+            } catch (err) {
+              console.error('Error saving partner memory:', err);
+            }
+          }
+          
+          await loadMemories();
+          
+          if (partnerMemories.length > 0) {
+            toast({
+              title: "Memories synced",
+              description: `Synced ${partnerMemories.length} memories with your beloved`,
             });
           }
         }
@@ -60,7 +88,20 @@ export default function MemoriesPage() {
     };
 
     ws.addEventListener('message', handleMessage);
+    
+    // Request partner's memory history on connection
+    const requestHistoryTimeout = setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN && partnerId) {
+        console.log('Requesting partner memory history...');
+        sendWS({
+          type: 'request-memory-history',
+          data: { requesterId: userId },
+        });
+      }
+    }, 500);
+    
     return () => {
+      clearTimeout(requestHistoryTimeout);
       ws.removeEventListener('message', handleMessage);
     };
   }, [ws, partnerId, userId]);

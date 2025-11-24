@@ -29,25 +29,57 @@ export default function ReactionsPage() {
     loadReactions();
   }, []);
 
-  // Listen for incoming reactions from partner
+  // Listen for incoming reactions from partner and handle history sync
   useEffect(() => {
     if (!ws || !partnerId) return;
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
+        
         if (data.type === 'reaction') {
           console.log('Received reaction from partner:', data.data);
           const incomingReaction = data.data;
           
           if (incomingReaction.recipientId === userId && incomingReaction.senderId === partnerId) {
-            saveReaction(incomingReaction).then(() => {
-              setReactions(prev => {
-                if (prev.some(r => r.id === incomingReaction.id)) {
-                  return prev;
-                }
-                return [incomingReaction, ...prev];
-              });
+            await saveReaction(incomingReaction);
+            setReactions(prev => {
+              if (prev.some(r => r.id === incomingReaction.id)) {
+                return prev;
+              }
+              return [incomingReaction, ...prev];
+            });
+          }
+        } else if (data.type === 'request-reaction-history') {
+          console.log('Partner requesting reaction history, sending...');
+          const allReactions = await getAllReactions();
+          const relevantReactions = allReactions.filter(
+            r => (r.senderId === userId && r.recipientId === partnerId) ||
+                 (r.senderId === partnerId && r.recipientId === userId)
+          );
+          
+          sendWS({
+            type: 'reaction-history-response',
+            data: { reactions: relevantReactions, partnerId: partnerId },
+          });
+        } else if (data.type === 'reaction-history-response') {
+          console.log('Received reaction history from partner');
+          const partnerReactions: Reaction[] = data.data.reactions || [];
+          
+          for (const reaction of partnerReactions) {
+            try {
+              await saveReaction(reaction);
+            } catch (err) {
+              console.error('Error saving partner reaction:', err);
+            }
+          }
+          
+          await loadReactions();
+          
+          if (partnerReactions.length > 0) {
+            toast({
+              title: "Reactions synced",
+              description: `Synced ${partnerReactions.length} reactions with your beloved`,
             });
           }
         }
@@ -57,7 +89,20 @@ export default function ReactionsPage() {
     };
 
     ws.addEventListener('message', handleMessage);
+    
+    // Request partner's reaction history on connection
+    const requestHistoryTimeout = setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN && partnerId) {
+        console.log('Requesting partner reaction history...');
+        sendWS({
+          type: 'request-reaction-history',
+          data: { requesterId: userId },
+        });
+      }
+    }, 500);
+    
     return () => {
+      clearTimeout(requestHistoryTimeout);
       ws.removeEventListener('message', handleMessage);
     };
   }, [ws, partnerId, userId]);

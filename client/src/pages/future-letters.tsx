@@ -29,25 +29,57 @@ export default function FutureLettersPage() {
     loadLetters();
   }, []);
 
-  // Listen for incoming future letters from partner
+  // Listen for incoming future letters from partner and handle history sync
   useEffect(() => {
     if (!ws || !partnerId) return;
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
+        
         if (data.type === 'future-letter') {
           console.log('Received future letter from partner:', data.data);
           const incomingLetter = data.data;
           
           if (incomingLetter.recipientId === userId && incomingLetter.authorId === partnerId) {
-            saveFutureLetter(incomingLetter).then(() => {
-              setLetters(prev => {
-                if (prev.some(l => l.id === incomingLetter.id)) {
-                  return prev;
-                }
-                return [...prev, incomingLetter];
-              });
+            await saveFutureLetter(incomingLetter);
+            setLetters(prev => {
+              if (prev.some(l => l.id === incomingLetter.id)) {
+                return prev;
+              }
+              return [...prev, incomingLetter];
+            });
+          }
+        } else if (data.type === 'request-future-letter-history') {
+          console.log('Partner requesting future letter history, sending...');
+          const allLetters = await getAllFutureLetters();
+          const relevantLetters = allLetters.filter(
+            l => (l.authorId === userId && l.recipientId === partnerId) ||
+                 (l.authorId === partnerId && l.recipientId === userId)
+          );
+          
+          sendWS({
+            type: 'future-letter-history-response',
+            data: { letters: relevantLetters, partnerId: partnerId },
+          });
+        } else if (data.type === 'future-letter-history-response') {
+          console.log('Received future letter history from partner');
+          const partnerLetters: FutureLetter[] = data.data.letters || [];
+          
+          for (const letter of partnerLetters) {
+            try {
+              await saveFutureLetter(letter);
+            } catch (err) {
+              console.error('Error saving partner future letter:', err);
+            }
+          }
+          
+          await loadLetters();
+          
+          if (partnerLetters.length > 0) {
+            toast({
+              title: "Future letters synced",
+              description: `Synced ${partnerLetters.length} letters with your beloved`,
             });
           }
         }
@@ -57,7 +89,20 @@ export default function FutureLettersPage() {
     };
 
     ws.addEventListener('message', handleMessage);
+    
+    // Request partner's future letter history on connection
+    const requestHistoryTimeout = setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN && partnerId) {
+        console.log('Requesting partner future letter history...');
+        sendWS({
+          type: 'request-future-letter-history',
+          data: { requesterId: userId },
+        });
+      }
+    }, 500);
+    
     return () => {
+      clearTimeout(requestHistoryTimeout);
       ws.removeEventListener('message', handleMessage);
     };
   }, [ws, partnerId, userId]);

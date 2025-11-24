@@ -33,34 +33,61 @@ export default function CalendarPage() {
     loadEvents();
   }, []);
 
-  // Listen for incoming events from partner
+  // Listen for incoming events from partner and handle history sync
   useEffect(() => {
     if (!ws || !partnerId) return;
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
+        
         if (data.type === 'calendar') {
           console.log('Received calendar event from partner:', data.data);
           const incomingEvent = data.data;
           
-          // Only accept events where we are the partner
           if (incomingEvent.partnerId === userId && incomingEvent.userId === partnerId) {
-            // Save to local storage
-            saveCalendarEvent(incomingEvent).then(() => {
-              // Add to local state
-              setEvents(prev => {
-                // Avoid duplicates
-                if (prev.some(e => e.id === incomingEvent.id)) {
-                  return prev;
-                }
-                return [...prev, incomingEvent];
-              });
-              
-              // Update anniversary date if needed
-              if (incomingEvent.isAnniversary) {
-                setAnniversaryDate(new Date(incomingEvent.eventDate));
+            await saveCalendarEvent(incomingEvent);
+            setEvents(prev => {
+              if (prev.some(e => e.id === incomingEvent.id)) {
+                return prev;
               }
+              return [...prev, incomingEvent];
+            });
+            
+            if (incomingEvent.isAnniversary) {
+              setAnniversaryDate(new Date(incomingEvent.eventDate));
+            }
+          }
+        } else if (data.type === 'request-calendar-history') {
+          console.log('Partner requesting calendar history, sending...');
+          const allEvents = await getAllCalendarEvents();
+          const relevantEvents = allEvents.filter(
+            e => (e.userId === userId && e.partnerId === partnerId) ||
+                 (e.userId === partnerId && e.partnerId === userId)
+          );
+          
+          sendWS({
+            type: 'calendar-history-response',
+            data: { events: relevantEvents, partnerId: partnerId },
+          });
+        } else if (data.type === 'calendar-history-response') {
+          console.log('Received calendar history from partner');
+          const partnerEvents: CalendarEvent[] = data.data.events || [];
+          
+          for (const event of partnerEvents) {
+            try {
+              await saveCalendarEvent(event);
+            } catch (err) {
+              console.error('Error saving partner event:', err);
+            }
+          }
+          
+          await loadEvents();
+          
+          if (partnerEvents.length > 0) {
+            toast({
+              title: "Calendar synced",
+              description: `Synced ${partnerEvents.length} events with your beloved`,
             });
           }
         }
@@ -70,7 +97,20 @@ export default function CalendarPage() {
     };
 
     ws.addEventListener('message', handleMessage);
+    
+    // Request partner's calendar history on connection
+    const requestHistoryTimeout = setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN && partnerId) {
+        console.log('Requesting partner calendar history...');
+        sendWS({
+          type: 'request-calendar-history',
+          data: { requesterId: userId },
+        });
+      }
+    }, 500);
+    
     return () => {
+      clearTimeout(requestHistoryTimeout);
       ws.removeEventListener('message', handleMessage);
     };
   }, [ws, partnerId, userId]);
