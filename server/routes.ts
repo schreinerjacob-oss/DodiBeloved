@@ -100,26 +100,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
 
           case 'ritual':
-            const savedRitual = await storage.saveDailyRitual(message.data);
+            console.log('Server received ritual:', {
+              ritualId: message.data.id,
+              userId: message.data.userId,
+              partnerId: message.data.partnerId,
+            });
+            // For peer-to-peer sync, just forward to partner without server storage
             broadcast(message.data.partnerId, {
               type: 'ritual',
-              data: savedRitual,
+              data: message.data,
             });
             break;
 
           case 'letter':
-            const savedLetter = await storage.saveLoveLetter(message.data);
+            console.log('Server received letter:', {
+              letterId: message.data.id,
+              authorId: message.data.authorId,
+              recipientId: message.data.recipientId,
+            });
+            // For peer-to-peer sync, just forward to partner without server storage
             broadcast(message.data.recipientId, {
               type: 'letter',
-              data: savedLetter,
+              data: message.data,
             });
             break;
 
           case 'reaction':
-            const savedReaction = await storage.saveReaction(message.data);
+            console.log('Server received reaction:', {
+              reactionId: message.data.id,
+              senderId: message.data.senderId,
+              recipientId: message.data.recipientId,
+            });
+            // For peer-to-peer sync, just forward to partner without server storage
             broadcast(message.data.recipientId, {
               type: 'reaction',
-              data: savedReaction,
+              data: message.data,
+            });
+            break;
+
+          case 'prayer':
+            console.log('Server received prayer:', {
+              prayerId: message.data.id,
+              userId: message.data.userId,
+              partnerId: message.data.partnerId,
+            });
+            // For peer-to-peer sync, just forward to partner without server storage
+            broadcast(message.data.partnerId, {
+              type: 'prayer',
+              data: message.data,
+            });
+            break;
+
+          case 'future-letter':
+            console.log('Server received future letter:', {
+              letterId: message.data.id,
+              authorId: message.data.authorId,
+              recipientId: message.data.recipientId,
+            });
+            // For peer-to-peer sync, just forward to partner without server storage
+            broadcast(message.data.recipientId, {
+              type: 'future-letter',
+              data: message.data,
             });
             break;
 

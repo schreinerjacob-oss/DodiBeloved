@@ -17,24 +17,26 @@
 
 ## Recent Updates (Latest Session - Nov 24, 2025)
 
-### Critical Fixes Completed:
-1. **Chat Button Fixes** - Replaced shadcn Button components with native HTML buttons in chat input bar (image, mic, disappearing toggle now fully clickable)
-2. **WebRTC Call Permissions** - Enhanced error handling for camera/microphone access with specific error messages:
-   - NotAllowedError: "Please allow camera/mic in browser settings"
-   - NotFoundError: "No camera/mic detected"
-   - NotReadableError: "Device already in use by another app"
-   - Added helpful instruction card explaining browser permission prompt
-3. **Message Persistence** - Messages now save to encrypted IndexedDB and persist across refreshes
-4. **Peer-to-Peer Sync** - History request/response implemented for syncing chat history between paired devices
-5. **Memory Sync** - Memories now sync in real-time between devices:
-   - Partner receives memory instantly via WebSocket
-   - Saved to both devices' encrypted IndexedDB
-   - Server acts as relay without storing data (peer-to-peer architecture)
-6. **Calendar Event Creation** - Full event management system implemented:
-   - Dialog with title, date, description, and anniversary checkbox
-   - Real-time sync between paired devices via WebSocket
-   - Anniversary counter shows "days together" when set
-   - Peer-to-peer architecture (no server storage)
+### Complete Peer-to-Peer Sync Implementation:
+1. **All Features Now Sync** - Complete WebSocket sync for ALL app features (peer-to-peer, server as relay only):
+   - Chat messages with history sync
+   - Memories (photos/videos)
+   - Calendar events and anniversaries
+   - Daily rituals (3 questions)
+   - Love letters
+   - Future letters (time-locked)
+   - Gratitude & Prayers (renamed from "Prayers")
+   - Quick reactions
+2. **Navigation Update** - Renamed "Prayers" to "Gratitude" in bottom nav (full name: "Gratitude & Prayers")
+3. **Server Architecture** - Updated all message types (prayer, ritual, letter, reaction, future-letter) to peer-to-peer relay (no storage)
+
+### Previous Critical Fixes (Same Session):
+1. **Chat Button Fixes** - Replaced shadcn Button components with native HTML buttons in chat input bar
+2. **WebRTC Call Permissions** - Enhanced error handling for camera/microphone access with specific error messages
+3. **Message Persistence** - Messages save to encrypted IndexedDB and persist across refreshes
+4. **Peer-to-Peer Chat Sync** - History request/response for syncing chat history between paired devices
+5. **Memory Sync** - Real-time sync with partner via WebSocket relay
+6. **Calendar Event Creation** - Full event management with real-time sync
 
 ### Previous Session Features:
 1. **Disappearing Messages** - Toggle button in chat interface to send messages that auto-delete after 5 seconds
@@ -118,8 +120,8 @@ Preferred communication style: Simple, everyday language.
 
 **WebSocket Protocol:**
 - Client registration with user ID on connection
-- Message types: `register`, `message`, `memory`, `calendar`, `ritual`, `letter`, `reaction`
-- Real-time broadcasting to connected partner
+- Message types: `register`, `message`, `memory`, `calendar`, `ritual`, `letter`, `future-letter`, `prayer`, `reaction`
+- Real-time peer-to-peer broadcasting to connected partner (server as relay only, no storage)
 - Automatic reconnection on disconnect (3-second interval)
 - Connection management via `Map<userId, WebSocket>`
 

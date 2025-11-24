@@ -72,7 +72,7 @@ function MainApp() {
     { href: "/ritual", icon: Sparkles, label: "Ritual" },
     { href: "/letters", icon: Heart, label: "Letters" },
     { href: "/future", icon: Clock, label: "Future" },
-    { href: "/prayers", icon: Lock, label: "Prayers" },
+    { href: "/prayers", icon: Lock, label: "Gratitude" },
     { href: "/reactions", icon: Zap, label: "Reactions" },
     { href: "/settings", icon: Settings, label: "Settings" },
   ];

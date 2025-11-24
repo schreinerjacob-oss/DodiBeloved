@@ -10,6 +10,7 @@ import type { DailyRitual } from '@shared/schema';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { useWebSocket } from '@/hooks/use-websocket';
 
 const emotions = [
   { name: 'joyful', icon: Laugh, color: 'text-yellow-500' },
@@ -25,6 +26,7 @@ const emotions = [
 export default function DailyRitualPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
+  const { send: sendWS, ws } = useWebSocket();
   const [rituals, setRituals] = useState<DailyRitual[]>([]);
   const [selectedEmotion, setSelectedEmotion] = useState('');
   const [lovedMoment, setLovedMoment] = useState('');
@@ -36,6 +38,39 @@ export default function DailyRitualPage() {
   useEffect(() => {
     loadRituals();
   }, []);
+
+  // Listen for incoming rituals from partner
+  useEffect(() => {
+    if (!ws || !partnerId) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'ritual') {
+          console.log('Received ritual from partner:', data.data);
+          const incomingRitual = data.data;
+          
+          if (incomingRitual.partnerId === userId && incomingRitual.userId === partnerId) {
+            saveDailyRitual(incomingRitual).then(() => {
+              setRituals(prev => {
+                if (prev.some(r => r.id === incomingRitual.id)) {
+                  return prev;
+                }
+                return [...prev, incomingRitual];
+              });
+            });
+          }
+        }
+      } catch (e) {
+        console.log('WebSocket message parse error:', e);
+      }
+    };
+
+    ws.addEventListener('message', handleMessage);
+    return () => {
+      ws.removeEventListener('message', handleMessage);
+    };
+  }, [ws, partnerId, userId]);
 
   const loadRituals = async () => {
     const allRituals = await getAllDailyRituals();
@@ -76,6 +111,12 @@ export default function DailyRitualPage() {
       await saveDailyRitual(ritual);
       setRituals(prev => [...prev, ritual]);
       setTodayCompleted(true);
+
+      // Send to partner via WebSocket
+      sendWS({
+        type: 'ritual',
+        data: ritual,
+      });
 
       setSelectedEmotion('');
       setLovedMoment('');

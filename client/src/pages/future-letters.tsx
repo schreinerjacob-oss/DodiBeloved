@@ -12,10 +12,12 @@ import type { FutureLetter } from '@shared/schema';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format, isPast } from 'date-fns';
+import { useWebSocket } from '@/hooks/use-websocket';
 
 export default function FutureLettersPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
+  const { send: sendWS, ws } = useWebSocket();
   const [letters, setLetters] = useState<FutureLetter[]>([]);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -26,6 +28,39 @@ export default function FutureLettersPage() {
   useEffect(() => {
     loadLetters();
   }, []);
+
+  // Listen for incoming future letters from partner
+  useEffect(() => {
+    if (!ws || !partnerId) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'future-letter') {
+          console.log('Received future letter from partner:', data.data);
+          const incomingLetter = data.data;
+          
+          if (incomingLetter.recipientId === userId && incomingLetter.authorId === partnerId) {
+            saveFutureLetter(incomingLetter).then(() => {
+              setLetters(prev => {
+                if (prev.some(l => l.id === incomingLetter.id)) {
+                  return prev;
+                }
+                return [...prev, incomingLetter];
+              });
+            });
+          }
+        }
+      } catch (e) {
+        console.log('WebSocket message parse error:', e);
+      }
+    };
+
+    ws.addEventListener('message', handleMessage);
+    return () => {
+      ws.removeEventListener('message', handleMessage);
+    };
+  }, [ws, partnerId, userId]);
 
   const loadLetters = async () => {
     const allLetters = await getAllFutureLetters();
@@ -58,6 +93,12 @@ export default function FutureLettersPage() {
       await saveFutureLetter(letter);
       setLetters(prev => [...prev, letter]);
       
+      // Send to partner via WebSocket
+      sendWS({
+        type: 'future-letter',
+        data: letter,
+      });
+
       setTitle('');
       setContent('');
       setUnlockDate('');
@@ -65,7 +106,7 @@ export default function FutureLettersPage() {
 
       toast({
         title: "Letter scheduled ⏰",
-        description: "Your letter will be revealed on the chosen date.",
+        description: "Your letter will be revealed on the chosen date and shared.",
       });
     } catch (error) {
       toast({

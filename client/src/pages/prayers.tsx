@@ -11,10 +11,12 @@ import type { Prayer } from '@shared/schema';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { useWebSocket } from '@/hooks/use-websocket';
 
 export default function PrayersPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
+  const { send: sendWS, ws } = useWebSocket();
   const [prayers, setPrayers] = useState<Prayer[]>([]);
   const [gratitude, setGratitude] = useState('');
   const [prayer, setPrayer] = useState('');
@@ -25,6 +27,40 @@ export default function PrayersPage() {
   useEffect(() => {
     loadPrayers();
   }, []);
+
+  // Listen for incoming prayers from partner
+  useEffect(() => {
+    if (!ws || !partnerId) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'prayer') {
+          console.log('Received prayer from partner:', data.data);
+          const incomingPrayer = data.data;
+          
+          // Only accept prayers where we are the partner
+          if (incomingPrayer.partnerId === userId && incomingPrayer.userId === partnerId) {
+            savePrayer(incomingPrayer).then(() => {
+              setPrayers(prev => {
+                if (prev.some(p => p.id === incomingPrayer.id)) {
+                  return prev;
+                }
+                return [...prev, incomingPrayer];
+              });
+            });
+          }
+        }
+      } catch (e) {
+        console.log('WebSocket message parse error:', e);
+      }
+    };
+
+    ws.addEventListener('message', handleMessage);
+    return () => {
+      ws.removeEventListener('message', handleMessage);
+    };
+  }, [ws, partnerId, userId]);
 
   const loadPrayers = async () => {
     const allPrayers = await getAllPrayers();
@@ -82,6 +118,12 @@ export default function PrayersPage() {
       setPrayers(prev => [...prev, prayerEntry]);
       setTodaySubmitted(true);
 
+      // Send to partner via WebSocket
+      sendWS({
+        type: 'prayer',
+        data: prayerEntry,
+      });
+
       setGratitude('');
       setPrayer('');
       setDialogOpen(false);
@@ -110,7 +152,7 @@ export default function PrayersPage() {
     <div className="h-full flex flex-col bg-background">
       <div className="flex items-center justify-between px-6 py-4 border-b bg-card/50">
         <div>
-          <h2 className="text-xl font-light text-foreground">Prayers & Gratitude</h2>
+          <h2 className="text-xl font-light text-foreground">Gratitude & Prayers</h2>
           <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
             <Lock className="w-3 h-3" />
             Share blessings together

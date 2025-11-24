@@ -9,6 +9,7 @@ import type { Reaction } from '@shared/schema';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format, isToday } from 'date-fns';
+import { useWebSocket } from '@/hooks/use-websocket';
 
 const reactionTypes = [
   { id: 'thinking-of-you', label: 'Thinking of you', icon: Heart, color: 'text-blush' },
@@ -20,12 +21,46 @@ const reactionTypes = [
 export default function ReactionsPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
+  const { send: sendWS, ws } = useWebSocket();
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [sending, setSending] = useState<string | null>(null);
 
   useEffect(() => {
     loadReactions();
   }, []);
+
+  // Listen for incoming reactions from partner
+  useEffect(() => {
+    if (!ws || !partnerId) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'reaction') {
+          console.log('Received reaction from partner:', data.data);
+          const incomingReaction = data.data;
+          
+          if (incomingReaction.recipientId === userId && incomingReaction.senderId === partnerId) {
+            saveReaction(incomingReaction).then(() => {
+              setReactions(prev => {
+                if (prev.some(r => r.id === incomingReaction.id)) {
+                  return prev;
+                }
+                return [incomingReaction, ...prev];
+              });
+            });
+          }
+        }
+      } catch (e) {
+        console.log('WebSocket message parse error:', e);
+      }
+    };
+
+    ws.addEventListener('message', handleMessage);
+    return () => {
+      ws.removeEventListener('message', handleMessage);
+    };
+  }, [ws, partnerId, userId]);
 
   const loadReactions = async () => {
     const allReactions = await getAllReactions();
@@ -47,6 +82,12 @@ export default function ReactionsPage() {
 
       await saveReaction(reaction);
       setReactions(prev => [reaction, ...prev]);
+
+      // Send to partner via WebSocket
+      sendWS({
+        type: 'reaction',
+        data: reaction,
+      });
 
       toast({
         title: "Sent! 💝",

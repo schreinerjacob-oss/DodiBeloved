@@ -12,10 +12,12 @@ import type { LoveLetter } from '@shared/schema';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { useWebSocket } from '@/hooks/use-websocket';
 
 export default function LoveLettersPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
+  const { send: sendWS, ws } = useWebSocket();
   const [letters, setLetters] = useState<LoveLetter[]>([]);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -26,6 +28,39 @@ export default function LoveLettersPage() {
   useEffect(() => {
     loadLetters();
   }, []);
+
+  // Listen for incoming letters from partner
+  useEffect(() => {
+    if (!ws || !partnerId) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'letter') {
+          console.log('Received letter from partner:', data.data);
+          const incomingLetter = data.data;
+          
+          if (incomingLetter.recipientId === userId && incomingLetter.authorId === partnerId) {
+            saveLoveLetter(incomingLetter).then(() => {
+              setLetters(prev => {
+                if (prev.some(l => l.id === incomingLetter.id)) {
+                  return prev;
+                }
+                return [...prev, incomingLetter];
+              });
+            });
+          }
+        }
+      } catch (e) {
+        console.log('WebSocket message parse error:', e);
+      }
+    };
+
+    ws.addEventListener('message', handleMessage);
+    return () => {
+      ws.removeEventListener('message', handleMessage);
+    };
+  }, [ws, partnerId, userId]);
 
   const loadLetters = async () => {
     const allLetters = await getAllLoveLetters();
@@ -49,13 +84,19 @@ export default function LoveLettersPage() {
       await saveLoveLetter(letter);
       setLetters(prev => [...prev, letter]);
       
+      // Send to partner via WebSocket
+      sendWS({
+        type: 'letter',
+        data: letter,
+      });
+
       setTitle('');
       setContent('');
       setDialogOpen(false);
 
       toast({
         title: "Letter saved 💕",
-        description: "Your love letter has been preserved.",
+        description: "Your love letter has been preserved and shared.",
       });
     } catch (error) {
       toast({
