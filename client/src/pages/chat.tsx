@@ -408,49 +408,48 @@ export default function ChatPage() {
             className="hidden"
             data-testid="input-image-file"
           />
-          <Button
-            size="icon"
-            variant="ghost"
-            className="flex-shrink-0 text-muted-foreground"
+          <button
             onClick={handleImageClick}
             disabled={sending}
+            className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="button-attach-image"
+            type="button"
           >
-            <Image className="w-5 h-5" />
-          </Button>
+            <Image className="w-5 h-5 text-muted-foreground" />
+          </button>
 
-          <Button
-            size="icon"
-            variant="ghost"
-            className="flex-shrink-0 text-muted-foreground"
+          <button
             onClick={handleVoiceClick}
             disabled={sending}
+            className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="button-voice-note"
+            type="button"
           >
-            <Mic className="w-5 h-5" />
-          </Button>
+            <Mic className="w-5 h-5 text-muted-foreground" />
+          </button>
 
-          <Toggle
-            pressed={isDisappearing}
-            onPressedChange={(pressed) => {
-              console.log('Toggle clicked! New state:', pressed);
-              setIsDisappearing(pressed);
+          <button
+            onClick={() => {
+              console.log('Toggle clicked! New state:', !isDisappearing);
+              setIsDisappearing(!isDisappearing);
             }}
-            className="flex-shrink-0 text-muted-foreground"
+            disabled={sending}
+            className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="button-disappearing"
             title="Send disappearing message"
+            type="button"
           >
             {isDisappearing ? (
               <EyeOff className="w-5 h-5 text-accent" />
             ) : (
-              <Eye className="w-5 h-5" />
+              <Eye className="w-5 h-5 text-muted-foreground" />
             )}
-          </Toggle>
+          </button>
 
           <Input
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
             placeholder="Type a message..."
             className="flex-1"
             disabled={sending}
@@ -463,6 +462,7 @@ export default function ChatPage() {
             size="icon"
             className="flex-shrink-0"
             data-testid="button-send"
+            type="button"
           >
             <Send className="w-4 h-4" />
           </Button>
