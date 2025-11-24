@@ -150,7 +150,16 @@ export default function ChatPage() {
   };
 
   const handleImageClick = () => {
+    console.log('Image button clicked!');
     fileInputRef.current?.click();
+  };
+
+  const handleVoiceClick = () => {
+    console.log('Voice button clicked!');
+    toast({
+      title: "Voice recording",
+      description: "Voice messages coming soon!",
+    });
   };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -234,7 +243,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="w-screen flex flex-col bg-background" style={{ minHeight: '100dvh' }}>
+    <div className="flex flex-col h-full bg-background">
       <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b bg-card/50">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sage to-blush flex items-center justify-center">
@@ -339,6 +348,8 @@ export default function ChatPage() {
             size="icon"
             variant="ghost"
             className="flex-shrink-0 text-muted-foreground"
+            onClick={handleVoiceClick}
+            disabled={sending}
             data-testid="button-voice-note"
           >
             <Mic className="w-5 h-5" />
@@ -346,7 +357,10 @@ export default function ChatPage() {
 
           <Toggle
             pressed={isDisappearing}
-            onPressedChange={setIsDisappearing}
+            onPressedChange={(pressed) => {
+              console.log('Toggle clicked! New state:', pressed);
+              setIsDisappearing(pressed);
+            }}
             className="flex-shrink-0 text-muted-foreground"
             data-testid="button-disappearing"
             title="Send disappearing message"
