@@ -40,7 +40,11 @@ export default function PrayersPage() {
           console.log('Received prayer from partner:', data.data);
           const incomingPrayer = data.data;
           
-          if (incomingPrayer.partnerId === userId && incomingPrayer.userId === partnerId) {
+          // Accept prayers/gratitude between us and our partner (either direction)
+          const isOurPrayer = (incomingPrayer.userId === userId && incomingPrayer.partnerId === partnerId) ||
+                             (incomingPrayer.userId === partnerId && incomingPrayer.partnerId === userId);
+          
+          if (isOurPrayer) {
             await savePrayer(incomingPrayer);
             setPrayers(prev => {
               if (prev.some(p => p.id === incomingPrayer.id)) {

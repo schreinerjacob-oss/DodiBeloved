@@ -45,7 +45,11 @@ export default function CalendarPage() {
           console.log('Received calendar event from partner:', data.data);
           const incomingEvent = data.data;
           
-          if (incomingEvent.partnerId === userId && incomingEvent.userId === partnerId) {
+          // Accept events between us and our partner (either direction)
+          const isOurEvent = (incomingEvent.userId === userId && incomingEvent.partnerId === partnerId) ||
+                            (incomingEvent.userId === partnerId && incomingEvent.partnerId === userId);
+          
+          if (isOurEvent) {
             await saveCalendarEvent(incomingEvent);
             setEvents(prev => {
               if (prev.some(e => e.id === incomingEvent.id)) {

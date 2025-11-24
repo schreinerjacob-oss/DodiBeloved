@@ -136,6 +136,14 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     }
     
     const db = await initDB();
+    
+    // Check if salt already exists, if not generate one
+    const existingSalt = await db.get('settings', 'salt');
+    if (!existingSalt) {
+      const saltBase64 = arrayBufferToBase64(generateSalt());
+      await db.put('settings', { key: 'salt', value: saltBase64 });
+    }
+    
     await db.put('settings', { key: 'partnerId', value: newPartnerId });
     await db.put('settings', { key: 'passphrase', value: sharedPassphrase });
     

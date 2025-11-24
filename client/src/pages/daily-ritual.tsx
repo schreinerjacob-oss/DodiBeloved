@@ -51,7 +51,11 @@ export default function DailyRitualPage() {
           console.log('Received ritual from partner:', data.data);
           const incomingRitual = data.data;
           
-          if (incomingRitual.partnerId === userId && incomingRitual.userId === partnerId) {
+          // Accept rituals between us and our partner (either direction)
+          const isOurRitual = (incomingRitual.userId === userId && incomingRitual.partnerId === partnerId) ||
+                             (incomingRitual.userId === partnerId && incomingRitual.partnerId === userId);
+          
+          if (isOurRitual) {
             await saveDailyRitual(incomingRitual);
             setRituals(prev => {
               if (prev.some(r => r.id === incomingRitual.id)) {

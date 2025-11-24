@@ -68,9 +68,10 @@ export default function PairingPage() {
     }
 
     return () => {
-      if (scannerRef.current && mode !== 'scan') {
+      if (scannerRef.current) {
         try {
           scannerRef.current.clear();
+          scannerRef.current = null;
         } catch (e) {
           console.log('Scanner cleanup:', e);
         }
@@ -93,9 +94,8 @@ export default function PairingPage() {
       scanner.render(
         (decodedText) => {
           if (decodedText.startsWith('dodi:')) {
+            // handleScanSuccess will handle scanner cleanup
             handleScanSuccess(decodedText);
-            scanner.clear();
-            setScannerInitialized(false);
           }
         },
         () => {}
@@ -116,6 +116,18 @@ export default function PairingPage() {
   const handleScanSuccess = (data: string) => {
     const parts = data.replace('dodi:', '').split(':');
     if (parts.length === 2) {
+      // Clear scanner immediately to prevent rescanning
+      if (scannerRef.current) {
+        try {
+          scannerRef.current.clear();
+          scannerRef.current = null;
+        } catch (e) {
+          console.log('Scanner clear error:', e);
+        }
+      }
+      setScannerInitialized(false);
+      
+      // Set pairing data and switch mode
       setPartnerId(parts[0]);
       setPartnerPassphrase(parts[1]);
       setQrCodeData(data);

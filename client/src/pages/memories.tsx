@@ -40,7 +40,11 @@ export default function MemoriesPage() {
           console.log('Received memory from partner:', data.data);
           const incomingMemory = data.data;
           
-          if (incomingMemory.partnerId === userId && incomingMemory.userId === partnerId) {
+          // Accept memories between us and our partner (either direction)
+          const isOurMemory = (incomingMemory.userId === userId && incomingMemory.partnerId === partnerId) ||
+                             (incomingMemory.userId === partnerId && incomingMemory.partnerId === userId);
+          
+          if (isOurMemory) {
             await saveMemory(incomingMemory);
             setMemories(prev => {
               if (prev.some(m => m.id === incomingMemory.id)) {
