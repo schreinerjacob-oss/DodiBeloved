@@ -11,10 +11,12 @@ import type { Memory } from '@shared/schema';
 import { format } from 'date-fns';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
+import { useWebSocket } from '@/hooks/use-websocket';
 
 export default function MemoriesPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
+  const { send: sendWS, ws } = useWebSocket();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [caption, setCaption] = useState<string>('');
@@ -25,6 +27,43 @@ export default function MemoriesPage() {
   useEffect(() => {
     loadMemories();
   }, []);
+
+  // Listen for incoming memories from partner
+  useEffect(() => {
+    if (!ws || !partnerId) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'memory') {
+          console.log('Received memory from partner:', data.data);
+          const incomingMemory = data.data;
+          
+          // Only accept memories where we are the partner
+          if (incomingMemory.partnerId === userId && incomingMemory.userId === partnerId) {
+            // Save to local storage
+            saveMemory(incomingMemory).then(() => {
+              // Add to local state
+              setMemories(prev => {
+                // Avoid duplicates
+                if (prev.some(m => m.id === incomingMemory.id)) {
+                  return prev;
+                }
+                return [...prev, incomingMemory];
+              });
+            });
+          }
+        }
+      } catch (e) {
+        console.log('WebSocket message parse error:', e);
+      }
+    };
+
+    ws.addEventListener('message', handleMessage);
+    return () => {
+      ws.removeEventListener('message', handleMessage);
+    };
+  }, [ws, partnerId, userId]);
 
   const loadMemories = async () => {
     const allMemories = await getAllMemories();
@@ -55,16 +94,28 @@ export default function MemoriesPage() {
         mediaType: 'photo',
         timestamp: new Date(),
       };
+      
+      // Save to local IndexedDB first
       await saveMemory(memory);
+      
+      // Add to local state immediately
       setMemories(prev => [...prev, memory]);
+      
+      // Send to partner via WebSocket
+      sendWS({
+        type: 'memory',
+        data: memory,
+      });
+      
       setCaption('');
       setPreview('');
       setDialogOpen(false);
       toast({
         title: "Memory saved 📸",
-        description: "Your precious moment is preserved.",
+        description: "Your precious moment is preserved and shared.",
       });
     } catch (error) {
+      console.error('Save memory error:', error);
       toast({
         title: "Failed to save",
         description: "Could not save memory. Please try again.",

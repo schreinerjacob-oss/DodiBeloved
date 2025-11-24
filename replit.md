@@ -26,6 +26,10 @@
    - Added helpful instruction card explaining browser permission prompt
 3. **Message Persistence** - Messages now save to encrypted IndexedDB and persist across refreshes
 4. **Peer-to-Peer Sync** - History request/response implemented for syncing chat history between paired devices
+5. **Memory Sync** - Memories now sync in real-time between devices:
+   - Partner receives memory instantly via WebSocket
+   - Saved to both devices' encrypted IndexedDB
+   - Server acts as relay without storing data (peer-to-peer architecture)
 
 ### Previous Session Features:
 1. **Disappearing Messages** - Toggle button in chat interface to send messages that auto-delete after 5 seconds

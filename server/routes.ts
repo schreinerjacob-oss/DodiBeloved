@@ -73,10 +73,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
 
           case 'memory':
-            const savedMemory = await storage.saveMemory(message.data);
+            console.log('Server received memory:', {
+              memoryId: message.data.id,
+              userId: message.data.userId,
+              partnerId: message.data.partnerId,
+            });
+            // For peer-to-peer sync, just forward to partner without server storage
             broadcast(message.data.partnerId, {
               type: 'memory',
-              data: savedMemory,
+              data: message.data,
             });
             break;
 
