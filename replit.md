@@ -30,6 +30,11 @@
    - Partner receives memory instantly via WebSocket
    - Saved to both devices' encrypted IndexedDB
    - Server acts as relay without storing data (peer-to-peer architecture)
+6. **Calendar Event Creation** - Full event management system implemented:
+   - Dialog with title, date, description, and anniversary checkbox
+   - Real-time sync between paired devices via WebSocket
+   - Anniversary counter shows "days together" when set
+   - Peer-to-peer architecture (no server storage)
 
 ### Previous Session Features:
 1. **Disappearing Messages** - Toggle button in chat interface to send messages that auto-delete after 5 seconds

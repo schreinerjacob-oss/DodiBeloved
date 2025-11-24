@@ -86,10 +86,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
 
           case 'calendar':
-            const savedEvent = await storage.saveCalendarEvent(message.data);
+            console.log('Server received calendar event:', {
+              eventId: message.data.id,
+              userId: message.data.userId,
+              partnerId: message.data.partnerId,
+              title: message.data.title,
+            });
+            // For peer-to-peer sync, just forward to partner without server storage
             broadcast(message.data.partnerId, {
               type: 'calendar',
-              data: savedEvent,
+              data: message.data,
             });
             break;
 
