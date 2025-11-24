@@ -51,12 +51,24 @@ export default function CallsPage() {
 
   const initiatePeerConnection = async (type: 'audio' | 'video') => {
     try {
+      // Check if getUserMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        toast({
+          title: 'Not supported',
+          description: 'Your browser does not support video/audio calls',
+          variant: 'destructive',
+        });
+        return null;
+      }
+
       const constraints = {
         audio: true,
         video: type === 'video' ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
       };
 
+      console.log('Requesting media permissions:', constraints);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log('Media permissions granted, stream:', stream);
       localStreamRef.current = stream;
 
       if (type === 'video' && localVideoRef.current) {
@@ -100,13 +112,44 @@ export default function CallsPage() {
       });
 
       return peer;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error accessing media:', error);
+      
+      let title = 'Permission denied';
+      let description = 'Unable to access microphone/camera';
+      
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        title = 'Camera/Mic blocked';
+        description = type === 'video' 
+          ? 'Please allow camera and microphone access in your browser settings, then try again.'
+          : 'Please allow microphone access in your browser settings, then try again.';
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        title = 'No device found';
+        description = type === 'video'
+          ? 'No camera or microphone detected. Please connect a device and try again.'
+          : 'No microphone detected. Please connect a microphone and try again.';
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        title = 'Device in use';
+        description = 'Your camera or microphone is already being used by another app. Please close it and try again.';
+      } else if (error.name === 'OverconstrainedError' || error.name === 'ConstraintNotSatisfiedError') {
+        title = 'Device limitation';
+        description = 'Your device does not meet the requirements for this call.';
+      } else if (error.name === 'TypeError') {
+        title = 'Invalid constraints';
+        description = 'There was an error configuring the call. Please try again.';
+      } else if (error.name === 'SecurityError') {
+        title = 'Security error';
+        description = 'Calls require HTTPS. Please access the app through a secure connection.';
+      }
+      
       toast({
-        title: 'Permission denied',
-        description: 'Unable to access microphone/camera',
+        title,
+        description,
         variant: 'destructive',
       });
+      
+      setCallActive(false);
+      setCallType(null);
       return null;
     }
   };
@@ -317,38 +360,57 @@ export default function CallsPage() {
         </p>
       </div>
 
-      <div className="flex-1 flex items-center justify-center gap-6">
-        <Card className="p-8 space-y-4 hover-elevate cursor-pointer" data-testid="card-audio-call">
-          <div className="w-16 h-16 mx-auto rounded-full bg-sage/20 flex items-center justify-center">
-            <Phone className="w-8 h-8 text-sage" />
-          </div>
-          <h3 className="text-center font-medium">Audio Call</h3>
-          <p className="text-xs text-center text-muted-foreground">Voice only</p>
-          <Button
-            onClick={() => startCall('audio')}
-            disabled={!connected}
-            className="w-full"
-            data-testid="button-start-audio"
-          >
-            {connected ? 'Start' : 'Connecting...'}
-          </Button>
-        </Card>
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-3xl mx-auto space-y-6">
+          <Card className="bg-blush/5 border-blush/20 p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-blush/20 flex items-center justify-center flex-shrink-0">
+                <Phone className="w-4 h-4 text-blush" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <h3 className="font-medium text-sm">First time calling?</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  When you start a call, your browser will ask for permission to use your camera and microphone. 
+                  Click "Allow" to enable calls. If you accidentally blocked access, you can reset it in your browser settings.
+                </p>
+              </div>
+            </div>
+          </Card>
 
-        <Card className="p-8 space-y-4 hover-elevate cursor-pointer" data-testid="card-video-call">
-          <div className="w-16 h-16 mx-auto rounded-full bg-blush/20 flex items-center justify-center">
-            <Video className="w-8 h-8 text-blush" />
+          <div className="flex items-center justify-center gap-6">
+            <Card className="p-8 space-y-4 hover-elevate cursor-pointer" data-testid="card-audio-call">
+              <div className="w-16 h-16 mx-auto rounded-full bg-sage/20 flex items-center justify-center">
+                <Phone className="w-8 h-8 text-sage" />
+              </div>
+              <h3 className="text-center font-medium">Audio Call</h3>
+              <p className="text-xs text-center text-muted-foreground">Voice only</p>
+              <Button
+                onClick={() => startCall('audio')}
+                disabled={!connected}
+                className="w-full"
+                data-testid="button-start-audio"
+              >
+                {connected ? 'Start' : 'Connecting...'}
+              </Button>
+            </Card>
+
+            <Card className="p-8 space-y-4 hover-elevate cursor-pointer" data-testid="card-video-call">
+              <div className="w-16 h-16 mx-auto rounded-full bg-blush/20 flex items-center justify-center">
+                <Video className="w-8 h-8 text-blush" />
+              </div>
+              <h3 className="text-center font-medium">Video Call</h3>
+              <p className="text-xs text-center text-muted-foreground">See each other</p>
+              <Button
+                onClick={() => startCall('video')}
+                disabled={!connected}
+                className="w-full"
+                data-testid="button-start-video"
+              >
+                {connected ? 'Start' : 'Connecting...'}
+              </Button>
+            </Card>
           </div>
-          <h3 className="text-center font-medium">Video Call</h3>
-          <p className="text-xs text-center text-muted-foreground">See each other</p>
-          <Button
-            onClick={() => startCall('video')}
-            disabled={!connected}
-            className="w-full"
-            data-testid="button-start-video"
-          >
-            {connected ? 'Start' : 'Connecting...'}
-          </Button>
-        </Card>
+        </div>
       </div>
     </div>
   );

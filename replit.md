@@ -15,17 +15,17 @@
 - **Disappearing messages** with auto-delete timers (NEW)
 - **30-day free trial** with subscription plans (NEW)
 
-## Recent Updates (Latest Session - Nov 23, 2025)
+## Recent Updates (Latest Session - Nov 24, 2025)
 
 ### Critical Fixes Completed:
-1. **Global Polyfill Fix** - Added `window.global = window` in index.html to fix "global is not defined" error from Simple-Peer library
-2. **Subscription UI** - Added explicit `text-gold` class to Infinity icon for Lifetime plan visibility
-3. **Trial Enforcement** - Complete implementation:
-   - useEffect redirect guard (redirects to /subscription when trial expires)
-   - Periodic trial status checking (every 60 seconds)
-   - Visibility change listener (re-checks when app becomes visible)
-   - Navigation disabled for expired trials (except Settings/Subscription)
-4. **Pairing Logic** - Improved unique ID generation with do-while loop to prevent ID collisions
+1. **Chat Button Fixes** - Replaced shadcn Button components with native HTML buttons in chat input bar (image, mic, disappearing toggle now fully clickable)
+2. **WebRTC Call Permissions** - Enhanced error handling for camera/microphone access with specific error messages:
+   - NotAllowedError: "Please allow camera/mic in browser settings"
+   - NotFoundError: "No camera/mic detected"
+   - NotReadableError: "Device already in use by another app"
+   - Added helpful instruction card explaining browser permission prompt
+3. **Message Persistence** - Messages now save to encrypted IndexedDB and persist across refreshes
+4. **Peer-to-Peer Sync** - History request/response implemented for syncing chat history between paired devices
 
 ### Previous Session Features:
 1. **Disappearing Messages** - Toggle button in chat interface to send messages that auto-delete after 5 seconds
