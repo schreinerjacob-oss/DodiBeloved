@@ -128,6 +128,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }));
             }
             break;
+
+          case 'request-history':
+            // Forward history request to partner (peer-to-peer)
+            if (userId) {
+              const partnerId = userPairings.get(userId);
+              if (partnerId) {
+                console.log('Forwarding history request from', userId, 'to partner', partnerId);
+                broadcast(partnerId, {
+                  type: 'request-history',
+                  data: message.data,
+                });
+              }
+            }
+            break;
+
+          case 'history-response':
+            // Forward history response to partner (peer-to-peer)
+            if (userId) {
+              const partnerId = userPairings.get(userId);
+              if (partnerId) {
+                console.log('Forwarding history response from', userId, 'to partner', partnerId);
+                broadcast(partnerId, {
+                  type: 'history-response',
+                  data: message.data,
+                });
+              }
+            }
+            break;
         }
       } catch (error) {
         console.error('WebSocket message error:', error);

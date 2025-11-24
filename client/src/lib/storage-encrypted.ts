@@ -104,9 +104,19 @@ export async function decryptReaction(encrypted: EncryptedData): Promise<Reactio
 }
 
 export async function saveMessage(message: Message): Promise<void> {
-  const db = await initDB();
-  const encrypted = await encryptMessage(message);
-  await db.put('messages', encrypted);
+  try {
+    const db = await initDB();
+    const encrypted = await encryptMessage(message);
+    // Preserve the ID as the primary key while storing encrypted blob
+    const record = {
+      id: message.id,
+      ...encrypted,
+    };
+    await db.put('messages', record);
+  } catch (error) {
+    console.error('Failed to save message:', error);
+    throw error;
+  }
 }
 
 export async function getAllMessages(): Promise<Message[]> {
@@ -116,9 +126,18 @@ export async function getAllMessages(): Promise<Message[]> {
 }
 
 export async function saveMemory(memory: Memory): Promise<void> {
-  const db = await initDB();
-  const encrypted = await encryptMemory(memory);
-  await db.put('memories', encrypted);
+  try {
+    const db = await initDB();
+    const encrypted = await encryptMemory(memory);
+    const record = {
+      id: memory.id,
+      ...encrypted,
+    };
+    await db.put('memories', record);
+  } catch (error) {
+    console.error('Failed to save memory:', error);
+    throw error;
+  }
 }
 
 export async function getAllMemories(): Promise<Memory[]> {
@@ -128,9 +147,18 @@ export async function getAllMemories(): Promise<Memory[]> {
 }
 
 export async function saveCalendarEvent(event: CalendarEvent): Promise<void> {
-  const db = await initDB();
-  const encrypted = await encryptCalendarEvent(event);
-  await db.put('calendarEvents', encrypted);
+  try {
+    const db = await initDB();
+    const encrypted = await encryptCalendarEvent(event);
+    const record = {
+      id: event.id,
+      ...encrypted,
+    };
+    await db.put('calendarEvents', record);
+  } catch (error) {
+    console.error('Failed to save calendar event:', error);
+    throw error;
+  }
 }
 
 export async function getAllCalendarEvents(): Promise<CalendarEvent[]> {
@@ -140,9 +168,18 @@ export async function getAllCalendarEvents(): Promise<CalendarEvent[]> {
 }
 
 export async function saveDailyRitual(ritual: DailyRitual): Promise<void> {
-  const db = await initDB();
-  const encrypted = await encryptDailyRitual(ritual);
-  await db.put('dailyRituals', encrypted);
+  try {
+    const db = await initDB();
+    const encrypted = await encryptDailyRitual(ritual);
+    const record = {
+      id: ritual.id,
+      ...encrypted,
+    };
+    await db.put('dailyRituals', record);
+  } catch (error) {
+    console.error('Failed to save daily ritual:', error);
+    throw error;
+  }
 }
 
 export async function getAllDailyRituals(): Promise<DailyRitual[]> {
@@ -152,9 +189,18 @@ export async function getAllDailyRituals(): Promise<DailyRitual[]> {
 }
 
 export async function saveLoveLetter(letter: LoveLetter): Promise<void> {
-  const db = await initDB();
-  const encrypted = await encryptLoveLetter(letter);
-  await db.put('loveLetters', encrypted);
+  try {
+    const db = await initDB();
+    const encrypted = await encryptLoveLetter(letter);
+    const record = {
+      id: letter.id,
+      ...encrypted,
+    };
+    await db.put('loveLetters', record);
+  } catch (error) {
+    console.error('Failed to save love letter:', error);
+    throw error;
+  }
 }
 
 export async function getAllLoveLetters(): Promise<LoveLetter[]> {
@@ -212,9 +258,18 @@ export async function getAllPrayers(): Promise<Prayer[]> {
 }
 
 export async function saveReaction(reaction: Reaction): Promise<void> {
-  const db = await initDB();
-  const encrypted = await encryptReaction(reaction);
-  await db.put('reactions', encrypted);
+  try {
+    const db = await initDB();
+    const encrypted = await encryptReaction(reaction);
+    const record = {
+      id: reaction.id,
+      ...encrypted,
+    };
+    await db.put('reactions', record);
+  } catch (error) {
+    console.error('Failed to save reaction:', error);
+    throw error;
+  }
 }
 
 export async function getAllReactions(): Promise<Reaction[]> {

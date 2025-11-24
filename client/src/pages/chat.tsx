@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
 import { Heart, Send, Image, Mic, Lock, Eye, EyeOff } from 'lucide-react';
-import { getAllMessages, saveMessage } from '@/lib/storage';
+import { getAllMessages, saveMessage } from '@/lib/storage-encrypted';
 import { useWebSocket } from '@/hooks/use-websocket';
 import type { Message } from '@shared/schema';
 import { nanoid } from 'nanoid';
@@ -35,25 +35,82 @@ export default function ChatPage() {
 
     console.log('Chat: Setting up message listener for partnerId:', partnerId);
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('Chat: Received WebSocket message:', { type: data.type, senderId: data.data?.senderId, partnerId });
+        console.log('Chat: Received WebSocket message:', { type: data.type });
         
         if (data.type === 'message') {
           const incomingMessage = data.data;
-          console.log('Chat: Processing incoming message:', { 
-            senderId: incomingMessage.senderId, 
-            partnerId,
-            isFromPartner: incomingMessage.senderId === partnerId 
-          });
           
+          // Validate sender is our paired partner
           if (incomingMessage.senderId === partnerId) {
-            console.log('Chat: Message is from partner, adding to state');
-            setMessages(prev => [...prev, incomingMessage]);
-            saveMessage(incomingMessage).catch(err => console.error('Failed to save message:', err));
-          } else {
-            console.log('Chat: Message is NOT from partner, ignoring');
+            console.log('Chat: Message from partner, saving and displaying');
+            await saveMessage(incomingMessage);
+            setMessages(prev => {
+              // Deduplicate - don't add if already exists
+              if (prev.some(m => m.id === incomingMessage.id)) {
+                return prev;
+              }
+              return [...prev, incomingMessage];
+            });
+          }
+        } else if (data.type === 'request-history') {
+          // SECURITY: Only respond to history requests from our actual paired partner
+          if (!partnerId) {
+            console.warn('Ignoring history request - no partner paired');
+            return;
+          }
+          
+          console.log('Chat: Partner requesting message history, sending...');
+          const allMessages = await getAllMessages();
+          
+          // Only send messages between us and our partner (filter out any stale data)
+          const relevantMessages = allMessages.filter(
+            m => (m.senderId === userId && m.recipientId === partnerId) ||
+                 (m.senderId === partnerId && m.recipientId === userId)
+          );
+          
+          sendWS({
+            type: 'history-response',
+            data: { 
+              messages: relevantMessages,
+              partnerId: partnerId, // Include for validation
+            },
+          });
+        } else if (data.type === 'history-response') {
+          // SECURITY: Validate response is from our paired partner
+          if (data.data.partnerId !== userId) {
+            console.warn('Ignoring history response - partner ID mismatch');
+            return;
+          }
+          
+          console.log('Chat: Received partner history, syncing...');
+          const partnerMessages: Message[] = data.data.messages || [];
+          
+          // Additional validation: only save messages involving our partner
+          const validMessages = partnerMessages.filter(
+            m => (m.senderId === partnerId && m.recipientId === userId) ||
+                 (m.senderId === userId && m.recipientId === partnerId)
+          );
+          
+          // Save all validated partner messages to our IndexedDB
+          for (const msg of validMessages) {
+            try {
+              await saveMessage(msg);
+            } catch (err) {
+              console.error('Error saving partner message:', err);
+            }
+          }
+          
+          // Reload all messages from IndexedDB (includes ours + partner's, deduplicated)
+          await loadMessages();
+          
+          if (validMessages.length > 0) {
+            toast({
+              title: "Messages synced",
+              description: `Synced ${validMessages.length} messages with your beloved`,
+            });
           }
         }
       } catch (error) {
@@ -64,11 +121,23 @@ export default function ChatPage() {
     ws.addEventListener('message', handleMessage);
     console.log('Chat: Message listener attached');
     
+    // Request partner's message history when we connect (with delay to ensure connection is ready)
+    const requestHistoryTimeout = setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN && partnerId) {
+        console.log('Chat: Requesting partner message history...');
+        sendWS({
+          type: 'request-history',
+          data: { requesterId: userId },
+        });
+      }
+    }, 500);
+    
     return () => {
       console.log('Chat: Cleaning up message listener');
+      clearTimeout(requestHistoryTimeout);
       ws.removeEventListener('message', handleMessage);
     };
-  }, [ws, partnerId]);
+  }, [ws, partnerId, userId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -110,6 +179,9 @@ export default function ChatPage() {
         isDisappearing,
         timestamp: now,
       };
+
+      // Save to IndexedDB first
+      await saveMessage(message);
 
       // Add to local state immediately
       setMessages(prev => [...prev, message]);
@@ -204,6 +276,9 @@ export default function ChatPage() {
           isDisappearing,
           timestamp: now,
         };
+
+        // Save to IndexedDB
+        await saveMessage(message);
 
         // Add to local state
         setMessages(prev => [...prev, message]);
