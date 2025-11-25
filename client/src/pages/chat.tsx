@@ -8,7 +8,7 @@ import { Toggle } from '@/components/ui/toggle';
 import { Heart, Send, Image, Mic, Lock, Eye, EyeOff } from 'lucide-react';
 import { getAllMessages, saveMessage } from '@/lib/storage-encrypted';
 import { useWebSocket } from '@/hooks/use-websocket';
-import type { Message } from '@shared/schema';
+import type { Message } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 

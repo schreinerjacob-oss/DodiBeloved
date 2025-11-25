@@ -1,5 +1,5 @@
 import { initDB, getSetting } from './storage';
-import type { Subscription } from '@shared/schema';
+import type { Subscription } from '@/types';
 
 export async function saveSubscription(subscription: Subscription): Promise<void> {
   const db = await initDB();

@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Sparkles, Heart, Check, Smile, Frown, Meh, Laugh, Angry, Zap } from 'lucide-react';
 import { getAllDailyRituals, saveDailyRitual } from '@/lib/storage-encrypted';
-import type { DailyRitual } from '@shared/schema';
+import type { DailyRitual } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';

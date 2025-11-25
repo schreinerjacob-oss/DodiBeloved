@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Heart, Sparkles, Smile, Zap, Send } from 'lucide-react';
 import { getAllReactions, saveReaction } from '@/lib/storage-encrypted';
-import type { Reaction } from '@shared/schema';
+import type { Reaction } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format, isToday } from 'date-fns';

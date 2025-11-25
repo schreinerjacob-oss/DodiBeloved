@@ -1,5 +1,5 @@
 import { openDB, type IDBPDatabase } from 'idb';
-import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction } from '@shared/schema';
+import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction } from '@/types';
 
 const DB_NAME = 'dodi-encrypted-storage';
 const DB_VERSION = 1;

@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Pen, Lock, Heart, Plus } from 'lucide-react';
 import { getAllLoveLetters, saveLoveLetter } from '@/lib/storage-encrypted';
-import type { LoveLetter } from '@shared/schema';
+import type { LoveLetter } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';

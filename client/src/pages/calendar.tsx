@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar as CalendarIcon, Heart, Plus, Sparkles } from 'lucide-react';
 import { getAllCalendarEvents, saveCalendarEvent } from '@/lib/storage-encrypted';
-import type { CalendarEvent } from '@shared/schema';
+import type { CalendarEvent } from '@/types';
 import { format, differenceInDays } from 'date-fns';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';

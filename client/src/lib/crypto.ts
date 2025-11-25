@@ -1,4 +1,4 @@
-import type { EncryptedData } from "@shared/schema";
+import type { EncryptedData } from "@/types";
 
 const PBKDF2_ITERATIONS = 600000;
 const SALT_LENGTH = 16;
