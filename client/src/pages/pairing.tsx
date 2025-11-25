@@ -54,7 +54,7 @@ export default function PairingPage() {
     }
     
     if (pendingSession) {
-      // Creator: restore pending session and auto-advance to scanning
+      // Creator: restore pending session
       setPairingPayload({
         creatorId: pendingSession.creatorId,
         passphrase: pendingSession.passphrase,
@@ -63,11 +63,6 @@ export default function PairingPage() {
         createdAt: pendingSession.createdAt,
       });
       setMode('creator-show-qr');
-      // Auto-advance to scanning after 2 seconds
-      const timeout = setTimeout(() => {
-        setMode('creator-scan-answer');
-      }, 2000);
-      return () => clearTimeout(timeout);
     } else if (storedJoinerResponse) {
       // Joiner: restore answer QR display
       const answerPayload = {
@@ -80,16 +75,6 @@ export default function PairingPage() {
       setMode('joiner-show-answer');
     }
   }, [pairingStatus]);
-
-  // Auto-advance creator from showing QR to scanning answer
-  useEffect(() => {
-    if (mode === 'creator-show-qr' && pairingPayload) {
-      const timeout = setTimeout(() => {
-        setMode('creator-scan-answer');
-      }, 2000);
-      return () => clearTimeout(timeout);
-    }
-  }, [mode, pairingPayload]);
 
   // Watch for P2P connection to complete
   useEffect(() => {
@@ -439,11 +424,18 @@ export default function PairingPage() {
               {copied ? 'Copied!' : 'Copy QR Data'}
             </Button>
 
-            <div className="p-4 bg-muted/50 rounded-lg text-center">
-              <Loader2 className="w-6 h-6 mx-auto animate-spin text-accent mb-2" />
-              <p className="text-sm text-muted-foreground">
-                After your partner scans, you'll automatically scan their response...
+            <div className="border-t pt-4">
+              <p className="text-sm text-center text-muted-foreground mb-4">
+                After they scan, tap below to scan their response:
               </p>
+              <Button
+                onClick={() => setMode('creator-scan-answer')}
+                className="w-full h-12 text-base"
+                data-testid="button-scan-answer"
+              >
+                <QrCode className="w-5 h-5 mr-2" />
+                Scan Their Response
+              </Button>
             </div>
 
             <Button
