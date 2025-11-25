@@ -1,0 +1,60 @@
+You are the Final Privacy Auditor and Fixer for "Dodi" — the ultra-private couples app that means "my beloved" in Hebrew.
+
+Resume the current project and perform a COMPLETE AUDIT + FIX of EVERYTHING against these NON-NEGOTIABLE REQUIREMENTS:
+
+PRIVACY FOUNDATION (fail if ANY are broken — delete and rebuild if needed):
+- PURE CLIENT-SIDE PROGRESSIVE WEB APP ONLY. ZERO backend, ZERO server code, ZERO Express/Node, ZERO database (no Postgres, Neon, Drizzle, Supabase, Firebase).
+- NO server folder, NO server scripts, NO DATABASE_URL, NO passport/sessions.
+- All data (messages, photos, prayers, letters, everything) encrypted BEFORE storage using Web Crypto API AES-GCM 256-bit.
+- Encryption key derived ONLY from shared passphrase + per-device salt (PBKDF2 with EXACTLY 600,000 iterations).
+- Storage: ONLY browser IndexedDB via "idb" library — never unencrypted, never touches phone gallery/camera roll.
+- Sync: PURE PEER-TO-PEER via Simple-Peer (WebRTC) + temporary WebSocket hosted by ONE device when both online. NO external relay/TURN (but allow optional self-hosted later).
+- Confirm: Show code snippets from crypto.ts, storage-encrypted.ts, sync.ts proving this. If ANY server code exists, DELETE IT ALL and rebuild client-only.
+
+FEATURES (add/fix if missing — all encrypted, all on-device):
+1. Pairing via QR code (qrcode.react + html5-qrcode) or shared passphrase — generates key + salt.
+2. Real-time encrypted chat: text, photos/videos (as encrypted blobs), voice notes, disappearing messages.
+3. Private encrypted memory timeline: photo/video vault, chronological view, no gallery access.
+4. Shared calendar: events, love-day/anniversary counters, soft reminders.
+5. Daily ritual: emotion wheel + EXACT three questions (“What made you feel most loved today?”, “One thing I’m grateful for in you”, “Tomorrow I need…”).
+6. Future Letters: write today, unlock on chosen date (encrypted until then).
+7. Shared Prayers/Gratitude: both submit before revealed that day (dual-entry logic).
+8. Private voice/video calls: WebRTC via Simple-Peer, signaling over the same encrypted WebSocket.
+9. “Thinking of you” one-tap reactions: soft chime when received.
+10. Full offline support + installable PWA.
+
+MONETIZATION (exact match or fix):
+- 30-day full-featured free trial (no card needed, stored locally).
+- After trial: warm screen “Your private garden is blooming. A small fee keeps Dodi completely yours and ad-free forever.”
+- EXACT three plans: Monthly $2.99, Yearly $29.99 ($2.50/mo — “Most Popular ♾️”), Lifetime $79 (“Forever ♾️” with gold infinity).
+- Use Stripe + Apple/Google in-app purchases — store status encrypted locally.
+
+VISUAL STYLE (match or fix):
+- Name: “dodi” (lowercase in app, title-case on icon).
+- Palette: soft sage green (#A7C9B0), warm cream (#F8F1E9), gentle blush (#F4C2C2), subtle gold (#D4AF37).
+- Logo: two vines intertwining into a subtle heart.
+- Use shadcn/ui + Tailwind + Lucide icons.
+- Warm, intimate feel: handwritten-love-note meets secret garden, subtle glows/animations.
+
+TECH STACK (enforce or fix):
+- React 18 + TypeScript + Vite
+- Wouter for routing
+- TanStack Query (local only)
+- idb for IndexedDB
+- simple-peer for WebRTC
+- qrcode.react + html5-qrcode for pairing
+- No server dependencies at all
+
+AUDIT + FIX PROCESS:
+1. Scan ALL files — show me the FULL file structure first.
+2. Verify privacy foundation with code snippets (crypto.ts, storage-encrypted.ts, sync.ts, storage.ts).
+3. Check + fix each feature with UI screenshots or code previews.
+4. Confirm monetization screen with exact wording/tiers.
+5. Test: Simulate two devices — show pairing, send encrypted message, make call, add future letter.
+6. Deploy the final always-on PWA and give me the live URL.
+
+Do NOT proceed until EVERY requirement is 100% verified. If ANYTHING is wrong (e.g., old server code), DELETE it and rebuild from scratch as pure client-side.
+
+Confirm at start: “No server code exists. All data stays encrypted on the two devices only.”
+
+Begin now.

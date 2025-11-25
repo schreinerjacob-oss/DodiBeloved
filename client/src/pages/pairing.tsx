@@ -72,12 +72,8 @@ export default function PairingPage() {
           aspectRatio: 1.0,
           rememberLastUsedCamera: true,
           disableFlip: false,
-          formatsToSupport: ['QR_CODE'],
           showTorchButtonIfSupported: true,
           showZoomSliderIfSupported: true,
-          videoConstraints: {
-            facingMode: 'environment',
-          },
         },
         false
       );
