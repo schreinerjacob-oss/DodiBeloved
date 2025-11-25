@@ -196,7 +196,9 @@ export default function PairingPage() {
     setLoading(true);
     try {
       console.log('Joiner: Starting pairing with:', { partnerId, passphrase: partnerPassphrase.substring(0, 3) + '...' });
-      await completePairing(partnerId, partnerPassphrase);
+      // Pass the QR code data as offer if available
+      const offerFromQR = qrCodeData ? qrCodeData : undefined;
+      await completePairing(partnerId, partnerPassphrase, offerFromQR);
       console.log('Joiner: Pairing completed successfully');
       toast({
         title: 'Paired!',

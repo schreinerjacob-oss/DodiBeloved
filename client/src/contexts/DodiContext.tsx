@@ -237,6 +237,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         isOnline,
         isTrialActive,
         trialDaysRemaining,
+        isConnected,
         initializeProfile,
         initializePairing,
         completePairing,
