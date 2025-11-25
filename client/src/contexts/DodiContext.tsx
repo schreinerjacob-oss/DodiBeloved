@@ -4,7 +4,7 @@ import { saveSetting, getSetting, initDB, clearEncryptionCache } from '@/lib/sto
 import { getTrialStatus } from '@/lib/storage-subscription';
 import { nanoid } from 'nanoid';
 
-export type DodiContextType = {
+interface DodiContextType {
   userId: string | null;
   displayName: string | null;
   partnerId: string | null;
@@ -16,7 +16,6 @@ export type DodiContextType = {
   initializeProfile: (displayName: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
   completePairing: (partnerId: string, passphrase: string) => Promise<void>;
-  setCreatorReady: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -113,9 +112,9 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setUserId(newUserId);
     setPassphrase(newPassphrase);
     setPartnerId(null);
-    // DO NOT set isPaired yet - creator needs to confirm they're ready
+    setIsPaired(true); // Creator is ready - waiting for partner to join
     
-    console.log('Creator initialized - ready to show QR code');
+    console.log('Creator initialized - isPaired set to true, ready for partner');
     return { userId: newUserId, passphrase: newPassphrase };
   };
 
@@ -171,13 +170,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     return newUserId;
   };
 
-  const setCreatorReady = async () => {
-    const db = await initDB();
-    await db.put('settings', { key: 'partnerId', value: '' });
-    setIsPaired(true);
-    console.log('Creator marked as ready');
-  };
-
   const logout = async () => {
     clearEncryptionCache();
     
@@ -211,7 +203,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         initializeProfile,
         initializePairing,
         completePairing,
-        setCreatorReady,
         logout,
       }}
     >
