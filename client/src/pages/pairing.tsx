@@ -148,10 +148,15 @@ export default function PairingPage() {
   const handleCreatePairing = async () => {
     setLoading(true);
     try {
+      console.log('Creator: Initializing pairing...');
       const data = await initializePairing();
       setPairingData(data);
+      console.log('Creator: Pairing initialized, userId:', data.userId);
       setMode('create');
+      // Small delay to ensure state updates before potential navigation
+      await new Promise(resolve => setTimeout(resolve, 300));
     } catch (error) {
+      console.error('Create pairing error:', error);
       toast({
         title: 'Error',
         description: 'Failed to create pairing. Please try again.',

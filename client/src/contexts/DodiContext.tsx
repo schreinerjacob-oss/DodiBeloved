@@ -111,6 +111,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setUserId(newUserId);
     setPassphrase(newPassphrase);
     setPartnerId(null);
+    setIsPaired(true); // Creator is ready - waiting for partner to join
     
     return { userId: newUserId, passphrase: newPassphrase };
   };
