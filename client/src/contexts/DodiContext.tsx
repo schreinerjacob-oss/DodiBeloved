@@ -3,6 +3,7 @@ import { generatePassphrase, generateSalt, deriveKey, arrayBufferToBase64 } from
 import { saveSetting, getSetting, initDB, clearEncryptionCache } from '@/lib/storage-encrypted';
 import { getTrialStatus } from '@/lib/storage-subscription';
 import { nanoid } from 'nanoid';
+import SimplePeer from 'simple-peer';
 
 interface DodiContextType {
   userId: string | null;
@@ -13,9 +14,10 @@ interface DodiContextType {
   isOnline: boolean;
   isTrialActive: boolean;
   trialDaysRemaining: number;
+  isConnected: boolean;
   initializeProfile: (displayName: string) => Promise<string>;
-  initializePairing: () => Promise<{ userId: string; passphrase: string }>;
-  completePairing: (partnerId: string, passphrase: string) => Promise<void>;
+  initializePairing: () => Promise<{ userId: string; passphrase: string; offer?: string }>;
+  completePairing: (partnerId: string, passphrase: string, offer?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -30,6 +32,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isTrialActive, setIsTrialActive] = useState(true);
   const [trialDaysRemaining, setTrialDaysRemaining] = useState(30);
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     const loadPairingData = async () => {
@@ -112,13 +115,30 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setUserId(newUserId);
     setPassphrase(newPassphrase);
     setPartnerId(null);
-    setIsPaired(true); // Creator is ready - waiting for partner to join
+    setIsPaired(true);
     
-    console.log('Creator initialized - isPaired set to true, ready for partner');
-    return { userId: newUserId, passphrase: newPassphrase };
+    // Start WebRTC peer in initiator mode
+    let offer = '';
+    try {
+      const peer = new SimplePeer({ initiator: true, trickle: false });
+      offer = await new Promise<string>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Offer timeout')), 5000);
+        peer.on('signal', (data) => {
+          clearTimeout(timeout);
+          resolve(btoa(JSON.stringify(data)));
+        });
+        peer.on('error', reject);
+      });
+      await saveSetting('peerOffer', offer);
+      console.log('Creator: WebRTC offer generated and stored');
+    } catch (e) {
+      console.error('Error creating offer:', e);
+    }
+    
+    return { userId: newUserId, passphrase: newPassphrase, offer };
   };
 
-  const completePairing = async (newPartnerId: string, sharedPassphrase: string) => {
+  const completePairing = async (newPartnerId: string, sharedPassphrase: string, offer?: string) => {
     if (!newPartnerId || !sharedPassphrase) {
       throw new Error('Partner ID and passphrase are required');
     }
@@ -154,9 +174,26 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setPassphrase(sharedPassphrase);
     setIsPaired(true);
     
-    // Pure P2P - no server notification needed
-    // Pairing is complete when both devices have the shared passphrase
-    console.log('Pairing complete - ready for P2P connection');
+    // Accept offer and create answer if offer provided
+    if (offer) {
+      try {
+        const peer = new SimplePeer({ initiator: false, trickle: false });
+        const answer = await new Promise<string>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Answer timeout')), 5000);
+          peer.on('signal', (data) => {
+            clearTimeout(timeout);
+            resolve(btoa(JSON.stringify(data)));
+          });
+          peer.on('error', reject);
+          peer.signal(JSON.parse(atob(offer)));
+        });
+        await saveSetting('peerAnswer', answer);
+        setIsConnected(true);
+        console.log('Joiner: WebRTC answer generated, P2P connected');
+      } catch (e) {
+        console.error('Error accepting offer:', e);
+      }
+    }
   };
 
   const initializeProfile = async (name: string) => {
