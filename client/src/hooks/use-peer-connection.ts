@@ -133,9 +133,19 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         });
 
         peer.on('error', (err) => {
+          console.error('SimplePeer error in createOffer:', {
+            message: err.message,
+            code: err.code,
+            stack: err.stack,
+            toString: err.toString(),
+          });
           reject(err);
         });
       } catch (e) {
+        console.error('Exception in createOffer:', {
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        });
         reject(e);
       }
     });
@@ -165,11 +175,21 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         });
 
         peer.on('error', (err) => {
+          console.error('SimplePeer error in acceptOffer:', {
+            message: err.message,
+            code: err.code,
+            stack: err.stack,
+            toString: err.toString(),
+          });
           reject(err);
         });
 
         peer.signal(offer);
       } catch (e) {
+        console.error('Exception in acceptOffer:', {
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        });
         reject(e);
       }
     });

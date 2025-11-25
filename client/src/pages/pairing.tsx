@@ -54,7 +54,7 @@ export default function PairingPage() {
     }
     
     if (pendingSession) {
-      // Creator: restore pending session and auto-advance to scanning
+      // Creator: restore pending session
       setPairingPayload({
         creatorId: pendingSession.creatorId,
         passphrase: pendingSession.passphrase,
@@ -63,11 +63,6 @@ export default function PairingPage() {
         createdAt: pendingSession.createdAt,
       });
       setMode('creator-show-qr');
-      // Auto-advance to scanning after 2 seconds
-      const timeout = setTimeout(() => {
-        setMode('creator-scan-answer');
-      }, 2000);
-      return () => clearTimeout(timeout);
     } else if (storedJoinerResponse) {
       // Joiner: restore answer QR display
       const answerPayload = {
@@ -81,15 +76,6 @@ export default function PairingPage() {
     }
   }, [pairingStatus]);
 
-  // Auto-advance creator from showing QR to scanning answer
-  useEffect(() => {
-    if (mode === 'creator-show-qr' && pairingPayload) {
-      const timeout = setTimeout(() => {
-        setMode('creator-scan-answer');
-      }, 2000);
-      return () => clearTimeout(timeout);
-    }
-  }, [mode, pairingPayload]);
 
   // Watch for P2P connection to complete
   useEffect(() => {
