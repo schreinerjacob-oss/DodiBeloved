@@ -7,7 +7,7 @@ const rootDir = path.resolve(__dirname, '..');
 
 console.log('Starting dodi PWA production server...');
 
-const viteProcess = spawn('npx', ['vite', 'preview', '--host', '0.0.0.0', '--port', '5000'], {
+const viteProcess = spawn('npx', ['vite', 'preview', '--config', 'vite.replit.config.ts', '--host', '0.0.0.0', '--port', '5000'], {
   cwd: rootDir,
   stdio: 'inherit',
   shell: true,
