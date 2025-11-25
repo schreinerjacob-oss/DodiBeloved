@@ -28,7 +28,17 @@ export default function PairingPage() {
 
   useEffect(() => {
     if (mode === 'scan' && !scannerInitialized) {
-      initializeScanner();
+      // Wait for DOM to be ready
+      const timeoutId = setTimeout(() => {
+        const element = document.getElementById('qr-reader');
+        if (element) {
+          initializeScanner();
+        } else {
+          console.error('QR reader element not found');
+        }
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
     }
 
     return () => {
@@ -45,6 +55,7 @@ export default function PairingPage() {
 
   const initializeScanner = async () => {
     try {
+      console.log('Initializing QR scanner...');
       const scanner = new Html5QrcodeScanner(
         'qr-reader',
         {
@@ -52,26 +63,30 @@ export default function PairingPage() {
           qrbox: { width: 250, height: 250 },
           aspectRatio: 1.0,
           rememberLastUsedCamera: true,
+          showTorchButtonIfSupported: true,
+          showZoomSliderIfSupported: true,
         },
         false
       );
 
       scanner.render(
         (decodedText: string) => {
+          console.log('QR decoded:', decodedText);
           if (decodedText && decodedText.startsWith('dodi:')) {
             handleScanSuccess(decodedText);
           }
         },
         (errorMessage: string) => {
-          // Error message on continuous scan
+          // Ignore "not found" errors during continuous scan
           if (errorMessage && !errorMessage.includes('NotFoundException')) {
-            console.debug('Scan error:', errorMessage);
+            console.debug('Scan frame error:', errorMessage);
           }
         }
       );
 
       scannerRef.current = scanner;
       setScannerInitialized(true);
+      console.log('QR scanner initialized successfully');
     } catch (err) {
       console.error('Scanner init error:', err);
       toast({
