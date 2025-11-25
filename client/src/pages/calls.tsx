@@ -1,57 +1,53 @@
 import { useState, useEffect, useRef } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
+import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { useWebSocket } from '@/hooks/use-websocket';
 import { Phone, Video, PhoneOff, Mic, MicOff, Camera, CameraOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-// @ts-ignore - simple-peer doesn't have type definitions
 import SimplePeer from 'simple-peer';
 
 export default function CallsPage() {
   const { userId, partnerId } = useDodi();
+  const { state: peerState, send: sendP2P } = usePeerConnection();
   const { toast } = useToast();
-  const { send: sendWS, ws, connected } = useWebSocket();
   const [callActive, setCallActive] = useState(false);
   const [callType, setCallType] = useState<'audio' | 'video' | null>(null);
   const [incomingCall, setIncomingCall] = useState(false);
   const [incomingCallType, setIncomingCallType] = useState<'audio' | 'video' | null>(null);
   const [micEnabled, setMicEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [peerRef] = useState<{ current: SimplePeer.Instance | null }>({ current: null });
+  const mediaCallRef = useRef<SimplePeer.Instance | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
 
-  // Handle incoming call signaling
+  // Listen for incoming call signals through P2P data channel
   useEffect(() => {
-    if (!ws || !partnerId) return;
-
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'call-offer') {
-          setIncomingCall(true);
-          setIncomingCallType(data.data.callType);
-        } else if (data.type === 'call-signal') {
-          if (peerRef.current && data.data.signal) {
-            peerRef.current.signal(data.data.signal);
-          }
-        } else if (data.type === 'call-end') {
-          endCall();
+    const handleP2PMessage = (event: CustomEvent) => {
+      const message = event.detail;
+      
+      if (message.type === 'call-offer') {
+        console.log('Incoming call offer:', message.data);
+        setIncomingCall(true);
+        setIncomingCallType(message.data.callType);
+        // Store the offer signal for when we accept
+        sessionStorage.setItem('call-offer-signal', JSON.stringify(message.data.signal));
+      } else if (message.type === 'call-signal') {
+        if (mediaCallRef.current && message.data.signal) {
+          mediaCallRef.current.signal(message.data.signal);
         }
-      } catch (e) {
-        console.log('WebSocket message parse error:', e);
+      } else if (message.type === 'call-end') {
+        endCall();
       }
     };
 
-    ws.addEventListener('message', handleMessage);
-    return () => ws.removeEventListener('message', handleMessage);
-  }, [ws, partnerId, peerRef]);
+    window.addEventListener('p2p-message', handleP2PMessage as EventListener);
+    return () => window.removeEventListener('p2p-message', handleP2PMessage as EventListener);
+  }, []);
 
-  const initiatePeerConnection = async (type: 'audio' | 'video') => {
+  const initiatePeerConnection = async (type: 'audio' | 'video', isInitiator: boolean, offerSignal?: any) => {
     try {
-      // Check if getUserMedia is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         toast({
           title: 'Not supported',
@@ -68,40 +64,41 @@ export default function CallsPage() {
 
       console.log('Requesting media permissions:', constraints);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log('Media permissions granted, stream:', stream);
       localStreamRef.current = stream;
 
       if (type === 'video' && localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
 
-      const isInitiator = true;
       const peer = new SimplePeer({
         initiator: isInitiator,
-        trickleIce: true,
+        trickle: false,
         stream: stream,
       });
 
-      peerRef.current = peer;
+      mediaCallRef.current = peer;
 
       peer.on('signal', (signal: any) => {
-        sendWS({
+        console.log('Call signal generated, sending through P2P');
+        // Send the signal through the P2P data channel
+        sendP2P({
           type: 'call-signal',
           data: { signal, callType: type },
         });
       });
 
       peer.on('stream', (remoteStream: MediaStream) => {
+        console.log('Remote stream received');
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStream;
         }
       });
 
       peer.on('error', (err: Error) => {
-        console.error('Peer error:', err);
+        console.error('Media peer error:', err);
         toast({
           title: 'Connection error',
-          description: 'Failed to establish connection',
+          description: 'Failed to establish call connection',
           variant: 'destructive',
         });
         endCall();
@@ -110,6 +107,12 @@ export default function CallsPage() {
       peer.on('close', () => {
         endCall();
       });
+
+      // If we're the answerer, immediately signal the offer we received
+      if (!isInitiator && offerSignal) {
+        console.log('Accepting offer signal');
+        peer.signal(offerSignal);
+      }
 
       return peer;
     } catch (error: any) {
@@ -121,25 +124,19 @@ export default function CallsPage() {
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
         title = 'Camera/Mic blocked';
         description = type === 'video' 
-          ? 'Please allow camera and microphone access in your browser settings, then try again.'
-          : 'Please allow microphone access in your browser settings, then try again.';
+          ? 'Please allow camera and microphone access in your browser settings.'
+          : 'Please allow microphone access in your browser settings.';
       } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
         title = 'No device found';
         description = type === 'video'
-          ? 'No camera or microphone detected. Please connect a device and try again.'
-          : 'No microphone detected. Please connect a microphone and try again.';
+          ? 'No camera or microphone detected.'
+          : 'No microphone detected.';
       } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
         title = 'Device in use';
-        description = 'Your camera or microphone is already being used by another app. Please close it and try again.';
-      } else if (error.name === 'OverconstrainedError' || error.name === 'ConstraintNotSatisfiedError') {
-        title = 'Device limitation';
-        description = 'Your device does not meet the requirements for this call.';
-      } else if (error.name === 'TypeError') {
-        title = 'Invalid constraints';
-        description = 'There was an error configuring the call. Please try again.';
+        description = 'Your camera or microphone is already in use by another app.';
       } else if (error.name === 'SecurityError') {
         title = 'Security error';
-        description = 'Calls require HTTPS. Please access the app through a secure connection.';
+        description = 'Calls require HTTPS. Please use a secure connection.';
       }
       
       toast({
@@ -164,10 +161,10 @@ export default function CallsPage() {
       return;
     }
 
-    if (!connected || !ws || ws.readyState !== WebSocket.OPEN) {
+    if (!peerState.connected) {
       toast({
         title: 'Connecting...',
-        description: 'WebSocket connection establishing. Try again in a moment.',
+        description: 'P2P connection establishing. Try again in a moment.',
         variant: 'default',
       });
       return;
@@ -176,12 +173,14 @@ export default function CallsPage() {
     setCallActive(true);
     setCallType(type);
 
-    sendWS({
+    // Send call offer through P2P data channel
+    await initiatePeerConnection(type, true);
+    
+    // Notify partner of call offer
+    sendP2P({
       type: 'call-offer',
       data: { callType: type, fromUserId: userId },
     });
-
-    await initiatePeerConnection(type);
   };
 
   const acceptCall = async () => {
@@ -191,26 +190,33 @@ export default function CallsPage() {
     setCallType(incomingCallType);
     setIncomingCall(false);
 
-    sendWS({
+    // Get the stored offer signal
+    const offerSignalStr = sessionStorage.getItem('call-offer-signal');
+    const offerSignal = offerSignalStr ? JSON.parse(offerSignalStr) : null;
+    sessionStorage.removeItem('call-offer-signal');
+
+    await initiatePeerConnection(incomingCallType, false, offerSignal);
+
+    // Send call accept through P2P data channel
+    sendP2P({
       type: 'call-accept',
       data: { callType: incomingCallType },
     });
-
-    await initiatePeerConnection(incomingCallType);
   };
 
   const rejectCall = () => {
     setIncomingCall(false);
-    sendWS({
+    sessionStorage.removeItem('call-offer-signal');
+    sendP2P({
       type: 'call-reject',
       data: {},
     });
   };
 
   const endCall = () => {
-    if (peerRef.current) {
-      peerRef.current.destroy();
-      peerRef.current = null;
+    if (mediaCallRef.current) {
+      mediaCallRef.current.destroy();
+      mediaCallRef.current = null;
     }
 
     if (localStreamRef.current) {
@@ -221,7 +227,8 @@ export default function CallsPage() {
     setCallActive(false);
     setCallType(null);
 
-    sendWS({
+    // Notify partner through P2P data channel
+    sendP2P({
       type: 'call-end',
       data: {},
     });
@@ -356,7 +363,7 @@ export default function CallsPage() {
       <div className="px-6 py-4 border-b bg-card/50">
         <h2 className="text-xl font-light text-foreground">Voice & Video</h2>
         <p className="text-xs text-muted-foreground mt-1">
-          {connected ? '✓ Connected & ready' : '⏳ Connecting...'}
+          {peerState.connected ? '✓ Connected & encrypted' : '⏳ Connecting...'}
         </p>
       </div>
 
@@ -371,7 +378,7 @@ export default function CallsPage() {
                 <h3 className="font-medium text-sm">First time calling?</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   When you start a call, your browser will ask for permission to use your camera and microphone. 
-                  Click "Allow" to enable calls. If you accidentally blocked access, you can reset it in your browser settings.
+                  Click "Allow" to enable calls. Your call is completely encrypted and peer-to-peer.
                 </p>
               </div>
             </div>
@@ -386,11 +393,11 @@ export default function CallsPage() {
               <p className="text-xs text-center text-muted-foreground">Voice only</p>
               <Button
                 onClick={() => startCall('audio')}
-                disabled={!connected}
+                disabled={!peerState.connected}
                 className="w-full"
                 data-testid="button-start-audio"
               >
-                {connected ? 'Start' : 'Connecting...'}
+                {peerState.connected ? 'Start' : 'Connecting...'}
               </Button>
             </Card>
 
@@ -402,11 +409,11 @@ export default function CallsPage() {
               <p className="text-xs text-center text-muted-foreground">See each other</p>
               <Button
                 onClick={() => startCall('video')}
-                disabled={!connected}
+                disabled={!peerState.connected}
                 className="w-full"
                 data-testid="button-start-video"
               >
-                {connected ? 'Start' : 'Connecting...'}
+                {peerState.connected ? 'Start' : 'Connecting...'}
               </Button>
             </Card>
           </div>
