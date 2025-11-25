@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'wouter';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,9 +11,8 @@ import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
 export default function PairingPage() {
-  const { initializePairing, completePairing, userId } = useDodi();
+  const { initializePairing, completePairing } = useDodi();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
   const [mode, setMode] = useState<'choose' | 'create' | 'join' | 'scan'>('choose');
   const [pairingData, setPairingData] = useState<{ userId: string; passphrase: string } | null>(null);
   const [partnerPassphrase, setPartnerPassphrase] = useState('');
@@ -152,13 +150,11 @@ export default function PairingPage() {
     try {
       console.log('Creator: Initializing pairing...');
       const data = await initializePairing();
-      console.log('Creator: Pairing initialized, userId:', data.userId);
       setPairingData(data);
+      console.log('Creator: Pairing initialized, userId:', data.userId);
       setMode('create');
-      toast({
-        title: 'Connection Created!',
-        description: 'Share the code below with your beloved.',
-      });
+      // Small delay to ensure state updates before potential navigation
+      await new Promise(resolve => setTimeout(resolve, 300));
     } catch (error) {
       console.error('Create pairing error:', error);
       toast({
@@ -195,19 +191,15 @@ export default function PairingPage() {
 
     setLoading(true);
     try {
-      console.log('Joiner: Starting pairing with:', { partnerId, passphrase: partnerPassphrase.substring(0, 3) + '...' });
-      // Pass the QR code data as offer if available
-      const offerFromQR = qrCodeData ? qrCodeData : undefined;
-      await completePairing(partnerId, partnerPassphrase, offerFromQR);
-      console.log('Joiner: Pairing completed successfully');
+      console.log('Starting pairing with:', { partnerId, passphrase: partnerPassphrase.substring(0, 3) + '...' });
+      await completePairing(partnerId, partnerPassphrase);
+      console.log('Pairing completed successfully');
       toast({
         title: 'Paired!',
         description: 'Welcome to your private sanctuary.',
       });
-      // Navigate to chat after brief delay
+      // Force a small delay to ensure state updates
       await new Promise(resolve => setTimeout(resolve, 500));
-      console.log('Joiner: Navigating to chat...');
-      setLocation('/chat');
     } catch (error) {
       console.error('Pairing error:', error);
       toast({
@@ -313,33 +305,10 @@ export default function PairingPage() {
                 {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
                 {copied ? 'Copied!' : 'Copy Pairing Details'}
               </Button>
-
-              <Button
-                onClick={() => {
-                  console.log('Creator: Marking as paired and navigating to chat');
-                  // Complete the pairing locally without offer (creator mode)
-                  // This sets isPaired = true which triggers navigation in App.tsx
-                  completePairing(userId || 'unknown', pairingData?.passphrase || '').then(() => {
-                    setLocation('/chat');
-                  }).catch(err => {
-                    console.error('Error completing pairing:', err);
-                    toast({
-                      title: 'Error',
-                      description: 'Failed to complete pairing',
-                      variant: 'destructive',
-                    });
-                  });
-                }}
-                className="w-full h-12 text-base"
-                data-testid="button-go-to-chat"
-              >
-                <Heart className="w-5 h-5 mr-2" />
-                Ready to Connect
-              </Button>
             </div>
 
             <p className="text-xs text-center text-muted-foreground leading-relaxed">
-              Share this code with your beloved. You can navigate to chat anytime.
+              Once your beloved scans this or enters the details, your private space will be ready.
             </p>
           </Card>
         )}
