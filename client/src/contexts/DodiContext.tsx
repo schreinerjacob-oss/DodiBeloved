@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { generatePassphrase, generateSalt, deriveKey, arrayBufferToBase64 } from '@/lib/crypto';
-import { saveSetting, getSetting, initDB } from '@/lib/storage-encrypted';
+import { saveSetting, getSetting, initDB, clearEncryptionCache } from '@/lib/storage-encrypted';
 import { getTrialStatus } from '@/lib/storage-subscription';
 import { nanoid } from 'nanoid';
 
@@ -168,8 +168,16 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    clearEncryptionCache();
+    
     const db = await initDB();
     await db.clear('settings');
+    await db.clear('messages');
+    await db.clear('memories');
+    await db.clear('calendarEvents');
+    await db.clear('dailyRituals');
+    await db.clear('loveLetters');
+    await db.clear('reactions');
     
     setUserId(null);
     setDisplayName(null);

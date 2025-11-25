@@ -39,7 +39,29 @@ All sensitive data is encrypted before storage using the **Web Crypto API**:
 - **Key Derivation:** PBKDF2 with 600,000 iterations (security hardened)
 - **Salt:** Cryptographically random, stored locally
 - **Key Caching:** Derived key cached in memory for performance
+- **Date Handling:** Dates are properly serialized/deserialized with JSON revivers
 - Implementation: `client/src/lib/crypto.ts`, `client/src/lib/storage-encrypted.ts`
+
+### Security Considerations & Threat Model
+
+**Current Design Tradeoffs:**
+
+1. **Passphrase Storage:** The pairing passphrase is stored in IndexedDB to enable seamless app usage across page refreshes. This is a UX tradeoff - without storage, users would need to re-enter the passphrase every time they open the app.
+
+2. **Threat Model:**
+   - **Protected against:** Network surveillance, server compromise (no server), unauthorized access to message content
+   - **Not protected against:** Physical device compromise with direct IndexedDB access
+   - **Mitigation:** Logout clears all stored data including cached encryption keys
+
+3. **Future Enhancements (v2):**
+   - Optional PIN/biometric lock for app access
+   - Session-based passphrase that requires re-entry
+   - Encrypted passphrase storage with device-specific unlock
+
+**Logout Behavior:**
+- Clears encryption key cache
+- Wipes all IndexedDB stores (settings, messages, memories, etc.)
+- Forces complete re-pairing on next use
 
 ### Peer-to-Peer Sync
 

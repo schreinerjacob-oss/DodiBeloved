@@ -33,10 +33,20 @@ async function encryptObject<T>(obj: T): Promise<EncryptedData> {
   return encrypt(jsonStr, key);
 }
 
+function dateReviver(_key: string, value: unknown): unknown {
+  if (typeof value === 'string') {
+    const dateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/;
+    if (dateRegex.test(value)) {
+      return new Date(value);
+    }
+  }
+  return value;
+}
+
 async function decryptObject<T>(encrypted: EncryptedData): Promise<T> {
   const key = await getEncryptionKey();
   const jsonStr = await decrypt(encrypted, key);
-  return JSON.parse(jsonStr) as T;
+  return JSON.parse(jsonStr, dateReviver) as T;
 }
 
 export async function encryptMessage(message: Message): Promise<EncryptedData> {
