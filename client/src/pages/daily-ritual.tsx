@@ -155,6 +155,7 @@ export default function DailyRitualPage() {
         gratitude,
         tomorrowNeed,
         ritualDate: new Date(),
+        createdAt: new Date(),
       };
 
       await saveDailyRitual(ritual);

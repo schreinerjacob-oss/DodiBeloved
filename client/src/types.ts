@@ -11,6 +11,9 @@ export interface Message {
   timestamp: Date;
   disappearsAt?: Date | null;
   isRead?: boolean;
+  type?: 'text' | 'image' | 'voice';
+  mediaUrl?: string | null;
+  isDisappearing?: boolean | null;
 }
 
 export interface Memory {
@@ -20,6 +23,9 @@ export interface Memory {
   imageData: string;
   caption?: string | null;
   createdAt: Date;
+  timestamp: Date;
+  mediaUrl?: string | null;
+  mediaType?: 'image' | 'video' | 'photo';
 }
 
 export interface CalendarEvent {
@@ -37,16 +43,17 @@ export interface DailyRitual {
   id: string;
   userId: string;
   partnerId: string;
-  date: Date;
+  ritualDate: Date;
+  emotion?: string;
+  lovedMoment?: string;
   gratitude: string;
-  thinking: string;
-  wish: string;
+  tomorrowNeed?: string;
   createdAt: Date;
 }
 
 export interface LoveLetter {
   id: string;
-  senderId: string;
+  authorId: string;
   recipientId: string;
   title: string;
   content: string;
@@ -56,22 +63,27 @@ export interface LoveLetter {
 
 export interface FutureLetter {
   id: string;
-  senderId: string;
+  authorId: string;
   recipientId: string;
   title: string;
   content: string;
-  deliverAt: Date;
+  unlockDate: Date;
   createdAt: Date;
-  isDelivered?: boolean;
+  isUnlocked?: boolean;
 }
 
 export interface Prayer {
   id: string;
   userId: string;
   partnerId: string;
-  type: 'gratitude' | 'prayer';
-  content: string;
+  pairingId?: string | null;
+  type?: 'gratitude' | 'prayer';
+  content?: string;
+  gratitudeEntry?: string | null;
+  prayerEntry?: string | null;
   createdAt: Date;
+  prayerDate: Date;
+  isRevealed?: boolean;
 }
 
 export interface Reaction {

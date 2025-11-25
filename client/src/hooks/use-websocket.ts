@@ -1,100 +1,73 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 
 interface WSMessage {
   type: string;
-  data: any;
+  data: unknown;
 }
 
 export function useWebSocket() {
-  const { userId, partnerId, isPaired, isOnline } = useDodi();
+  const { userId, partnerId, isPaired } = useDodi();
   const [connected, setConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const messageHandlersRef = useRef<((event: MessageEvent) => void)[]>([]);
+  
+  // Since we're now a pure P2P app, WebSocket is replaced with event-based messaging
+  // This stub maintains API compatibility while pages migrate to P2P
+  
+  const send = useCallback((message: WSMessage) => {
+    console.log('P2P send (stub):', message.type, message.data);
+    
+    // Dispatch as custom event for local components
+    window.dispatchEvent(new CustomEvent('dodi-sync', { 
+      detail: { type: message.type, data: message.data }
+    }));
+  }, []);
 
-  useEffect(() => {
-    // Connect for unpaired users waiting for partner, or paired users
-    if (!userId) {
-      console.log('WebSocket: No userId yet');
-      return;
-    }
-
-    const connect = () => {
-      console.log('WebSocket: Attempting to connect for userId:', userId);
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
-      
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('WebSocket: Connected');
-        setConnected(true);
-        ws.send(JSON.stringify({
-          type: 'register',
-          data: { userId },
-        }));
-
-        if (isPaired) {
-          console.log('WebSocket: Sending sync request for paired user');
-          ws.send(JSON.stringify({
-            type: 'sync',
-            data: {},
-          }));
-        }
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message: WSMessage = JSON.parse(event.data);
-          console.log('WebSocket received:', message.type, message.data);
-          
-          if (message.type === 'partner-joined' && !isPaired) {
-            console.log('WebSocket: Partner joined, reloading');
-            // Partner has joined, trigger a page reload to refresh context
-            window.location.reload();
-          }
-        } catch (e) {
-          console.error('WebSocket message parse error:', e, 'Raw data:', event.data);
-        }
-      };
-
-      ws.onclose = () => {
-        console.log('WebSocket: Disconnected, reconnecting in 3s');
-        setConnected(false);
-        reconnectTimeoutRef.current = setTimeout(connect, 3000);
-      };
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        setConnected(false);
-      };
-    };
-
-    connect();
-
-    return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
+  // Simulate WebSocket object for backward compatibility
+  const wsObject = {
+    readyState: isPaired ? 1 : 3, // OPEN : CLOSED
+    addEventListener: (type: string, handler: (event: MessageEvent) => void) => {
+      if (type === 'message') {
+        messageHandlersRef.current.push(handler);
       }
-      if (wsRef.current) {
-        wsRef.current.close();
+    },
+    removeEventListener: (type: string, handler: (event: MessageEvent) => void) => {
+      if (type === 'message') {
+        messageHandlersRef.current = messageHandlersRef.current.filter(h => h !== handler);
       }
-    };
-  }, [userId, isPaired]);
-
-  const send = (message: WSMessage) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+    },
+    send: (data: string) => {
       try {
-        wsRef.current.send(JSON.stringify(message));
-        console.log('WebSocket message sent:', message.type);
-      } catch (error) {
-        console.error('WebSocket send error:', error);
+        const parsed = JSON.parse(data);
+        send(parsed);
+      } catch (e) {
+        console.error('Error parsing message:', e);
       }
-    } else {
-      console.warn('WebSocket not ready. State:', wsRef.current?.readyState, 'Connected:', connected);
-    }
+    },
   };
 
-  return { connected, send, ws: wsRef.current };
+  useEffect(() => {
+    if (isPaired) {
+      setConnected(true);
+    }
+  }, [isPaired]);
+
+  // Listen for incoming sync events
+  useEffect(() => {
+    const handleSyncEvent = (event: CustomEvent) => {
+      const messageEvent = { data: JSON.stringify(event.detail) } as MessageEvent;
+      messageHandlersRef.current.forEach(handler => handler(messageEvent));
+    };
+
+    window.addEventListener('dodi-sync', handleSyncEvent as EventListener);
+    return () => {
+      window.removeEventListener('dodi-sync', handleSyncEvent as EventListener);
+    };
+  }, []);
+
+  return { 
+    connected: isPaired, 
+    send, 
+    ws: wsObject as unknown as WebSocket 
+  };
 }

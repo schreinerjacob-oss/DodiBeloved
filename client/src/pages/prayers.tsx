@@ -157,9 +157,9 @@ export default function PrayersPage() {
         partnerId,
         gratitudeEntry: gratitude,
         prayerEntry: prayer.trim() || null,
-        participantIds: JSON.stringify([userId]),
         isRevealed: false,
         prayerDate: new Date(),
+        createdAt: new Date(),
       };
 
       await savePrayer(prayerEntry);

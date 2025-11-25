@@ -134,10 +134,12 @@ export default function MemoriesPage() {
         id: nanoid(),
         userId,
         partnerId,
+        imageData: preview,
         mediaUrl: preview,
         caption: caption.trim() || null,
         mediaType: 'photo',
         timestamp: new Date(),
+        createdAt: new Date(),
       };
       
       // Save to local IndexedDB first

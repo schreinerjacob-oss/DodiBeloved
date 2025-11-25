@@ -150,17 +150,10 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setPartnerId(newPartnerId);
     setPassphrase(sharedPassphrase);
     setIsPaired(true);
-
-    setTimeout(() => {
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-      
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'register', data: { userId: currentUserId } }));
-        ws.send(JSON.stringify({ type: 'partner-joined', data: { partnerId: newPartnerId, joinedUserId: currentUserId } }));
-        ws.close();
-      };
-    }, 100);
+    
+    // Pure P2P - no server notification needed
+    // Pairing is complete when both devices have the shared passphrase
+    console.log('Pairing complete - ready for P2P connection');
   };
 
   const initializeProfile = async (name: string) => {
