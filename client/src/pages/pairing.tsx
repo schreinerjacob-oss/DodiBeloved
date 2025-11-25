@@ -138,30 +138,39 @@ export default function PairingPage() {
     setLoading(true);
     
     try {
+      console.log('Creator scanned answer QR data:', data?.substring(0, 50));
+      
       // Parse the answer QR data
-      const parsed = JSON.parse(atob(data.replace('dodi-answer:', '')));
+      const cleanData = data.replace('dodi-answer:', '');
+      const parsed = JSON.parse(atob(cleanData));
       const { answer, joinerId } = parsed;
       
       if (!joinerId) {
         throw new Error('Invalid response: missing partner ID');
       }
       
+      console.log('Parsed answer payload, joinerId:', joinerId);
+      
       // Store the partner's ID
+      console.log('Setting partner ID for creator:', joinerId);
       await setPartnerIdForCreator(joinerId);
+      console.log('Partner ID set successfully');
       
       // Complete the WebRTC connection
+      console.log('Completing WebRTC connection with answer');
       completeConnection(answer);
       
       toast({
-        title: 'Connecting...',
-        description: 'Establishing secure connection.',
+        title: 'Connected!',
+        description: 'Your partner is connecting...',
       });
       
     } catch (error) {
       console.error('Parse answer error:', error);
+      console.error('Error details:', error instanceof Error ? error.message : 'Unknown error');
       toast({
         title: 'Invalid QR Code',
-        description: 'Please scan the QR code your partner is showing.',
+        description: error instanceof Error ? error.message : 'Please scan the QR code your partner is showing.',
         variant: 'destructive',
       });
       setMode('creator-show-qr');
@@ -176,18 +185,27 @@ export default function PairingPage() {
     setLoading(true);
     
     try {
+      console.log('Joiner scanned QR data:', data?.substring(0, 50));
+      
       // Decode the QR payload
-      const payload = decodePairingPayload(data.replace('dodi:', ''));
+      const cleanData = data.replace('dodi:', '').replace('dodi-answer:', '');
+      const payload = decodePairingPayload(cleanData);
       
       if (!payload) {
-        throw new Error('Invalid QR code format');
+        throw new Error('Invalid QR code format - could not decode payload');
       }
       
+      console.log('Decoded payload:', { creatorId: payload.creatorId, sessionId: payload.sessionId });
+      
       // Complete pairing with credentials - this returns the joiner's userId
+      console.log('Completing pairing with creator:', payload.creatorId);
       const joinerId = await completePairing(payload.creatorId, payload.passphrase);
+      console.log('Pairing completed, joinerId:', joinerId);
       
       // Generate WebRTC answer
+      console.log('Accepting offer...');
       const answer = await acceptOffer(payload.offer);
+      console.log('Answer generated');
       
       // Create answer QR data with the confirmed joiner ID
       const answerPayload = {
@@ -206,14 +224,21 @@ export default function PairingPage() {
         sessionId: payload.sessionId,
       });
       
+      console.log('Transitioning to joiner-show-answer');
       setAnswerQrData(answerData);
       setMode('joiner-show-answer');
       
+      toast({
+        title: 'QR scanned!',
+        description: 'Now show your QR code to your partner.',
+      });
+      
     } catch (error) {
       console.error('Scan process error:', error);
+      console.error('Error details:', error instanceof Error ? error.message : 'Unknown error');
       toast({
-        title: 'Error',
-        description: 'Failed to process QR code. Please try again.',
+        title: 'Error processing QR',
+        description: error instanceof Error ? error.message : 'Failed to process QR code. Please try again.',
         variant: 'destructive',
       });
       setMode('choose');
