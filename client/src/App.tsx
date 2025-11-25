@@ -44,20 +44,22 @@ function NavItem({ href, icon: Icon, label, active, disabled }: { href: string; 
 }
 
 function MainApp() {
-  const { userId, isPaired, isOnline, isTrialActive } = useDodi();
+  const { userId, pairingStatus, isOnline, isTrialActive } = useDodi();
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
-    if (isPaired && !isTrialActive && location !== '/subscription' && location !== '/settings') {
+    if (pairingStatus === 'connected' && !isTrialActive && location !== '/subscription' && location !== '/settings') {
       setLocation('/subscription');
     }
-  }, [isPaired, isTrialActive, location, setLocation]);
+  }, [pairingStatus, isTrialActive, location, setLocation]);
 
   if (!userId) {
     return <ProfileSetupPage />;
   }
 
-  if (!isPaired) {
+  // Show pairing page for both 'unpaired' and 'waiting' states
+  // Only show main app when pairingStatus is 'connected'
+  if (pairingStatus !== 'connected') {
     return <PairingPage />;
   }
 

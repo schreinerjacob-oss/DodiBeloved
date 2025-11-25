@@ -20,7 +20,7 @@ interface UsePeerConnectionReturn {
 }
 
 export function usePeerConnection(): UsePeerConnectionReturn {
-  const { userId, partnerId, isPaired } = useDodi();
+  const { userId, partnerId, pairingStatus } = useDodi();
   const [state, setState] = useState<PeerConnectionState>({
     connected: false,
     connecting: false,
@@ -193,7 +193,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
   // Try to reconnect using stored signal data
   useEffect(() => {
-    if (!isPaired || !partnerId) return;
+    if (pairingStatus !== 'connected' || !partnerId) return;
     
     // Check for stored peer signal from pairing
     const storedSignal = localStorage.getItem('dodi-peer-signal');
@@ -212,7 +212,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         console.error('Error reconnecting:', e);
       }
     }
-  }, [isPaired, partnerId]);
+  }, [pairingStatus, partnerId]);
 
   // Cleanup on unmount
   useEffect(() => {

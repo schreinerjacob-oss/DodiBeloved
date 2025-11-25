@@ -4,16 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { QRCodeSVG } from 'qrcode.react';
-import { Heart, Lock, Copy, Check, Sparkles, Camera, X } from 'lucide-react';
+import { Heart, Lock, Copy, Check, Sparkles, Camera, X, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeToggle } from '@/components/theme-toggle';
 import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
 export default function PairingPage() {
-  const { initializePairing, completePairing } = useDodi();
+  const { initializePairing, completePairing, onPeerConnected, pairingStatus, userId, passphrase, setPartnerIdForCreator } = useDodi();
   const { toast } = useToast();
-  const [mode, setMode] = useState<'choose' | 'create' | 'join' | 'scan'>('choose');
+  const [mode, setMode] = useState<'choose' | 'create' | 'join' | 'scan' | 'creator-enter-partner'>('choose');
   const [pairingData, setPairingData] = useState<{ userId: string; passphrase: string } | null>(null);
   const [partnerPassphrase, setPartnerPassphrase] = useState('');
   const [partnerId, setPartnerId] = useState('');
@@ -22,6 +22,50 @@ export default function PairingPage() {
   const [loading, setLoading] = useState(false);
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const [scannerInitialized, setScannerInitialized] = useState(false);
+
+  // If we're already in 'waiting' status (page refresh), restore the create mode
+  useEffect(() => {
+    if (pairingStatus === 'waiting' && userId && passphrase) {
+      setPairingData({ userId, passphrase });
+      setMode('create');
+    }
+  }, [pairingStatus, userId, passphrase]);
+
+  // Handle creator moving to enter partner's ID step
+  const handleCreatorSharedCredentials = () => {
+    setMode('creator-enter-partner');
+  };
+
+  // Handle creator completing pairing with partner's ID
+  const handleCreatorCompletePairing = async () => {
+    if (!partnerId) {
+      toast({
+        title: 'Missing Partner ID',
+        description: 'Please enter your partner\'s ID to complete pairing.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await setPartnerIdForCreator(partnerId);
+      onPeerConnected();
+      toast({
+        title: 'Pairing Complete!',
+        description: 'Your private sanctuary awaits.',
+      });
+    } catch (error) {
+      console.error('Error completing pairing:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to complete pairing. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (mode === 'scan' && !scannerInitialized) {
@@ -132,7 +176,6 @@ export default function PairingPage() {
       setPairingData(data);
       console.log('Creator: Pairing initialized, userId:', data.userId);
       setMode('create');
-      await new Promise(resolve => setTimeout(resolve, 300));
     } catch (error) {
       console.error('Create pairing error:', error);
       toast({
@@ -147,7 +190,8 @@ export default function PairingPage() {
 
   const handleCopyPassphrase = () => {
     if (pairingData) {
-      navigator.clipboard.writeText(`${pairingData.userId}:${pairingData.passphrase}`);
+      const copyData = `${pairingData.userId}:${pairingData.passphrase}`;
+      navigator.clipboard.writeText(copyData);
       setCopied(true);
       toast({
         title: 'Copied!',
@@ -176,7 +220,6 @@ export default function PairingPage() {
         title: 'Paired!',
         description: 'Welcome to your private sanctuary.',
       });
-      await new Promise(resolve => setTimeout(resolve, 500));
     } catch (error) {
       console.error('Pairing error:', error);
       toast({
@@ -248,7 +291,7 @@ export default function PairingPage() {
               <Heart className="w-8 h-8 mx-auto text-accent animate-gentle-bounce" />
               <h2 className="text-xl font-light">Share With Your Beloved</h2>
               <p className="text-sm text-muted-foreground">
-                Have them scan this QR code with their phone camera
+                Have them scan this QR code or enter the details below
               </p>
             </div>
 
@@ -284,9 +327,80 @@ export default function PairingPage() {
               </Button>
             </div>
 
+            <Button
+              onClick={handleCreatorSharedCredentials}
+              className="w-full h-12 text-base"
+              data-testid="button-shared-credentials"
+            >
+              <Heart className="w-5 h-5 mr-2" />
+              I've Shared This - Continue
+            </Button>
+
             <p className="text-xs text-center text-muted-foreground leading-relaxed">
-              Once your beloved enters these details, you'll both be connected privately.
+              Share the QR code or credentials above with your beloved, then click Continue.
             </p>
+          </Card>
+        )}
+
+        {mode === 'creator-enter-partner' && pairingData && (
+          <Card className="p-8 space-y-6 border-sage/30">
+            <div className="text-center space-y-2">
+              <Heart className="w-8 h-8 mx-auto text-accent animate-gentle-bounce" />
+              <h2 className="text-xl font-light">Almost There!</h2>
+              <p className="text-sm text-muted-foreground">
+                Once your beloved has joined, enter their ID below to complete pairing
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+                <p className="text-xs text-muted-foreground font-medium">YOUR CREDENTIALS (SHARED)</p>
+                <p className="text-sm font-mono break-all">{pairingData.userId}</p>
+                <p className="text-sm font-mono">{pairingData.passphrase}</p>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="creator-partner-id" className="text-sm font-medium">
+                  Partner's ID
+                </label>
+                <Input
+                  id="creator-partner-id"
+                  placeholder="Enter your beloved's ID"
+                  value={partnerId}
+                  onChange={(e) => setPartnerId(e.target.value)}
+                  className="font-mono"
+                  data-testid="input-creator-partner-id"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Ask your beloved to share their ID from their Settings page after they join
+                </p>
+              </div>
+
+              <Button
+                onClick={handleCreatorCompletePairing}
+                disabled={loading || !partnerId}
+                className="w-full h-12 text-base"
+                data-testid="button-creator-complete"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Completing...
+                  </>
+                ) : (
+                  'Complete Pairing'
+                )}
+              </Button>
+
+              <Button
+                onClick={() => setMode('create')}
+                variant="ghost"
+                className="w-full"
+                data-testid="button-back-to-share"
+              >
+                Back to Share Credentials
+              </Button>
+            </div>
           </Card>
         )}
 
@@ -404,7 +518,14 @@ export default function PairingPage() {
                 className="w-full h-12 text-base"
                 data-testid="button-complete-pairing"
               >
-                Complete Pairing
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  'Complete Pairing'
+                )}
               </Button>
 
               <Button

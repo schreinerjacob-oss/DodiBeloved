@@ -1,21 +1,26 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { generatePassphrase, generateSalt, deriveKey, arrayBufferToBase64 } from '@/lib/crypto';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { generatePassphrase, generateSalt, arrayBufferToBase64 } from '@/lib/crypto';
 import { saveSetting, getSetting, initDB, clearEncryptionCache } from '@/lib/storage-encrypted';
 import { getTrialStatus } from '@/lib/storage-subscription';
 import { nanoid } from 'nanoid';
+
+type PairingStatus = 'unpaired' | 'waiting' | 'connected';
 
 interface DodiContextType {
   userId: string | null;
   displayName: string | null;
   partnerId: string | null;
   passphrase: string | null;
-  isPaired: boolean;
+  pairingStatus: PairingStatus;
+  isPaired: boolean; // Convenience getter: pairingStatus === 'connected'
   isOnline: boolean;
   isTrialActive: boolean;
   trialDaysRemaining: number;
   initializeProfile: (displayName: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
   completePairing: (partnerId: string, passphrase: string) => Promise<void>;
+  setPartnerIdForCreator: (newPartnerId: string) => Promise<void>; // Creator sets partner ID after joiner joins
+  onPeerConnected: () => void; // Called when P2P connection is established
   logout: () => Promise<void>;
 }
 
@@ -26,20 +31,24 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [passphrase, setPassphrase] = useState<string | null>(null);
-  const [isPaired, setIsPaired] = useState(false);
+  const [pairingStatus, setPairingStatus] = useState<PairingStatus>('unpaired');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isTrialActive, setIsTrialActive] = useState(true);
   const [trialDaysRemaining, setTrialDaysRemaining] = useState(30);
+
+  // Convenience getter
+  const isPaired = pairingStatus === 'connected';
 
   useEffect(() => {
     const loadPairingData = async () => {
       try {
         const db = await initDB();
-        const [storedUserId, storedDisplayName, storedPartnerId, storedPassphrase] = await Promise.all([
+        const [storedUserId, storedDisplayName, storedPartnerId, storedPassphrase, storedPairingStatus] = await Promise.all([
           db.get('settings', 'userId'),
           db.get('settings', 'displayName'),
           db.get('settings', 'partnerId'),
           db.get('settings', 'passphrase'),
+          db.get('settings', 'pairingStatus'),
         ]);
 
         if (storedUserId?.value) {
@@ -47,14 +56,30 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           setDisplayName(storedDisplayName?.value || null);
         }
 
-        // Paired = has userId + passphrase (creator waiting for partner, or joiner connected)
-        if (storedUserId?.value && storedPassphrase?.value) {
+        if (storedPassphrase?.value) {
           setPassphrase(storedPassphrase.value);
-          setIsPaired(true);
-          
-          // If there's a partnerId, also set it
+        }
+
+        if (storedPartnerId?.value) {
+          setPartnerId(storedPartnerId.value);
+        }
+
+        // Restore pairing status from storage
+        if (storedPairingStatus?.value) {
+          const status = storedPairingStatus.value as PairingStatus;
+          setPairingStatus(status);
+          console.log('Restored pairing status:', status);
+        } else if (storedUserId?.value && storedPassphrase?.value) {
+          // Legacy: if we have userId + passphrase but no status, treat as waiting
+          // This handles upgrades from old storage format
           if (storedPartnerId?.value) {
-            setPartnerId(storedPartnerId.value);
+            // Has partner, so was connected (joiner flow)
+            setPairingStatus('connected');
+            await db.put('settings', { key: 'pairingStatus', value: 'connected' });
+          } else {
+            // No partner, creator waiting
+            setPairingStatus('waiting');
+            await db.put('settings', { key: 'pairingStatus', value: 'waiting' });
           }
         }
 
@@ -98,6 +123,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Called by creator when generating pairing credentials
   const initializePairing = async () => {
     const newUserId = nanoid();
     const newPassphrase = generatePassphrase();
@@ -107,17 +133,19 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       saveSetting('userId', newUserId),
       saveSetting('passphrase', newPassphrase),
       saveSetting('salt', saltBase64),
+      saveSetting('pairingStatus', 'waiting'), // Creator is WAITING, not connected
     ]);
     
     setUserId(newUserId);
     setPassphrase(newPassphrase);
     setPartnerId(null);
-    setIsPaired(true); // Creator is ready - waiting for partner to join
+    setPairingStatus('waiting'); // Stay on pairing page, show QR code
     
-    console.log('Creator initialized - isPaired set to true, ready for partner');
+    console.log('Creator initialized - status: waiting, ready for partner to join');
     return { userId: newUserId, passphrase: newPassphrase };
   };
 
+  // Called by joiner when they enter partner's credentials
   const completePairing = async (newPartnerId: string, sharedPassphrase: string) => {
     if (!newPartnerId || !sharedPassphrase) {
       throw new Error('Partner ID and passphrase are required');
@@ -149,15 +177,40 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     
     await db.put('settings', { key: 'partnerId', value: newPartnerId });
     await db.put('settings', { key: 'passphrase', value: sharedPassphrase });
+    await db.put('settings', { key: 'pairingStatus', value: 'connected' });
     
     setPartnerId(newPartnerId);
     setPassphrase(sharedPassphrase);
-    setIsPaired(true);
+    setPairingStatus('connected'); // Joiner is immediately connected
     
-    // Pure P2P - no server notification needed
-    // Pairing is complete when both devices have the shared passphrase
-    console.log('Pairing complete - ready for P2P connection');
+    console.log('Joiner pairing complete - status: connected');
   };
+
+  // Called by creator to set partner ID after joiner has joined
+  const setPartnerIdForCreator = async (newPartnerId: string) => {
+    if (!newPartnerId) {
+      throw new Error('Partner ID is required');
+    }
+    
+    if (newPartnerId === userId) {
+      throw new Error('Cannot pair with yourself');
+    }
+    
+    const db = await initDB();
+    await db.put('settings', { key: 'partnerId', value: newPartnerId });
+    
+    setPartnerId(newPartnerId);
+    console.log('Creator set partner ID:', newPartnerId);
+  };
+
+  // Called when P2P connection is established (for creator waiting for joiner)
+  const onPeerConnected = useCallback(async () => {
+    if (pairingStatus === 'waiting') {
+      console.log('P2P connection established - updating status to connected');
+      setPairingStatus('connected');
+      await saveSetting('pairingStatus', 'connected');
+    }
+  }, [pairingStatus]);
 
   const initializeProfile = async (name: string) => {
     const newUserId = nanoid();
@@ -186,7 +239,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setDisplayName(null);
     setPartnerId(null);
     setPassphrase(null);
-    setIsPaired(false);
+    setPairingStatus('unpaired');
   };
 
   return (
@@ -196,6 +249,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         displayName,
         partnerId,
         passphrase,
+        pairingStatus,
         isPaired,
         isOnline,
         isTrialActive,
@@ -203,6 +257,8 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         initializeProfile,
         initializePairing,
         completePairing,
+        setPartnerIdForCreator,
+        onPeerConnected,
         logout,
       }}
     >
