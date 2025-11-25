@@ -12,7 +12,7 @@ import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
 export default function PairingPage() {
-  const { initializePairing, completePairing } = useDodi();
+  const { initializePairing, completePairing, setCreatorReady } = useDodi();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [mode, setMode] = useState<'choose' | 'create' | 'join' | 'scan'>('choose');
@@ -313,7 +313,11 @@ export default function PairingPage() {
               </Button>
 
               <Button
-                onClick={() => setLocation('/chat')}
+                onClick={async () => {
+                  await setCreatorReady();
+                  await new Promise(resolve => setTimeout(resolve, 200));
+                  setLocation('/chat');
+                }}
                 className="w-full h-12 text-base"
                 data-testid="button-go-to-chat"
               >
