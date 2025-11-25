@@ -145,7 +145,8 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     return { userId: newUserId, passphrase: newPassphrase };
   };
 
-  // Called by joiner when they enter partner's credentials
+  // Called by joiner when they scan the creator's QR code
+  // This stores credentials but keeps status as 'waiting' until P2P connection completes
   const completePairing = async (newPartnerId: string, sharedPassphrase: string) => {
     if (!newPartnerId || !sharedPassphrase) {
       throw new Error('Partner ID and passphrase are required');
@@ -177,13 +178,14 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     
     await db.put('settings', { key: 'partnerId', value: newPartnerId });
     await db.put('settings', { key: 'passphrase', value: sharedPassphrase });
-    await db.put('settings', { key: 'pairingStatus', value: 'connected' });
+    // Keep as 'waiting' until P2P connection is established
+    await db.put('settings', { key: 'pairingStatus', value: 'waiting' });
     
     setPartnerId(newPartnerId);
     setPassphrase(sharedPassphrase);
-    setPairingStatus('connected'); // Joiner is immediately connected
+    setPairingStatus('waiting'); // Joiner stays in waiting until P2P connects
     
-    console.log('Joiner pairing complete - status: connected');
+    console.log('Joiner credentials stored - status: waiting for P2P connection');
   };
 
   // Called by creator to set partner ID after joiner has joined
@@ -203,9 +205,9 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     console.log('Creator set partner ID:', newPartnerId);
   };
 
-  // Called when P2P connection is established (for creator waiting for joiner)
+  // Called when P2P connection is established (for both creator and joiner)
   const onPeerConnected = useCallback(async () => {
-    if (pairingStatus === 'waiting') {
+    if (pairingStatus === 'waiting' || pairingStatus === 'unpaired') {
       console.log('P2P connection established - updating status to connected');
       setPairingStatus('connected');
       await saveSetting('pairingStatus', 'connected');
