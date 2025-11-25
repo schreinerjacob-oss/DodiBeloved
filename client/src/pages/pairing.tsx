@@ -22,45 +22,9 @@ export default function PairingPage() {
   const [loading, setLoading] = useState(false);
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const [scannerInitialized, setScannerInitialized] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
 
-  // Listen for partner joining when in create mode
-  useEffect(() => {
-    if (mode === 'create' && pairingData) {
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        ws.send(JSON.stringify({
-          type: 'register',
-          data: { userId: pairingData.userId },
-        }));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          if (message.type === 'partner-joined') {
-            const joinedUserId = message.data.joinedUserId;
-            toast({
-              title: 'Partner Connected!',
-              description: 'Your beloved has joined. Welcome to your sanctuary.',
-            });
-            // Complete the pairing on this end
-            completePairing(joinedUserId, pairingData.passphrase);
-          }
-        } catch (e) {
-          console.log('WebSocket message error:', e);
-        }
-      };
-
-      return () => {
-        if (ws) ws.close();
-      };
-    }
-  }, [mode, pairingData, completePairing, toast]);
+  // In pure P2P mode, no server relay needed - partner syncs via P2P when they scan the QR code
+  // The connection is established when both devices have the same passphrase
 
   useEffect(() => {
     if (mode === 'scan' && !scannerInitialized) {
@@ -86,24 +50,30 @@ export default function PairingPage() {
         {
           fps: 10,
           qrbox: { width: 250, height: 250 },
-          aspectRatio: 1,
+          aspectRatio: 1.0,
+          rememberLastUsedCamera: true,
         },
         false
       );
 
       scanner.render(
-        (decodedText) => {
-          if (decodedText.startsWith('dodi:')) {
-            // handleScanSuccess will handle scanner cleanup
+        (decodedText: string) => {
+          if (decodedText && decodedText.startsWith('dodi:')) {
             handleScanSuccess(decodedText);
           }
         },
-        () => {}
+        (errorMessage: string) => {
+          // Error message on continuous scan
+          if (errorMessage && !errorMessage.includes('NotFoundException')) {
+            console.debug('Scan error:', errorMessage);
+          }
+        }
       );
 
       scannerRef.current = scanner;
       setScannerInitialized(true);
     } catch (err) {
+      console.error('Scanner init error:', err);
       toast({
         title: 'Camera Error',
         description: 'Could not access camera. Please check permissions.',
