@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
+import { usePeerConnection } from './use-peer-connection';
 
 interface WSMessage {
   type: string;
@@ -8,24 +9,24 @@ interface WSMessage {
 
 export function useWebSocket() {
   const { userId, partnerId, isPaired } = useDodi();
+  const { send: sendP2P, state: peerState } = usePeerConnection();
   const [connected, setConnected] = useState(false);
   const messageHandlersRef = useRef<((event: MessageEvent) => void)[]>([]);
   
-  // Since we're now a pure P2P app, WebSocket is replaced with event-based messaging
-  // This stub maintains API compatibility while pages migrate to P2P
-  
   const send = useCallback((message: WSMessage) => {
-    console.log('P2P send (stub):', message.type, message.data);
+    console.log('Sending via P2P:', message.type);
     
-    // Dispatch as custom event for local components
-    window.dispatchEvent(new CustomEvent('dodi-sync', { 
-      detail: { type: message.type, data: message.data }
-    }));
-  }, []);
+    // Send via actual P2P connection (timestamp added automatically)
+    sendP2P({
+      type: message.type,
+      data: message.data,
+      timestamp: Date.now(),
+    });
+  }, [sendP2P]);
 
   // Simulate WebSocket object for backward compatibility
   const wsObject = {
-    readyState: isPaired ? 1 : 3, // OPEN : CLOSED
+    readyState: peerState.connected ? 1 : 3, // OPEN : CLOSED
     addEventListener: (type: string, handler: (event: MessageEvent) => void) => {
       if (type === 'message') {
         messageHandlersRef.current.push(handler);
@@ -47,26 +48,26 @@ export function useWebSocket() {
   };
 
   useEffect(() => {
-    if (isPaired) {
-      setConnected(true);
-    }
-  }, [isPaired]);
+    setConnected(peerState.connected);
+  }, [peerState.connected]);
 
-  // Listen for incoming sync events
+  // Listen for incoming P2P messages and dispatch as events
   useEffect(() => {
-    const handleSyncEvent = (event: CustomEvent) => {
-      const messageEvent = { data: JSON.stringify(event.detail) } as MessageEvent;
+    const handleP2pMessage = (event: CustomEvent) => {
+      const message = event.detail;
+      console.log('Received P2P message:', message.type);
+      const messageEvent = { data: JSON.stringify(message) } as MessageEvent;
       messageHandlersRef.current.forEach(handler => handler(messageEvent));
     };
 
-    window.addEventListener('dodi-sync', handleSyncEvent as EventListener);
+    window.addEventListener('p2p-message', handleP2pMessage as EventListener);
     return () => {
-      window.removeEventListener('dodi-sync', handleSyncEvent as EventListener);
+      window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
     };
   }, []);
 
   return { 
-    connected: isPaired, 
+    connected: peerState.connected, 
     send, 
     ws: wsObject as unknown as WebSocket 
   };
