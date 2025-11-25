@@ -145,7 +145,10 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     
     let currentUserId = userId;
     
-    if (!currentUserId || currentUserId === newPartnerId) {
+    // For creator calling this (newPartnerId is their own userId), don't validate
+    const isCreator = newPartnerId === userId;
+    
+    if (!isCreator && (!currentUserId || currentUserId === newPartnerId)) {
       do {
         currentUserId = nanoid();
       } while (currentUserId === newPartnerId);
@@ -154,7 +157,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       setUserId(currentUserId);
     }
     
-    if (currentUserId === newPartnerId) {
+    if (!isCreator && currentUserId === newPartnerId) {
       throw new Error('Cannot pair with yourself');
     }
     
@@ -167,14 +170,22 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       await db.put('settings', { key: 'salt', value: saltBase64 });
     }
     
-    await db.put('settings', { key: 'partnerId', value: newPartnerId });
+    // Only update partnerId if this is joiner completing pairing
+    if (!isCreator) {
+      await db.put('settings', { key: 'partnerId', value: newPartnerId });
+    }
+    
     await db.put('settings', { key: 'passphrase', value: sharedPassphrase });
     
-    setPartnerId(newPartnerId);
+    if (!isCreator) {
+      setPartnerId(newPartnerId);
+    }
     setPassphrase(sharedPassphrase);
     setIsPaired(true);
     
-    // Accept offer and create answer if offer provided
+    console.log(`Pairing complete - ${isCreator ? 'Creator' : 'Joiner'} mode`);
+    
+    // Accept offer and create answer if offer provided (joiner flow)
     if (offer) {
       try {
         const peer = new SimplePeer({ initiator: false, trickle: false });

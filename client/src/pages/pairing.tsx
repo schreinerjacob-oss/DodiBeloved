@@ -12,7 +12,7 @@ import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
 export default function PairingPage() {
-  const { initializePairing, completePairing } = useDodi();
+  const { initializePairing, completePairing, userId } = useDodi();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [mode, setMode] = useState<'choose' | 'create' | 'join' | 'scan'>('choose');
@@ -315,14 +315,20 @@ export default function PairingPage() {
               </Button>
 
               <Button
-                onClick={async () => {
-                  try {
-                    // Set paired state before navigating
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                onClick={() => {
+                  console.log('Creator: Marking as paired and navigating to chat');
+                  // Complete the pairing locally without offer (creator mode)
+                  // This sets isPaired = true which triggers navigation in App.tsx
+                  completePairing(userId || 'unknown', pairingData?.passphrase || '').then(() => {
                     setLocation('/chat');
-                  } catch (error) {
-                    console.error('Error navigating:', error);
-                  }
+                  }).catch(err => {
+                    console.error('Error completing pairing:', err);
+                    toast({
+                      title: 'Error',
+                      description: 'Failed to complete pairing',
+                      variant: 'destructive',
+                    });
+                  });
                 }}
                 className="w-full h-12 text-base"
                 data-testid="button-go-to-chat"
