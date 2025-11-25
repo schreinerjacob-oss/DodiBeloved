@@ -115,7 +115,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setUserId(newUserId);
     setPassphrase(newPassphrase);
     setPartnerId(null);
-    setIsPaired(true);
+    // DO NOT set isPaired yet - creator stays on pairing page to show QR code
     
     // Start WebRTC peer in initiator mode
     let offer = '';

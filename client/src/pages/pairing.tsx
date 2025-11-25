@@ -315,7 +315,15 @@ export default function PairingPage() {
               </Button>
 
               <Button
-                onClick={() => setLocation('/chat')}
+                onClick={async () => {
+                  try {
+                    // Set paired state before navigating
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    setLocation('/chat');
+                  } catch (error) {
+                    console.error('Error navigating:', error);
+                  }
+                }}
                 className="w-full h-12 text-base"
                 data-testid="button-go-to-chat"
               >
