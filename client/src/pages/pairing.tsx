@@ -56,6 +56,14 @@ export default function PairingPage() {
   const initializeScanner = async () => {
     try {
       console.log('Initializing QR scanner...');
+      const element = document.getElementById('qr-reader');
+      if (!element) {
+        throw new Error('QR reader element not found in DOM');
+      }
+      
+      // Clear any existing content
+      element.innerHTML = '';
+      
       const scanner = new Html5QrcodeScanner(
         'qr-reader',
         {
@@ -63,12 +71,18 @@ export default function PairingPage() {
           qrbox: { width: 250, height: 250 },
           aspectRatio: 1.0,
           rememberLastUsedCamera: true,
+          disableFlip: false,
+          formatsToSupport: ['QR_CODE'],
           showTorchButtonIfSupported: true,
           showZoomSliderIfSupported: true,
+          videoConstraints: {
+            facingMode: 'environment',
+          },
         },
         false
       );
 
+      console.log('Rendering scanner to DOM...');
       scanner.render(
         (decodedText: string) => {
           console.log('QR decoded:', decodedText);
@@ -91,7 +105,7 @@ export default function PairingPage() {
       console.error('Scanner init error:', err);
       toast({
         title: 'Camera Error',
-        description: 'Could not access camera. Please check permissions.',
+        description: 'Could not access camera. Please check permissions or use manual entry.',
         variant: 'destructive',
       });
       setMode('join');
@@ -176,12 +190,17 @@ export default function PairingPage() {
 
     setLoading(true);
     try {
+      console.log('Starting pairing with:', { partnerId, passphrase: partnerPassphrase.substring(0, 3) + '...' });
       await completePairing(partnerId, partnerPassphrase);
+      console.log('Pairing completed successfully');
       toast({
         title: 'Paired!',
         description: 'Welcome to your private sanctuary.',
       });
+      // Force a small delay to ensure state updates
+      await new Promise(resolve => setTimeout(resolve, 500));
     } catch (error) {
+      console.error('Pairing error:', error);
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to complete pairing. Please check your details.',
