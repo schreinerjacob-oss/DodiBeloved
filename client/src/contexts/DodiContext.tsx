@@ -18,7 +18,7 @@ interface DodiContextType {
   trialDaysRemaining: number;
   initializeProfile: (displayName: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
-  completePairing: (partnerId: string, passphrase: string) => Promise<void>;
+  completePairing: (partnerId: string, passphrase: string) => Promise<string>; // Returns joiner's userId
   setPartnerIdForCreator: (newPartnerId: string) => Promise<void>; // Creator sets partner ID after joiner joins
   onPeerConnected: () => void; // Called when P2P connection is established
   logout: () => Promise<void>;
@@ -147,7 +147,8 @@ export function DodiProvider({ children }: { children: ReactNode }) {
 
   // Called by joiner when they scan the creator's QR code
   // This stores credentials but keeps status as 'waiting' until P2P connection completes
-  const completePairing = async (newPartnerId: string, sharedPassphrase: string) => {
+  // Returns the joiner's userId for use in the answer QR
+  const completePairing = async (newPartnerId: string, sharedPassphrase: string): Promise<string> => {
     if (!newPartnerId || !sharedPassphrase) {
       throw new Error('Partner ID and passphrase are required');
     }
@@ -186,6 +187,8 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setPairingStatus('waiting'); // Joiner stays in waiting until P2P connects
     
     console.log('Joiner credentials stored - status: waiting for P2P connection');
+    
+    return currentUserId; // Return the joiner's userId for the answer QR
   };
 
   // Called by creator to set partner ID after joiner has joined

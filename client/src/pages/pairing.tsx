@@ -15,6 +15,9 @@ import {
   savePendingSession,
   getPendingSession,
   clearPendingSession,
+  saveJoinerResponse,
+  getJoinerResponse,
+  clearJoinerResponse,
   type PairingPayload,
 } from '@/lib/pairing-codes';
 import { nanoid } from 'nanoid';
@@ -28,7 +31,7 @@ type Mode =
   | 'joiner-show-answer';  // Joiner showing answer QR
 
 export default function PairingPage() {
-  const { initializePairing, completePairing, onPeerConnected, pairingStatus, userId } = useDodi();
+  const { initializePairing, completePairing, onPeerConnected, pairingStatus, userId, setPartnerIdForCreator } = useDodi();
   const { createOffer, acceptOffer, completeConnection, state: peerState } = usePeerConnection();
   const { toast } = useToast();
   
@@ -41,11 +44,17 @@ export default function PairingPage() {
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const [scannerInitialized, setScannerInitialized] = useState(false);
 
-  // Check if we have a pending session on mount
+  // Check if we have a pending session or joiner response on mount
   useEffect(() => {
     const pendingSession = getPendingSession();
+    const storedJoinerResponse = getJoinerResponse();
     
-    if (pendingSession && pairingStatus !== 'connected') {
+    if (pairingStatus === 'connected') {
+      return; // Already connected, no need to restore
+    }
+    
+    if (pendingSession) {
+      // Creator: restore pending session
       setPairingPayload({
         creatorId: pendingSession.creatorId,
         passphrase: pendingSession.passphrase,
@@ -54,6 +63,16 @@ export default function PairingPage() {
         createdAt: pendingSession.createdAt,
       });
       setMode('creator-show-qr');
+    } else if (storedJoinerResponse) {
+      // Joiner: restore answer QR display
+      const answerPayload = {
+        answer: storedJoinerResponse.answer,
+        joinerId: storedJoinerResponse.joinerId,
+        sessionId: storedJoinerResponse.sessionId,
+      };
+      const answerData = `dodi-answer:${btoa(JSON.stringify(answerPayload))}`;
+      setAnswerQrData(answerData);
+      setMode('joiner-show-answer');
     }
   }, [pairingStatus]);
 
@@ -61,6 +80,7 @@ export default function PairingPage() {
   useEffect(() => {
     if (peerState.connected) {
       clearPendingSession();
+      clearJoinerResponse();
       onPeerConnected();
       toast({
         title: 'Connected!',
@@ -113,13 +133,21 @@ export default function PairingPage() {
   };
 
   // Creator: Handle scanning joiner's answer QR
-  const handleCreatorScanAnswer = (data: string) => {
+  const handleCreatorScanAnswer = async (data: string) => {
     cleanupScanner();
+    setLoading(true);
     
     try {
       // Parse the answer QR data
       const parsed = JSON.parse(atob(data.replace('dodi-answer:', '')));
       const { answer, joinerId } = parsed;
+      
+      if (!joinerId) {
+        throw new Error('Invalid response: missing partner ID');
+      }
+      
+      // Store the partner's ID
+      await setPartnerIdForCreator(joinerId);
       
       // Complete the WebRTC connection
       completeConnection(answer);
@@ -137,6 +165,8 @@ export default function PairingPage() {
         variant: 'destructive',
       });
       setMode('creator-show-qr');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -153,20 +183,29 @@ export default function PairingPage() {
         throw new Error('Invalid QR code format');
       }
       
-      // Complete pairing with credentials (this creates the joiner's userId)
-      await completePairing(payload.creatorId, payload.passphrase);
+      // Complete pairing with credentials - this returns the joiner's userId
+      const joinerId = await completePairing(payload.creatorId, payload.passphrase);
       
       // Generate WebRTC answer
       const answer = await acceptOffer(payload.offer);
       
-      // Create answer QR data
+      // Create answer QR data with the confirmed joiner ID
       const answerPayload = {
         answer,
-        joinerId: userId || nanoid(),
+        joinerId,
         sessionId: payload.sessionId,
       };
       
       const answerData = `dodi-answer:${btoa(JSON.stringify(answerPayload))}`;
+      
+      // Save joiner response for page refresh
+      saveJoinerResponse({
+        joinerId,
+        answer,
+        shortCode: '', // Not used in QR flow
+        sessionId: payload.sessionId,
+      });
+      
       setAnswerQrData(answerData);
       setMode('joiner-show-answer');
       
