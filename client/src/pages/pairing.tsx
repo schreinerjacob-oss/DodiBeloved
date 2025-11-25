@@ -155,10 +155,10 @@ export default function PairingPage() {
       console.log('Creator: Pairing initialized, userId:', data.userId);
       setPairingData(data);
       setMode('create');
-      // Wait a bit then navigate to chat
-      await new Promise(resolve => setTimeout(resolve, 500));
-      console.log('Creator: Navigating to chat...');
-      setLocation('/chat');
+      toast({
+        title: 'Connection Created!',
+        description: 'Share the code below with your beloved.',
+      });
     } catch (error) {
       console.error('Create pairing error:', error);
       toast({
@@ -202,7 +202,7 @@ export default function PairingPage() {
         title: 'Paired!',
         description: 'Welcome to your private sanctuary.',
       });
-      // Wait then navigate to chat
+      // Navigate to chat after brief delay
       await new Promise(resolve => setTimeout(resolve, 500));
       console.log('Joiner: Navigating to chat...');
       setLocation('/chat');
@@ -311,10 +311,19 @@ export default function PairingPage() {
                 {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
                 {copied ? 'Copied!' : 'Copy Pairing Details'}
               </Button>
+
+              <Button
+                onClick={() => setLocation('/chat')}
+                className="w-full h-12 text-base"
+                data-testid="button-go-to-chat"
+              >
+                <Heart className="w-5 h-5 mr-2" />
+                Ready to Connect
+              </Button>
             </div>
 
             <p className="text-xs text-center text-muted-foreground leading-relaxed">
-              Once your beloved scans this or enters the details, your private space will be ready.
+              Share this code with your beloved. You can navigate to chat anytime.
             </p>
           </Card>
         )}
