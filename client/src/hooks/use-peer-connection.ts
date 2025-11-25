@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import '@/lib/node-polyfills'; // Load polyfills before SimplePeer
 import { useDodi } from '@/contexts/DodiContext';
 import SimplePeer from 'simple-peer';
 import type { SyncMessage } from '@/types';
