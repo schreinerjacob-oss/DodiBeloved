@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'wouter';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +14,7 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 export default function PairingPage() {
   const { initializePairing, completePairing } = useDodi();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [mode, setMode] = useState<'choose' | 'create' | 'join' | 'scan'>('choose');
   const [pairingData, setPairingData] = useState<{ userId: string; passphrase: string } | null>(null);
   const [partnerPassphrase, setPartnerPassphrase] = useState('');
@@ -150,11 +152,13 @@ export default function PairingPage() {
     try {
       console.log('Creator: Initializing pairing...');
       const data = await initializePairing();
-      setPairingData(data);
       console.log('Creator: Pairing initialized, userId:', data.userId);
+      setPairingData(data);
       setMode('create');
-      // Small delay to ensure state updates before potential navigation
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Wait a bit then navigate to chat
+      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('Creator: Navigating to chat...');
+      setLocation('/chat');
     } catch (error) {
       console.error('Create pairing error:', error);
       toast({
@@ -191,15 +195,17 @@ export default function PairingPage() {
 
     setLoading(true);
     try {
-      console.log('Starting pairing with:', { partnerId, passphrase: partnerPassphrase.substring(0, 3) + '...' });
+      console.log('Joiner: Starting pairing with:', { partnerId, passphrase: partnerPassphrase.substring(0, 3) + '...' });
       await completePairing(partnerId, partnerPassphrase);
-      console.log('Pairing completed successfully');
+      console.log('Joiner: Pairing completed successfully');
       toast({
         title: 'Paired!',
         description: 'Welcome to your private sanctuary.',
       });
-      // Force a small delay to ensure state updates
+      // Wait then navigate to chat
       await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('Joiner: Navigating to chat...');
+      setLocation('/chat');
     } catch (error) {
       console.error('Pairing error:', error);
       toast({
