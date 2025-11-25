@@ -279,8 +279,8 @@ export default function PairingPage() {
         )}
 
         {mode === 'scan' && (
-          <Card className="p-8 space-y-6 border-sage/30">
-            <div className="text-center space-y-2">
+          <Card className="p-0 space-y-0 border-sage/30 overflow-hidden">
+            <div className="p-8 space-y-2 text-center">
               <Camera className="w-8 h-8 mx-auto text-accent animate-pulse-glow" />
               <h2 className="text-xl font-light">Scan QR Code</h2>
               <p className="text-sm text-muted-foreground">
@@ -288,27 +288,29 @@ export default function PairingPage() {
               </p>
             </div>
 
-            <div id="qr-reader" className="w-full rounded-lg overflow-hidden bg-muted"></div>
+            <div id="qr-reader" className="w-full h-80 bg-muted"></div>
 
-            <Button
-              onClick={() => {
-                if (scannerRef.current) {
-                  try {
-                    scannerRef.current.clear();
-                  } catch (e) {
-                    console.log('Scanner cleanup:', e);
+            <div className="p-8">
+              <Button
+                onClick={() => {
+                  if (scannerRef.current) {
+                    try {
+                      scannerRef.current.clear();
+                    } catch (e) {
+                      console.log('Scanner cleanup:', e);
+                    }
                   }
-                }
-                setScannerInitialized(false);
-                setMode('join');
-              }}
-              variant="ghost"
-              className="w-full"
-              data-testid="button-cancel-scan"
-            >
-              <X className="w-4 h-4 mr-2" />
-              Cancel
-            </Button>
+                  setScannerInitialized(false);
+                  setMode('join');
+                }}
+                variant="ghost"
+                className="w-full"
+                data-testid="button-cancel-scan"
+              >
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+            </div>
           </Card>
         )}
 
