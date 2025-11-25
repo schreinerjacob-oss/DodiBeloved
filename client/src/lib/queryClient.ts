@@ -1,5 +1,8 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+// Pure P2P app - no server API calls
+// All data is stored and synced locally in encrypted IndexedDB via P2P connections
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -7,38 +10,26 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+// DEPRECATED - Kept for backward compatibility but should not be used
+// All data operations use encrypted local storage + P2P sync
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
-
-  await throwIfResNotOk(res);
-  return res;
+  console.warn('apiRequest called - this should not happen in pure P2P mode');
+  throw new Error('No backend server - use local encrypted storage instead');
 }
 
+// DEPRECATED - Kept for backward compatibility but should not be used
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
-    });
-
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
-    }
-
-    await throwIfResNotOk(res);
-    return await res.json();
+    console.warn('getQueryFn called - this should not happen in pure P2P mode');
+    throw new Error('No backend server - use local encrypted storage instead');
   };
 
 export const queryClient = new QueryClient({

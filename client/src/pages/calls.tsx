@@ -84,6 +84,7 @@ export default function CallsPage() {
         sendP2P({
           type: 'call-signal',
           data: { signal, callType: type },
+          timestamp: Date.now(),
         });
       });
 
@@ -180,6 +181,7 @@ export default function CallsPage() {
     sendP2P({
       type: 'call-offer',
       data: { callType: type, fromUserId: userId },
+      timestamp: Date.now(),
     });
   };
 
@@ -201,6 +203,7 @@ export default function CallsPage() {
     sendP2P({
       type: 'call-accept',
       data: { callType: incomingCallType },
+      timestamp: Date.now(),
     });
   };
 
@@ -210,6 +213,7 @@ export default function CallsPage() {
     sendP2P({
       type: 'call-reject',
       data: {},
+      timestamp: Date.now(),
     });
   };
 
@@ -231,6 +235,7 @@ export default function CallsPage() {
     sendP2P({
       type: 'call-end',
       data: {},
+      timestamp: Date.now(),
     });
   };
 
