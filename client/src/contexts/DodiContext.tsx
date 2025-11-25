@@ -47,13 +47,15 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           setDisplayName(storedDisplayName?.value || null);
         }
 
-        if (storedUserId?.value && storedPartnerId?.value && storedPassphrase?.value) {
-          setPartnerId(storedPartnerId.value);
+        // Paired = has userId + passphrase (creator waiting for partner, or joiner connected)
+        if (storedUserId?.value && storedPassphrase?.value) {
           setPassphrase(storedPassphrase.value);
           setIsPaired(true);
-        } else if (storedUserId?.value) {
-          setPassphrase(storedPassphrase?.value || null);
-          setPartnerId(null);
+          
+          // If there's a partnerId, also set it
+          if (storedPartnerId?.value) {
+            setPartnerId(storedPartnerId.value);
+          }
         }
 
         const trialStatus = await getTrialStatus();
@@ -105,7 +107,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       saveSetting('userId', newUserId),
       saveSetting('passphrase', newPassphrase),
       saveSetting('salt', saltBase64),
-      saveSetting('partnerId', ''),
     ]);
     
     setUserId(newUserId);
@@ -113,6 +114,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setPartnerId(null);
     setIsPaired(true); // Creator is ready - waiting for partner to join
     
+    console.log('Creator initialized - isPaired set to true, ready for partner');
     return { userId: newUserId, passphrase: newPassphrase };
   };
 
