@@ -3,6 +3,7 @@ import { initDB as initDBRaw, getSetting as getSettingRaw, saveSetting as saveSe
 import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction, EncryptedData } from '@/types';
 
 let cachedKey: CryptoKey | null = null;
+let cachedPINKey: CryptoKey | null = null;
 
 export const initDB = initDBRaw;
 export const getSetting = getSettingRaw;
@@ -25,6 +26,7 @@ export async function getEncryptionKey(): Promise<CryptoKey> {
 
 export function clearEncryptionCache(): void {
   cachedKey = null;
+  cachedPINKey = null;
 }
 
 async function encryptObject<T>(obj: T): Promise<EncryptedData> {
@@ -111,6 +113,59 @@ export async function encryptReaction(reaction: Reaction): Promise<EncryptedData
 
 export async function decryptReaction(encrypted: EncryptedData): Promise<Reaction> {
   return decryptObject(encrypted);
+}
+
+// PIN Management Functions
+async function getPINKey(): Promise<CryptoKey> {
+  if (cachedPINKey) return cachedPINKey;
+  
+  // For PIN, we use a separate derivation with the main passphrase
+  // This ensures PIN is tied to the account
+  const storedPassphrase = await getSettingRaw('passphrase');
+  const storedSalt = await getSettingRaw('salt');
+
+  if (!storedPassphrase || !storedSalt) {
+    throw new Error('No encryption credentials available');
+  }
+
+  const salt = base64ToArrayBuffer(storedSalt);
+  cachedPINKey = await deriveKey(storedPassphrase, salt);
+  return cachedPINKey;
+}
+
+export async function savePIN(pin: string): Promise<void> {
+  try {
+    const key = await getPINKey();
+    const encrypted = await encrypt(pin, key);
+    const db = await initDB();
+    await db.put('settings', { 
+      key: 'pin', 
+      value: JSON.stringify(encrypted)
+    });
+  } catch (error) {
+    console.error('Failed to save PIN:', error);
+    throw error;
+  }
+}
+
+export async function verifyPIN(pin: string): Promise<boolean> {
+  try {
+    const db = await initDB();
+    const stored = await db.get('settings', 'pin');
+    
+    if (!stored?.value) {
+      return false;
+    }
+
+    const encrypted: EncryptedData = JSON.parse(stored.value);
+    const key = await getPINKey();
+    const decrypted = await decrypt(encrypted, key);
+    
+    return decrypted === pin;
+  } catch (error) {
+    console.error('Failed to verify PIN:', error);
+    return false;
+  }
 }
 
 export async function saveMessage(message: Message): Promise<void> {

@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { generatePassphrase, generateSalt, arrayBufferToBase64 } from '@/lib/crypto';
-import { saveSetting, getSetting, initDB, clearEncryptionCache } from '@/lib/storage-encrypted';
+import { saveSetting, getSetting, initDB, clearEncryptionCache, savePIN, getPIN, verifyPIN } from '@/lib/storage-encrypted';
 import { getTrialStatus } from '@/lib/storage-subscription';
+import { useInactivityTimer } from '@/hooks/use-inactivity-timer';
 import { nanoid } from 'nanoid';
 
 type PairingStatus = 'unpaired' | 'waiting' | 'connected';
@@ -12,15 +13,24 @@ interface DodiContextType {
   partnerId: string | null;
   passphrase: string | null;
   pairingStatus: PairingStatus;
-  isPaired: boolean; // Convenience getter: pairingStatus === 'connected'
+  isPaired: boolean;
   isOnline: boolean;
   isTrialActive: boolean;
   trialDaysRemaining: number;
+  isLocked: boolean;
+  pinEnabled: boolean;
+  showPinSetup: boolean;
+  inactivityMinutes: number;
   initializeProfile: (displayName: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
-  completePairing: (partnerId: string, passphrase: string) => Promise<string>; // Returns joiner's userId
-  setPartnerIdForCreator: (newPartnerId: string) => Promise<void>; // Creator sets partner ID after joiner joins
-  onPeerConnected: () => void; // Called when P2P connection is established
+  completePairing: (partnerId: string, passphrase: string) => Promise<string>;
+  setPartnerIdForCreator: (newPartnerId: string) => Promise<void>;
+  onPeerConnected: () => void;
+  setPIN: (pin: string) => Promise<void>;
+  unlockWithPIN: (pin: string) => Promise<boolean>;
+  unlockWithPassphrase: (passphrase: string) => Promise<boolean>;
+  lockApp: () => void;
+  setInactivityMinutes: (minutes: number) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -35,6 +45,10 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isTrialActive, setIsTrialActive] = useState(true);
   const [trialDaysRemaining, setTrialDaysRemaining] = useState(30);
+  const [isLocked, setIsLocked] = useState(false);
+  const [pinEnabled, setPinEnabled] = useState(false);
+  const [showPinSetup, setShowPinSetup] = useState(false);
+  const [inactivityMinutes, setInactivityMinutesState] = useState(10);
 
   // Convenience getter
   const isPaired = pairingStatus === 'connected';
@@ -43,12 +57,14 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     const loadPairingData = async () => {
       try {
         const db = await initDB();
-        const [storedUserId, storedDisplayName, storedPartnerId, storedPassphrase, storedPairingStatus] = await Promise.all([
+        const [storedUserId, storedDisplayName, storedPartnerId, storedPassphrase, storedPairingStatus, storedPinEnabled, storedInactivityMinutes] = await Promise.all([
           db.get('settings', 'userId'),
           db.get('settings', 'displayName'),
           db.get('settings', 'partnerId'),
           db.get('settings', 'passphrase'),
           db.get('settings', 'pairingStatus'),
+          db.get('settings', 'pinEnabled'),
+          db.get('settings', 'inactivityMinutes'),
         ]);
 
         if (storedUserId?.value) {
@@ -81,6 +97,16 @@ export function DodiProvider({ children }: { children: ReactNode }) {
             setPairingStatus('waiting');
             await db.put('settings', { key: 'pairingStatus', value: 'waiting' });
           }
+        }
+
+        // Restore PIN settings
+        if (storedPinEnabled?.value === true) {
+          setPinEnabled(true);
+          setIsLocked(true); // Lock on app load if PIN is enabled
+        }
+
+        if (storedInactivityMinutes?.value) {
+          setInactivityMinutesState(storedInactivityMinutes.value);
         }
 
         const trialStatus = await getTrialStatus();
@@ -214,8 +240,67 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       console.log('P2P connection established - updating status to connected');
       setPairingStatus('connected');
       await saveSetting('pairingStatus', 'connected');
+      
+      // Show PIN setup on successful pairing
+      if (!pinEnabled) {
+        setShowPinSetup(true);
+      }
     }
-  }, [pairingStatus]);
+  }, [pairingStatus, pinEnabled]);
+
+  // PIN Management Methods
+  const setPINHandler = async (pin: string) => {
+    if (pin.length < 4 || pin.length > 6) {
+      throw new Error('PIN must be 4-6 digits');
+    }
+    await savePIN(pin);
+    await saveSetting('pinEnabled', true);
+    setPinEnabled(true);
+    setShowPinSetup(false);
+  };
+
+  const unlockWithPINHandler = async (pin: string): Promise<boolean> => {
+    try {
+      const isValid = await verifyPIN(pin);
+      if (isValid) {
+        setIsLocked(false);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('PIN verification error:', error);
+      return false;
+    }
+  };
+
+  const unlockWithPassphraseHandler = async (pass: string): Promise<boolean> => {
+    try {
+      if (pass === passphrase) {
+        setIsLocked(false);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Passphrase verification error:', error);
+      return false;
+    }
+  };
+
+  const lockAppHandler = () => {
+    setIsLocked(true);
+  };
+
+  const setInactivityMinutesHandler = async (minutes: number) => {
+    setInactivityMinutesState(minutes);
+    await saveSetting('inactivityMinutes', minutes);
+  };
+
+  // Inactivity timer hook
+  useInactivityTimer({
+    onInactivity: lockAppHandler,
+    timeoutMinutes: inactivityMinutes,
+    enabled: pinEnabled && pairingStatus === 'connected',
+  });
 
   const initializeProfile = async (name: string) => {
     const newUserId = nanoid();
@@ -259,11 +344,20 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         isOnline,
         isTrialActive,
         trialDaysRemaining,
+        isLocked,
+        pinEnabled,
+        showPinSetup,
+        inactivityMinutes,
         initializeProfile,
         initializePairing,
         completePairing,
         setPartnerIdForCreator,
         onPeerConnected,
+        setPIN: setPINHandler,
+        unlockWithPIN: unlockWithPINHandler,
+        unlockWithPassphrase: unlockWithPassphraseHandler,
+        lockApp: lockAppHandler,
+        setInactivityMinutes: setInactivityMinutesHandler,
         logout,
       }}
     >

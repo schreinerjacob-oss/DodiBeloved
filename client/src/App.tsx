@@ -7,6 +7,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { DodiProvider, useDodi } from "@/contexts/DodiContext";
 import ProfileSetupPage from "@/pages/profile-setup";
 import PairingPage from "@/pages/pairing";
+import PinSetupPage from "@/pages/pin-setup";
+import PinLockPage from "@/pages/pin-lock";
 import ChatPage from "@/pages/chat";
 import MemoriesPage from "@/pages/memories";
 import CalendarPage from "@/pages/calendar";
@@ -44,7 +46,7 @@ function NavItem({ href, icon: Icon, label, active, disabled }: { href: string; 
 }
 
 function MainApp() {
-  const { userId, pairingStatus, isOnline, isTrialActive } = useDodi();
+  const { userId, pairingStatus, isOnline, isTrialActive, isLocked, showPinSetup } = useDodi();
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
@@ -61,6 +63,16 @@ function MainApp() {
   // Only show main app when pairingStatus is 'connected'
   if (pairingStatus !== 'connected') {
     return <PairingPage />;
+  }
+
+  // Show PIN setup after successful pairing
+  if (showPinSetup) {
+    return <PinSetupPage onComplete={() => {}} />;
+  }
+
+  // Show PIN lock screen if app is locked
+  if (isLocked) {
+    return <PinLockPage />;
   }
 
   const mainNavItems = [
