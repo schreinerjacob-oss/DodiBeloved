@@ -1,6 +1,6 @@
 // Global polyfill for Simple-Peer WebRTC library
-if (typeof global === 'undefined') {
-  (window as any).global = window;
+if (!globalThis.global) {
+  (globalThis as any).global = globalThis;
 }
 
 import { createRoot } from "react-dom/client";
