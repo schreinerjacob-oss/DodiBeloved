@@ -141,13 +141,31 @@ export default function PairingPage() {
     try {
       console.log('Creator scanned answer QR data:', decodedText?.substring(0, 50));
       
-      // Parse the answer QR data
-      const cleanData = decodedText.replace('dodi-answer:', '');
-      const parsed = JSON.parse(atob(cleanData));
+      // Parse the answer QR data - sanitize whitespace
+      const sanitized = decodedText.trim();
+      const cleanData = sanitized.replace('dodi-answer:', '').trim();
+      
+      if (!cleanData) {
+        throw new Error('QR code is empty - please scan again');
+      }
+      
+      let parsed;
+      try {
+        const decoded = atob(cleanData);
+        parsed = JSON.parse(decoded);
+      } catch (e) {
+        console.error('Failed to parse QR data:', e);
+        throw new Error('Invalid QR format - the QR code may be corrupted or incomplete. Try scanning again.');
+      }
+      
       const { answer, joinerId } = parsed;
       
       if (!joinerId) {
         throw new Error('Invalid response: missing partner ID');
+      }
+      
+      if (!answer) {
+        throw new Error('Invalid response: missing connection data');
       }
       
       console.log('Parsed answer payload, joinerId:', joinerId);
@@ -170,7 +188,7 @@ export default function PairingPage() {
       console.error('Parse answer error:', error);
       console.error('Error details:', error instanceof Error ? error.message : 'Unknown error');
       toast({
-        title: 'Invalid QR Code',
+        title: 'Error Reading QR',
         description: error instanceof Error ? error.message : 'Please scan the QR code your partner is showing.',
         variant: 'destructive',
       });
@@ -188,12 +206,26 @@ export default function PairingPage() {
     try {
       console.log('Joiner scanned QR data:', decodedText?.substring(0, 50));
       
-      // Decode the QR payload
-      const cleanData = decodedText.replace('dodi:', '').replace('dodi-answer:', '');
+      // Decode the QR payload - sanitize whitespace
+      const sanitized = decodedText.trim();
+      const cleanData = sanitized
+        .replace('dodi:', '')
+        .replace('dodi-answer:', '')
+        .trim();
+      
+      if (!cleanData) {
+        throw new Error('QR code is empty - please scan again');
+      }
+      
       const payload = decodePairingPayload(cleanData);
       
       if (!payload) {
-        throw new Error('Invalid QR code format - could not decode payload');
+        throw new Error('Invalid QR format - the QR code may be corrupted or incomplete. Try scanning again.');
+      }
+      
+      // Validate payload has required fields
+      if (!payload.creatorId || !payload.passphrase || !payload.offer) {
+        throw new Error('Invalid QR code: missing connection information. Please scan the full QR code.');
       }
       
       console.log('Decoded payload:', { creatorId: payload.creatorId, sessionId: payload.sessionId });
@@ -238,7 +270,7 @@ export default function PairingPage() {
       console.error('Scan process error:', error);
       console.error('Error details:', error instanceof Error ? error.message : 'Unknown error');
       toast({
-        title: 'Error processing QR',
+        title: 'Error Reading QR',
         description: error instanceof Error ? error.message : 'Failed to process QR code. Please try again.',
         variant: 'destructive',
       });
