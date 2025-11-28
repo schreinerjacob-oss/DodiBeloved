@@ -141,31 +141,13 @@ export default function PairingPage() {
     try {
       console.log('Creator scanned answer QR data:', decodedText?.substring(0, 50));
       
-      // Parse the answer QR data - sanitize whitespace
-      const sanitized = decodedText.trim();
-      const cleanData = sanitized.replace('dodi-answer:', '').trim();
-      
-      if (!cleanData) {
-        throw new Error('QR code is empty - please scan again');
-      }
-      
-      let parsed;
-      try {
-        const decoded = atob(cleanData);
-        parsed = JSON.parse(decoded);
-      } catch (e) {
-        console.error('Failed to parse QR data:', e);
-        throw new Error('Invalid QR format - the QR code may be corrupted or incomplete. Try scanning again.');
-      }
-      
+      // Parse the answer QR data
+      const cleanData = decodedText.replace('dodi-answer:', '');
+      const parsed = JSON.parse(atob(cleanData));
       const { answer, joinerId } = parsed;
       
       if (!joinerId) {
         throw new Error('Invalid response: missing partner ID');
-      }
-      
-      if (!answer) {
-        throw new Error('Invalid response: missing connection data');
       }
       
       console.log('Parsed answer payload, joinerId:', joinerId);
@@ -188,7 +170,7 @@ export default function PairingPage() {
       console.error('Parse answer error:', error);
       console.error('Error details:', error instanceof Error ? error.message : 'Unknown error');
       toast({
-        title: 'Error Reading QR',
+        title: 'Invalid QR Code',
         description: error instanceof Error ? error.message : 'Please scan the QR code your partner is showing.',
         variant: 'destructive',
       });
@@ -206,26 +188,12 @@ export default function PairingPage() {
     try {
       console.log('Joiner scanned QR data:', decodedText?.substring(0, 50));
       
-      // Decode the QR payload - sanitize whitespace
-      const sanitized = decodedText.trim();
-      const cleanData = sanitized
-        .replace('dodi:', '')
-        .replace('dodi-answer:', '')
-        .trim();
-      
-      if (!cleanData) {
-        throw new Error('QR code is empty - please scan again');
-      }
-      
+      // Decode the QR payload
+      const cleanData = decodedText.replace('dodi:', '').replace('dodi-answer:', '');
       const payload = decodePairingPayload(cleanData);
       
       if (!payload) {
-        throw new Error('Invalid QR format - the QR code may be corrupted or incomplete. Try scanning again.');
-      }
-      
-      // Validate payload has required fields
-      if (!payload.creatorId || !payload.passphrase || !payload.offer) {
-        throw new Error('Invalid QR code: missing connection information. Please scan the full QR code.');
+        throw new Error('Invalid QR code format - could not decode payload');
       }
       
       console.log('Decoded payload:', { creatorId: payload.creatorId, sessionId: payload.sessionId });
@@ -270,7 +238,7 @@ export default function PairingPage() {
       console.error('Scan process error:', error);
       console.error('Error details:', error instanceof Error ? error.message : 'Unknown error');
       toast({
-        title: 'Error Reading QR',
+        title: 'Error processing QR',
         description: error instanceof Error ? error.message : 'Failed to process QR code. Please try again.',
         variant: 'destructive',
       });
@@ -315,14 +283,6 @@ export default function PairingPage() {
 
   const initializeScanner = async (isCreatorScanning: boolean) => {
     try {
-      // Request camera permissions first to show the permission prompt
-      try {
-        await navigator.mediaDevices.getUserMedia({ video: true });
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        throw new Error(`Camera access required: ${errMsg}`);
-      }
-
       const element = document.getElementById('qr-reader');
       if (!element) throw new Error('QR reader element not found');
       
@@ -331,8 +291,8 @@ export default function PairingPage() {
       const scanner = new Html5QrcodeScanner(
         'qr-reader',
         {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
+          fps: 30,
+          qrbox: { width: 300, height: 300 },
           aspectRatio: 1.0,
           rememberLastUsedCamera: true,
           disableFlip: false,
@@ -344,11 +304,20 @@ export default function PairingPage() {
       scannerRef.current = scanner;
       setScannerInitialized(true);
 
+      // Create wrapper to handle html5-qrcode callback format
       const successHandler = isCreatorScanning ? handleCreatorScanAnswer : handleJoinerScanCreator;
+      
+      const onScanSuccess = (decodedText: string) => {
+        console.log('QR Code scanned successfully:', decodedText.substring(0, 50));
+        successHandler(decodedText);
+      };
 
-      await scanner.render(successHandler, (error: unknown) => {
-        console.log('Scanner error:', error);
-      });
+      const onScanFailure = (error: unknown) => {
+        // Suppress frequent error logs from continuous scanning attempts
+        console.debug('QR scan attempt:', error);
+      };
+
+      await scanner.render(onScanSuccess, onScanFailure);
     } catch (error) {
       console.error('Failed to initialize scanner:', error);
       toast({
