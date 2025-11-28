@@ -134,15 +134,15 @@ export default function PairingPage() {
   };
 
   // Creator: Handle scanning joiner's answer QR
-  const handleCreatorScanAnswer = async (data: string) => {
+  const handleCreatorScanAnswer = async (decodedText: string) => {
     cleanupScanner();
     setLoading(true);
     
     try {
-      console.log('Creator scanned answer QR data:', data?.substring(0, 50));
+      console.log('Creator scanned answer QR data:', decodedText?.substring(0, 50));
       
       // Parse the answer QR data
-      const cleanData = data.replace('dodi-answer:', '');
+      const cleanData = decodedText.replace('dodi-answer:', '');
       const parsed = JSON.parse(atob(cleanData));
       const { answer, joinerId } = parsed;
       
@@ -181,15 +181,15 @@ export default function PairingPage() {
   };
 
   // Joiner: Process scanned QR and generate answer
-  const handleJoinerScanCreator = async (data: string) => {
+  const handleJoinerScanCreator = async (decodedText: string) => {
     cleanupScanner();
     setLoading(true);
     
     try {
-      console.log('Joiner scanned QR data:', data?.substring(0, 50));
+      console.log('Joiner scanned QR data:', decodedText?.substring(0, 50));
       
       // Decode the QR payload
-      const cleanData = data.replace('dodi:', '').replace('dodi-answer:', '');
+      const cleanData = decodedText.replace('dodi:', '').replace('dodi-answer:', '');
       const payload = decodePairingPayload(cleanData);
       
       if (!payload) {
@@ -291,8 +291,8 @@ export default function PairingPage() {
       const scanner = new Html5QrcodeScanner(
         'qr-reader',
         {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
+          fps: 30,
+          qrbox: { width: 300, height: 300 },
           aspectRatio: 1.0,
           rememberLastUsedCamera: true,
           disableFlip: false,
@@ -304,11 +304,20 @@ export default function PairingPage() {
       scannerRef.current = scanner;
       setScannerInitialized(true);
 
+      // Create wrapper to handle html5-qrcode callback format
       const successHandler = isCreatorScanning ? handleCreatorScanAnswer : handleJoinerScanCreator;
+      
+      const onScanSuccess = (decodedText: string) => {
+        console.log('QR Code scanned successfully:', decodedText.substring(0, 50));
+        successHandler(decodedText);
+      };
 
-      await scanner.render(successHandler, (error: unknown) => {
-        console.log('Scanner error:', error);
-      });
+      const onScanFailure = (error: unknown) => {
+        // Suppress frequent error logs from continuous scanning attempts
+        console.debug('QR scan attempt:', error);
+      };
+
+      await scanner.render(onScanSuccess, onScanFailure);
     } catch (error) {
       console.error('Failed to initialize scanner:', error);
       toast({
