@@ -283,6 +283,7 @@ export default function PairingPage() {
 
   const initializeScanner = async (isCreatorScanning: boolean) => {
     try {
+      console.log('Initializing QR scanner for', isCreatorScanning ? 'creator' : 'joiner');
       const element = document.getElementById('qr-reader');
       if (!element) throw new Error('QR reader element not found');
       
@@ -291,38 +292,42 @@ export default function PairingPage() {
       const scanner = new Html5QrcodeScanner(
         'qr-reader',
         {
-          fps: 30,
+          fps: 15,
           qrbox: { width: 300, height: 300 },
           aspectRatio: 1.0,
           rememberLastUsedCamera: true,
           disableFlip: false,
           showTorchButtonIfSupported: true,
+          supportedScanTypes: [],
+          useBarCodeDetectorIfSupported: true,
         },
-        false
+        /* verbose= */ false
       );
 
       scannerRef.current = scanner;
-      setScannerInitialized(true);
 
       // Create wrapper to handle html5-qrcode callback format
       const successHandler = isCreatorScanning ? handleCreatorScanAnswer : handleJoinerScanCreator;
       
-      const onScanSuccess = (decodedText: string) => {
-        console.log('QR Code scanned successfully:', decodedText.substring(0, 50));
+      const onScanSuccess = (decodedText: string, result: unknown) => {
+        console.log('✓ QR Code scanned successfully:', decodedText.substring(0, 80));
         successHandler(decodedText);
       };
 
-      const onScanFailure = (error: unknown) => {
-        // Suppress frequent error logs from continuous scanning attempts
-        console.debug('QR scan attempt:', error);
+      const onScanError = (errorMessage: string) => {
+        // Silent - this fires constantly during scanning
       };
 
-      await scanner.render(onScanSuccess, onScanFailure);
+      console.log('Calling scanner.render()...');
+      const renderResult = await scanner.render(onScanSuccess, onScanError);
+      console.log('Scanner render completed:', renderResult);
+      setScannerInitialized(true);
     } catch (error) {
       console.error('Failed to initialize scanner:', error);
+      console.error('Error type:', error instanceof Error ? error.constructor.name : typeof error);
       toast({
         title: 'Camera Error',
-        description: 'Unable to access camera. Please check permissions.',
+        description: error instanceof Error ? error.message : 'Unable to access camera.',
         variant: 'destructive',
       });
       setScannerInitialized(false);
