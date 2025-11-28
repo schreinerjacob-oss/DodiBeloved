@@ -283,11 +283,24 @@ export default function PairingPage() {
 
   const initializeScanner = async (isCreatorScanning: boolean) => {
     try {
-      console.log('Initializing QR scanner for', isCreatorScanning ? 'creator' : 'joiner');
+      console.log('📱 Initializing QR scanner...');
+      
+      // Check camera permissions first
+      try {
+        const permissions = await navigator.permissions?.query?.({ name: 'camera' } as any);
+        console.log('Camera permission status:', permissions?.state);
+        if (permissions?.state === 'denied') {
+          throw new Error('Camera permission was denied. Please enable camera access in settings.');
+        }
+      } catch (permErr) {
+        console.log('Permission check not available or error:', permErr);
+      }
+
       const element = document.getElementById('qr-reader');
       if (!element) throw new Error('QR reader element not found');
       
       element.innerHTML = '';
+      console.log('DOM element cleared');
       
       const scanner = new Html5QrcodeScanner(
         'qr-reader',
@@ -298,36 +311,41 @@ export default function PairingPage() {
           rememberLastUsedCamera: true,
           disableFlip: false,
           showTorchButtonIfSupported: true,
-          supportedScanTypes: [],
-          useBarCodeDetectorIfSupported: true,
         },
         /* verbose= */ false
       );
 
       scannerRef.current = scanner;
+      console.log('Scanner instance created');
 
       // Create wrapper to handle html5-qrcode callback format
       const successHandler = isCreatorScanning ? handleCreatorScanAnswer : handleJoinerScanCreator;
       
       const onScanSuccess = (decodedText: string, result: unknown) => {
-        console.log('✓ QR Code scanned successfully:', decodedText.substring(0, 80));
-        successHandler(decodedText);
+        console.log('✅ QR CODE SCANNED:', decodedText.substring(0, 80));
+        try {
+          successHandler(decodedText);
+        } catch (e) {
+          console.error('Error in scan handler:', e);
+        }
       };
 
       const onScanError = (errorMessage: string) => {
-        // Silent - this fires constantly during scanning
+        // Silently log - this fires constantly during scanning
+        console.debug('Scan tick:', errorMessage?.substring?.(0, 30) || 'unknown');
       };
 
       console.log('Calling scanner.render()...');
-      const renderResult = await scanner.render(onScanSuccess, onScanError);
-      console.log('Scanner render completed:', renderResult);
+      await scanner.render(onScanSuccess, onScanError);
+      console.log('✓ Scanner render succeeded');
       setScannerInitialized(true);
     } catch (error) {
-      console.error('Failed to initialize scanner:', error);
-      console.error('Error type:', error instanceof Error ? error.constructor.name : typeof error);
+      console.error('❌ Failed to initialize scanner:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('Error details:', errorMsg);
       toast({
         title: 'Camera Error',
-        description: error instanceof Error ? error.message : 'Unable to access camera.',
+        description: errorMsg || 'Unable to access camera. Check permissions.',
         variant: 'destructive',
       });
       setScannerInitialized(false);
