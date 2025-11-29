@@ -20,6 +20,8 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
   const [confirmPin, setConfirmPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  console.log('🔐 [PIN SETUP] Page rendered');
 
   const handlePinChange = (value: string) => {
     const cleaned = value.replace(/\D/g, '').slice(0, 6);
@@ -56,13 +58,16 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
 
     setLoading(true);
     try {
+      console.log('🔐 [PIN SETUP] Setting PIN...');
       await setPIN(pin);
+      console.log('✅ [PIN SETUP] PIN set successfully, calling onComplete');
       toast({
         title: 'PIN Set!',
         description: 'Your app is now protected with a PIN.',
       });
       onComplete();
     } catch (err) {
+      console.error('❌ [PIN SETUP] Failed to set PIN:', err);
       setError(err instanceof Error ? err.message : 'Failed to set PIN');
       toast({
         title: 'Error',

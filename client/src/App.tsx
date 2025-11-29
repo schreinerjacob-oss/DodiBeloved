@@ -72,7 +72,10 @@ function MainApp() {
 
   // Show PIN setup after successful pairing
   if (showPinSetup) {
-    return <PinSetupPage onComplete={() => {}} />;
+    console.log('🔐 [APP] Rendering PIN setup page');
+    return <PinSetupPage onComplete={() => {
+      console.log('✅ [APP] PIN setup complete callback - state will auto-update via context');
+    }} />;
   }
 
   // Show PIN lock screen if app is locked
