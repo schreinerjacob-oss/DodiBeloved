@@ -8,6 +8,7 @@ import { Toggle } from '@/components/ui/toggle';
 import { Heart, Send, Image, Mic, Lock, Eye, EyeOff } from 'lucide-react';
 import { getAllMessages, saveMessage } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
+import { MessageMediaImage } from '@/components/message-media-image';
 import type { Message, SyncMessage } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
@@ -213,50 +214,53 @@ export default function ChatPage() {
 
     setSending(true);
     try {
+      const messageId = nanoid();
+      const now = new Date();
+
+      const message: Message = {
+        id: messageId,
+        senderId: userId!,
+        recipientId: partnerId!,
+        content: file.name,
+        type: 'image',
+        mediaUrl: null,
+        isDisappearing,
+        timestamp: now,
+      };
+
+      // Save blob to IndexedDB media store (not as base64)
+      const { saveMediaBlob } = await import('@/lib/storage');
+      await saveMediaBlob(messageId, file, 'message');
+
+      // Save message metadata to IndexedDB
+      await saveMessage(message);
+
+      // Add to local state
+      setMessages(prev => [...prev, message]);
+
+      // Send via P2P data channel (convert blob to base64 for transmission only)
       const reader = new FileReader();
-      reader.onload = async (event) => {
-        const base64 = event.target?.result as string;
-        const messageId = nanoid();
-        const now = new Date();
-
-        const message: Message = {
-          id: messageId,
-          senderId: userId!,
-          recipientId: partnerId!,
-          content: file.name,
-          type: 'image',
-          mediaUrl: base64,
-          isDisappearing,
-          timestamp: now,
-        };
-
-        // Save to IndexedDB
-        await saveMessage(message);
-
-        // Add to local state
-        setMessages(prev => [...prev, message]);
-
-        // Send via P2P data channel
+      reader.onload = () => {
         console.log('📤 [P2P] Sending image via P2P:', messageId);
         sendP2P({
           type: 'message',
-          data: message,
+          data: { ...message, mediaUrl: reader.result as string },
           timestamp: Date.now(),
         });
-
-        toast({
-          title: "Image sent",
-        });
-
-        if (isDisappearing) {
-          setTimeout(() => {
-            setMessages(prev => prev.filter(m => m.id !== messageId));
-          }, 30000);
-        }
-
-        setSending(false);
       };
       reader.readAsDataURL(file);
+
+      toast({
+        title: "Image sent",
+      });
+
+      if (isDisappearing) {
+        setTimeout(() => {
+          setMessages(prev => prev.filter(m => m.id !== messageId));
+        }, 30000);
+      }
+
+      setSending(false);
     } catch (error) {
       console.error('Image send error:', error);
       toast({
@@ -326,14 +330,9 @@ export default function ChatPage() {
                       : 'bg-card border-card-border'
                   }`}
                 >
-                  {isImage && message.mediaUrl ? (
+                  {isImage && (
                     <div className="space-y-2">
-                      <img
-                        src={message.mediaUrl}
-                        alt={message.content}
-                        className="w-full h-auto rounded-md"
-                        data-testid="message-image"
-                      />
+                      <MessageMediaImage messageId={message.id} fileName={message.content} />
                       <p className="text-xs text-muted-foreground px-3 pb-2">
                         {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Camera, Lock, Calendar, Heart, X } from 'lucide-react';
 import { getAllMemories, saveMemory } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
+import { MemoryMediaImage } from '@/components/memory-media-image';
 import type { Memory, SyncMessage } from '@/types';
 import { format } from 'date-fns';
 import { nanoid } from 'nanoid';
@@ -68,48 +69,59 @@ export default function MemoriesPage() {
     setMemories(allMemories);
   };
 
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setPreview(event.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+      setPreviewFile(file);
+      // Create preview URL for UI (no base64)
+      const previewUrl = URL.createObjectURL(file);
+      setPreview(previewUrl);
     }
   };
 
   const handleSaveMemory = async () => {
-    if (!preview || !userId || !partnerId) return;
+    if (!previewFile || !userId || !partnerId) return;
     setSaving(true);
     try {
+      const memoryId = nanoid();
       const memory: Memory = {
-        id: nanoid(),
+        id: memoryId,
         userId,
         partnerId,
-        imageData: preview,
-        mediaUrl: preview,
+        imageData: '',
+        mediaUrl: null,
         caption: caption.trim() || null,
         mediaType: 'photo',
         timestamp: new Date(),
         createdAt: new Date(),
       };
       
-      // Save to local IndexedDB first
+      // Save blob to IndexedDB media store (not as base64)
+      const { saveMediaBlob } = await import('@/lib/storage');
+      await saveMediaBlob(memoryId, previewFile, 'memory');
+      
+      // Save memory metadata to IndexedDB
       await saveMemory(memory);
       
       // Add to local state immediately
       setMemories(prev => [...prev, memory]);
       
-      // Send to partner via P2P data channel
-      sendP2P({
-        type: 'memory',
-        data: memory,
-        timestamp: Date.now(),
-      });
+      // Send to partner via P2P data channel (convert blob to base64 for transmission only)
+      const reader = new FileReader();
+      reader.onload = () => {
+        sendP2P({
+          type: 'memory',
+          data: { ...memory, mediaUrl: reader.result as string, imageData: reader.result as string },
+          timestamp: Date.now(),
+        });
+      };
+      reader.readAsDataURL(previewFile);
       
       setCaption('');
       setPreview('');
+      setPreviewFile(null);
       setDialogOpen(false);
       toast({
         title: "Memory saved 📸",
@@ -224,6 +236,7 @@ export default function MemoriesPage() {
                 className="group relative overflow-hidden aspect-square border-sage/30 hover-elevate cursor-pointer"
                 data-testid={`memory-${memory.id}`}
               >
+                <MemoryMediaImage memoryId={memory.id} />
                 <div className="absolute inset-0 bg-gradient-to-br from-sage/20 to-blush/20" />
                 <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent">
                   <div className="flex items-center gap-1 text-white text-xs">

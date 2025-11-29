@@ -14,6 +14,8 @@ interface DodiDB {
   prayers: Prayer;
   reactions: Reaction;
   settings: { key: string; value: string };
+  messageMedia: { id: string; blob: Blob };
+  memoryMedia: { id: string; blob: Blob };
 }
 
 let dbInstance: IDBPDatabase<DodiDB> | null = null;
@@ -65,6 +67,14 @@ export async function initDB(): Promise<IDBPDatabase<DodiDB>> {
       
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings', { keyPath: 'key' });
+      }
+
+      if (!db.objectStoreNames.contains('messageMedia')) {
+        db.createObjectStore('messageMedia', { keyPath: 'id' });
+      }
+
+      if (!db.objectStoreNames.contains('memoryMedia')) {
+        db.createObjectStore('memoryMedia', { keyPath: 'id' });
       }
     },
   });
@@ -120,6 +130,26 @@ export async function saveLoveLetter(letter: LoveLetter): Promise<void> {
 export async function getAllLoveLetters(): Promise<LoveLetter[]> {
   const db = await initDB();
   return db.getAllFromIndex('loveLetters', 'createdAt');
+}
+
+// Blob storage helpers
+export async function saveMediaBlob(mediaId: string, blob: Blob, type: 'message' | 'memory'): Promise<void> {
+  const db = await initDB();
+  const storeName = type === 'message' ? 'messageMedia' : 'memoryMedia';
+  await db.put(storeName as any, { id: mediaId, blob });
+}
+
+export async function getMediaBlob(mediaId: string, type: 'message' | 'memory'): Promise<Blob | undefined> {
+  const db = await initDB();
+  const storeName = type === 'message' ? 'messageMedia' : 'memoryMedia';
+  const result = await db.get(storeName as any, mediaId);
+  return result?.blob;
+}
+
+export async function deleteMediaBlob(mediaId: string, type: 'message' | 'memory'): Promise<void> {
+  const db = await initDB();
+  const storeName = type === 'message' ? 'messageMedia' : 'memoryMedia';
+  await db.delete(storeName as any, mediaId);
 }
 
 export async function saveReaction(reaction: Reaction): Promise<void> {
