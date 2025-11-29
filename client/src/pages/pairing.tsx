@@ -38,6 +38,13 @@ export default function PairingPage() {
 
   const handleMasterKeyReceived = async (payload: any) => {
     try {
+      console.log('📋 [ID AUDIT] Master key payload received:', {
+        creatorId: payload.creatorId,
+        joinerId: payload.joinerId,
+        hasMasterKey: !!payload.masterKey,
+        hasSalt: !!payload.salt,
+      });
+      
       await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
       onPeerConnected();
       if (roomRef.current) closeRoom(roomRef.current);
@@ -56,6 +63,18 @@ export default function PairingPage() {
   };
 
   const handleCreateRoom = async () => {
+    // VALIDATION: Ensure userId exists
+    if (!userId) {
+      console.error('❌ [ID AUDIT] FAILED: Creator has no userId - cannot start pairing');
+      toast({
+        title: 'Pairing Error',
+        description: 'User ID not initialized. Please refresh and try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    console.log('✅ [ID AUDIT] Creator userId exists:', userId);
     setLoading(true);
     setIsCreator(true);
     try {
@@ -64,16 +83,35 @@ export default function PairingPage() {
       const myPeerId = createRoomPeerId(code, true);
       
       console.log('🌿 Creating room as creator:', code);
+      console.log('📋 [ID AUDIT] Creator will send userId to tunnel:', userId);
       const peer = await initializePeer(myPeerId);
       
       setMode('pairing');
       
       const connPromise = waitForConnection(peer, 120000).then(async (conn) => {
         roomRef.current = { peer, conn, isCreator: true, peerId: myPeerId };
-        const payload = await runCreatorTunnel(conn, userId || '');
-        if (payload.joinerId) {
-          await setPartnerIdForCreator(payload.joinerId);
+        const payload = await runCreatorTunnel(conn, userId);
+        
+        console.log('📋 [ID AUDIT] Creator received tunnel payload:', {
+          creatorId: payload.creatorId,
+          joinerId: payload.joinerId,
+          creatorIdMatchesUserId: payload.creatorId === userId,
+          hasJoinerId: !!payload.joinerId,
+        });
+        
+        if (!payload.joinerId) {
+          throw new Error('Joiner ID not received in tunnel');
         }
+        
+        console.log('💾 [ID AUDIT] Creator storing partner ID:', payload.joinerId);
+        await setPartnerIdForCreator(payload.joinerId);
+        
+        console.log('✅ [ID AUDIT] Creator pairing complete:', {
+          myId: userId,
+          partnerId: payload.joinerId,
+          idMismatch: userId === payload.joinerId,
+        });
+        
         await handleMasterKeyReceived(payload);
       });
       
@@ -99,15 +137,41 @@ export default function PairingPage() {
   const attemptJoinRoom = async (normalCode: string, isRetry: boolean = false) => {
     try {
       console.log(`🌿 ${isRetry ? 'Retrying' : 'Joining'} room as joiner:`, normalCode);
+      
+      // VALIDATION: Ensure userId exists for joiner
+      if (!userId) {
+        console.error('❌ [ID AUDIT] FAILED: Joiner has no userId - cannot join');
+        throw new Error('Joiner user ID not initialized');
+      }
+      
+      console.log('✅ [ID AUDIT] Joiner userId exists:', userId);
+      
       const myPeerId = createRoomPeerId(normalCode, false);
       const peer = await initializePeer(myPeerId);
       const remotePeerId = getRemotePeerId(normalCode, false);
       const conn = await connectToRoom(peer, remotePeerId, 6000);
       roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
       const payload = await runJoinerTunnel(conn);
-      if (userId) {
-        await sendPairingAck(conn, userId);
+      
+      console.log('📋 [ID AUDIT] Joiner received tunnel payload:', {
+        creatorId: payload.creatorId,
+        hasCreatorId: !!payload.creatorId,
+        joinerReadyToSendAck: !!userId,
+      });
+      
+      if (!payload.creatorId) {
+        throw new Error('Creator ID not received in tunnel');
       }
+      
+      console.log('💾 [ID AUDIT] Joiner sending ACK with userId:', userId);
+      await sendPairingAck(conn, userId);
+      
+      console.log('✅ [ID AUDIT] Joiner pairing complete:', {
+        myId: userId,
+        creatorId: payload.creatorId,
+        idMismatch: userId === payload.creatorId,
+      });
+      
       await handleMasterKeyReceived(payload);
     } catch (error) {
       console.error(`Join room error (${isRetry ? 'retry' : 'attempt'} ${retryCountRef.current}):`, error);
