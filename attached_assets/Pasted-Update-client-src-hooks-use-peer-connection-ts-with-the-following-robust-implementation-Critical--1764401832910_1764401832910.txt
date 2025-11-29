@@ -1,3 +1,12 @@
+Update client/src/hooks/use-peer-connection.ts with the following robust implementation. 
+
+Critical Requirements:
+1. Use global singleton variables (globalPeer, globalConn) outside the component to persist the connection when navigating between pages.
+2. Implement auto-reconnection logic if the peer disconnects.
+3. Ensure the 'p2p-message' event is dispatched when data is received so other components can react.
+
+Use this exact code:
+
 import { useEffect, useState, useCallback } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import type { SyncMessage } from '@/types';
@@ -96,7 +105,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     return () => {
       // Intentionally DO NOT destroy peer on unmount to keep connection alive
     };
-  }, [userId, partnerId, pairingStatus, updateState]);
+  }, [userId, partnerId, pairingStatus]);
 
   // 2. CONNECT TO PARTNER
   const connectToPartner = (targetId: string) => {
@@ -133,10 +142,10 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     });
 
     conn.on('close', () => {
-      console.log('❌ Connection lost');
+      console.log('XY Connection lost');
       if (globalConn === conn) globalConn = null;
       updateState();
-      if (conn.peer) setTimeout(() => connectToPartner(conn.peer), 3000);
+      if (partnerId) setTimeout(() => connectToPartner(partnerId), 3000);
     });
 
     conn.on('error', (err) => {
