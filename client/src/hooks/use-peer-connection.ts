@@ -78,20 +78,37 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   }, []);
 
   const flushMessageQueue = useCallback(() => {
-    if (!channelRef.current || channelRef.current.readyState !== 'open') return;
-    if (!state.tunnelEstablished) return;
+    if (!channelRef.current || channelRef.current.readyState !== 'open') {
+      console.log('Cannot flush - channel not ready');
+      return;
+    }
+    
+    const queuedCount = messageQueueRef.current.length;
+    if (queuedCount === 0) {
+      console.log('No queued messages to flush');
+      return;
+    }
+    
+    console.log('Flushing', queuedCount, 'queued messages');
+    let sentCount = 0;
     
     while (messageQueueRef.current.length > 0) {
       const message = messageQueueRef.current.shift();
       if (message) {
         try {
           channelRef.current.send(JSON.stringify(message));
+          sentCount++;
         } catch (e) {
           console.error('Error sending queued message:', e);
+          // Re-queue if failed
+          messageQueueRef.current.unshift(message);
+          break;
         }
       }
     }
-  }, [state.tunnelEstablished]);
+    
+    console.log('Flushed', sentCount, 'messages, remaining queue:', messageQueueRef.current.length);
+  }, []);
 
   const send = useCallback((message: SyncMessage) => {
     const fullMessage = { ...message, timestamp: Date.now(), id: `${Date.now()}-${Math.random()}` };
@@ -187,15 +204,16 @@ export function usePeerConnection(): UsePeerConnectionReturn {
           tunnelCompleteCallbackRef.current(payload);
         }
         
-        flushMessageQueue();
+        // Flush after setting state
+        setTimeout(() => flushMessageQueue(), 10);
       }
     }
 
     if (message.type === 'tunnel-ack') {
       console.log('Tunnel ACK received - connection fully established. Queue size:', messageQueueRef.current.length);
       setState(prev => ({ ...prev, tunnelEstablished: true }));
-      // Flush immediately with small delay to ensure state updates
-      setTimeout(() => flushMessageQueue(), 50);
+      // Flush immediately
+      flushMessageQueue();
     }
   }, [userId, sendTunnelMessage, flushMessageQueue]);
 
