@@ -3,7 +3,7 @@ import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Heart, Loader2, Copy, Check, Leaf, AlertCircle } from 'lucide-react';
+import { Heart, Loader2, Copy, Check, Leaf } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { QRCodeSVG } from 'qrcode.react';
@@ -15,58 +15,20 @@ import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_
 
 type Mode = 'choose' | 'pairing' | 'success-animation';
 
-// Generate secure random token for QR code
-function generateSecretToken(): string {
-  const array = new Uint8Array(16);
-  window.crypto.getRandomValues(array);
-  return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-// Generate secure dodi:// URL with secret
-function generateSecurePairingUrl(roomCode: string, secret: string): string {
-  return `dodi://${roomCode}?secret=${secret}`;
-}
-
-// Parse dodi:// URL and extract room code and secret
-function parsePairingUrl(url: string): { roomCode: string; secret: string } | null {
-  try {
-    // Handle both dodi:// and manual URL parsing
-    let parsed = url;
-    if (url.startsWith('dodi://')) {
-      parsed = url.replace('dodi://', '');
-    }
-    
-    const [code, query] = parsed.split('?');
-    const params = new URLSearchParams(query || '');
-    const secret = params.get('secret');
-    
-    if (!code || !secret) {
-      return null;
-    }
-    
-    return { roomCode: normalizeRoomCode(code), secret };
-  } catch {
-    return null;
-  }
-}
-
 export default function PairingPage() {
   const { completePairingWithMasterKey, onPeerConnected, pairingStatus, userId } = useDodi();
   const { toast } = useToast();
   
   const [mode, setMode] = useState<Mode>('choose');
   const [roomCode, setRoomCode] = useState<string>('');
-  const [secret, setSecret] = useState<string>('');
-  const [inputUrl, setInputUrl] = useState<string>('');
+  const [inputCode, setInputCode] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [error, setError] = useState<string>('');
   const roomRef = useRef<RoomConnection | null>(null);
   const retryCountRef = useRef<number>(0);
-  const secretRef = useRef<string>('');
 
   useEffect(() => {
     if (pairingStatus === 'connected') {
@@ -83,11 +45,9 @@ export default function PairingPage() {
       setMode('success-animation');
     } catch (error) {
       if (roomRef.current) closeRoom(roomRef.current);
-      const errorMsg = error instanceof Error ? error.message : 'Could not complete connection.';
-      setError(errorMsg);
       toast({
         title: 'Pairing Failed',
-        description: errorMsg,
+        description: 'Could not complete connection.',
         variant: 'destructive',
       });
       setMode('choose');
@@ -97,24 +57,19 @@ export default function PairingPage() {
 
   const handleCreateRoom = async () => {
     setLoading(true);
-    setError('');
     setIsCreator(true);
     try {
       const code = generateRoomCode();
-      const secretToken = generateSecretToken();
       setRoomCode(code);
-      setSecret(secretToken);
-      secretRef.current = secretToken;
       const myPeerId = createRoomPeerId(code, true);
       
-      console.log('🌿 Creating room as creator with secret handshake:', code);
+      console.log('🌿 Creating room as creator:', code);
       const peer = await initializePeer(myPeerId);
       
       setMode('pairing');
       
       const connPromise = waitForConnection(peer, 120000).then(async (conn) => {
         roomRef.current = { peer, conn, isCreator: true, peerId: myPeerId };
-        console.log('🔐 Creator tunnel starting with secure handshake');
         const payload = await runCreatorTunnel(conn, userId || '');
         await handleMasterKeyReceived(payload);
       });
@@ -125,43 +80,27 @@ export default function PairingPage() {
           closeRoom(roomRef.current);
         }
         if (mode === 'pairing') {
-          const errorMsg = error instanceof Error ? error.message : 'Partner did not connect. Try again.';
-          setError(errorMsg);
-          toast({ 
-            title: 'Connection Failed', 
-            description: errorMsg, 
-            variant: 'destructive' 
-          });
+          toast({ title: 'Connection Failed', description: error instanceof Error ? error.message : 'Partner did not connect. Try again.', variant: 'destructive' });
           setMode('choose');
           setLoading(false);
         }
       });
     } catch (error) {
       console.error('Create room error:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Failed to create room.';
-      setError(errorMsg);
-      toast({ 
-        title: 'Error', 
-        description: errorMsg, 
-        variant: 'destructive' 
-      });
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to create room.', variant: 'destructive' });
       setMode('choose');
       setLoading(false);
     }
   };
 
-  const attemptJoinRoom = async (parsedData: { roomCode: string; secret: string }, isRetry: boolean = false) => {
+  const attemptJoinRoom = async (normalCode: string, isRetry: boolean = false) => {
     try {
-      console.log(`🌿 ${isRetry ? 'Retrying' : 'Joining'} room as joiner with secure handshake:`, parsedData.roomCode);
-      secretRef.current = parsedData.secret;
-      
-      const myPeerId = createRoomPeerId(parsedData.roomCode, false);
+      console.log(`🌿 ${isRetry ? 'Retrying' : 'Joining'} room as joiner:`, normalCode);
+      const myPeerId = createRoomPeerId(normalCode, false);
       const peer = await initializePeer(myPeerId);
-      const remotePeerId = getRemotePeerId(parsedData.roomCode, false);
+      const remotePeerId = getRemotePeerId(normalCode, false);
       const conn = await connectToRoom(peer, remotePeerId, 6000);
       roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
-      
-      console.log('🔐 Joiner tunnel starting with secure handshake');
       const payload = await runJoinerTunnel(conn);
       await handleMasterKeyReceived(payload);
     } catch (error) {
@@ -176,15 +115,13 @@ export default function PairingPage() {
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         try {
-          await attemptJoinRoom(parsedData, true);
+          await attemptJoinRoom(normalCode, true);
         } catch (retryError) {
           console.error('Retry failed:', retryError);
           if (roomRef.current) closeRoom(roomRef.current);
-          const errorMsg = 'Creator may not be ready. Please try again.';
-          setError(errorMsg);
           toast({ 
             title: 'Connection took too long', 
-            description: errorMsg,
+            description: 'Creator may not be ready. Please try again.',
             variant: 'destructive' 
           });
           setMode('choose');
@@ -195,11 +132,9 @@ export default function PairingPage() {
       } else {
         // Second attempt failed
         if (roomRef.current) closeRoom(roomRef.current);
-        const errorMsg = 'Could not connect. Please try again.';
-        setError(errorMsg);
         toast({ 
           title: 'Connection Failed', 
-          description: errorMsg,
+          description: 'Could not connect. Please try again.',
           variant: 'destructive' 
         });
         setMode('choose');
@@ -211,62 +146,26 @@ export default function PairingPage() {
   };
 
   const handleJoinRoom = async () => {
-    const trimmedInput = inputUrl.trim();
-    
-    if (!trimmedInput) {
-      const errorMsg = 'Please enter a pairing code or scan a QR code';
-      setError(errorMsg);
-      toast({ 
-        title: 'Missing pairing code', 
-        description: errorMsg, 
-        variant: 'destructive' 
-      });
-      return;
-    }
-    
-    // Try to parse as secure URL first
-    let parsedData = parsePairingUrl(trimmedInput);
-    
-    // If not a URL, try as a plain room code
-    if (!parsedData && isValidRoomCode(trimmedInput)) {
-      parsedData = {
-        roomCode: normalizeRoomCode(trimmedInput),
-        secret: generateSecretToken(), // Generate a local secret if not provided
-      };
-    }
-    
-    if (!parsedData) {
-      const errorMsg = 'Invalid pairing code. Please enter a valid code or scan a QR code.';
-      setError(errorMsg);
-      toast({ 
-        title: 'Invalid code', 
-        description: errorMsg, 
-        variant: 'destructive' 
-      });
+    if (!isValidRoomCode(inputCode)) {
+      toast({ title: 'Invalid code', description: 'Please enter a valid 8-character code (e.g., A7K9-P2M4)', variant: 'destructive' });
       return;
     }
     
     setLoading(true);
-    setError('');
     setIsCreator(false);
-    setRoomCode(parsedData.roomCode);
-    setSecret(parsedData.secret);
+    const normalCode = normalizeRoomCode(inputCode);
+    setRoomCode(normalCode);
     setMode('pairing');
     retryCountRef.current = 0;
     setIsRetrying(false);
     
-    await attemptJoinRoom(parsedData, false);
+    await attemptJoinRoom(normalCode, false);
   };
 
   const handleCopyCode = () => {
-    const securePairingUrl = generateSecurePairingUrl(roomCode, secret);
-    navigator.clipboard.writeText(securePairingUrl);
+    navigator.clipboard.writeText(roomCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    toast({
-      title: "Copied!",
-      description: "Secure pairing link copied to clipboard.",
-    });
   };
 
   if (showSuccess) {
@@ -300,7 +199,7 @@ export default function PairingPage() {
             transition={{ delay: 0.8, duration: 0.8 }} 
             className="text-sm text-muted-foreground leading-relaxed"
           >
-            All your messages are encrypted end-to-end and synced securely across your devices with verified peer-to-peer handshake.
+            All your messages are encrypted end-to-end and synced securely across your devices.
           </motion.p>
         </motion.div>
       </div>
@@ -325,172 +224,191 @@ export default function PairingPage() {
               initial={{ opacity: 0, y: 20 }} 
               animate={{ opacity: 1, y: 0 }} 
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-4"
+              transition={{ duration: 0.3 }}
             >
-              <Card className="p-6 space-y-4">
-                <p className="text-sm text-muted-foreground text-center">
-                  Pair with your beloved to begin your private sanctuary
-                </p>
+              <Card className="p-8 space-y-6 border-sage/30 shadow-lg">
+                <div className="space-y-3 text-center">
+                  <Heart className="w-8 h-8 mx-auto text-blush" />
+                  <h2 className="text-2xl font-light">Hold Close and Connect</h2>
+                  <p className="text-sm text-muted-foreground">A completely private sanctuary for you and your beloved</p>
+                </div>
+
                 <div className="space-y-3">
                   <Button 
                     onClick={handleCreateRoom} 
-                    className="w-full" 
-                    size="lg"
-                    data-testid="button-create-pairing"
+                    disabled={loading} 
+                    className="w-full h-12 hover-elevate" 
+                    data-testid="button-create-room"
                   >
-                    <Leaf className="w-4 h-4 mr-2" />
-                    Create Pairing Code
+                    {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Heart className="w-5 h-5 mr-2" />}
+                    {loading ? 'Creating...' : 'Create Connection'}
                   </Button>
+
                   <Button 
-                    onClick={() => setMode('pairing')} 
+                    onClick={() => { setInputCode(''); setMode('pairing'); setIsCreator(false); }} 
                     variant="outline" 
-                    className="w-full" 
-                    size="lg"
-                    data-testid="button-join-pairing"
+                    className="w-full h-12 hover-elevate" 
+                    data-testid="button-join-code"
                   >
-                    Enter Pairing Code
+                    Join with Code
                   </Button>
                 </div>
               </Card>
             </motion.div>
           )}
 
-          {mode === 'pairing' && isCreator && roomCode && secret && !loading && (
+          {mode === 'pairing' && (
             <motion.div 
-              key="show-code" 
-              initial={{ opacity: 0, y: 20 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              exit={{ opacity: 0, y: -20 }}
-              className="space-y-4"
+              key="pairing" 
+              initial={{ opacity: 0, scale: 0.95 }} 
+              animate={{ opacity: 1, scale: 1 }} 
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
             >
-              <Card className="p-6 space-y-6">
-                <div className="text-center space-y-2">
-                  <h2 className="text-lg font-light">Share This QR Code</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Your beloved can scan this to connect securely
-                  </p>
-                </div>
+              <Card className="p-8 space-y-6 border-sage/30 shadow-lg">
+                {isCreator ? (
+                  <>
+                    <div className="text-center space-y-2">
+                      <h2 className="text-xl font-light">Share This Code</h2>
+                      <p className="text-sm text-muted-foreground">Let your partner scan or type it</p>
+                    </div>
 
-                <div className="flex justify-center bg-white p-4 rounded-lg">
-                  <QRCodeSVG 
-                    value={generateSecurePairingUrl(roomCode, secret)}
-                    size={200}
-                    level="H"
-                    includeMargin={true}
-                    data-testid="qr-code-pairing"
-                  />
-                </div>
+                    <div className="text-center p-6 bg-sage/10 rounded-lg">
+                      <p className="text-6xl font-light tracking-widest text-sage font-mono" data-testid="text-room-code">
+                        {roomCode}
+                      </p>
+                    </div>
 
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">OR SHARE CODE</p>
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      value={generateSecurePairingUrl(roomCode, secret)}
-                      readOnly
-                      className="flex-1 px-3 py-2 text-xs font-mono bg-muted/50 border border-input rounded text-foreground"
-                      data-testid="input-secure-pairing-url"
-                    />
+                    <div className="flex justify-center">
+                      <div className="p-2 bg-white rounded-lg shadow-sm">
+                        <QRCodeSVG 
+                          value={roomCode} 
+                          size={80} 
+                          level="H" 
+                          includeMargin={false}
+                          data-testid="qr-room-code"
+                        />
+                      </div>
+                    </div>
+
                     <Button 
-                      size="icon" 
                       variant="ghost" 
-                      onClick={handleCopyCode}
-                      data-testid="button-copy-pairing-url"
+                      className="w-full" 
+                      onClick={handleCopyCode} 
+                      data-testid="button-copy-code"
                     >
-                      {copied ? (
-                        <Check className="w-4 h-4 text-accent" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
+                      {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+                      {copied ? 'Copied!' : 'Copy Code'}
                     </Button>
-                  </div>
-                </div>
 
-                <p className="text-xs text-muted-foreground text-center">
-                  Waiting for your beloved to scan the code...
-                </p>
-              </Card>
-            </motion.div>
-          )}
+                    {loading && (
+                      <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }} 
+                        className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
+                      >
+                        <motion.div animate={{ rotate: [0, 360] }} transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}>
+                          <Leaf className="w-4 h-4 text-sage" />
+                        </motion.div>
+                        <span>Waiting for partner...</span>
+                      </motion.div>
+                    )}
 
-          {mode === 'pairing' && !isCreator && !loading && (
-            <motion.div 
-              key="join-code" 
-              initial={{ opacity: 0, y: 20 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              exit={{ opacity: 0, y: -20 }}
-              className="space-y-4"
-            >
-              <Card className="p-6 space-y-4">
-                <div>
-                  <h2 className="text-lg font-light mb-2">Enter Pairing Code</h2>
-                  <p className="text-xs text-muted-foreground mb-4">
-                    Paste the secure link or enter the room code your beloved shared
-                  </p>
-                </div>
+                    <Button 
+                      onClick={() => { 
+                        if (roomRef.current) closeRoom(roomRef.current); 
+                        setMode('choose'); 
+                        setLoading(false); 
+                      }} 
+                      variant="ghost" 
+                      className="w-full" 
+                      disabled={loading}
+                      data-testid="button-cancel"
+                    >
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-center space-y-2">
+                      <h2 className="text-xl font-light">Enter Code</h2>
+                      <p className="text-sm text-muted-foreground">Your partner will share an 8-character code</p>
+                    </div>
 
-                {error && (
-                  <div className="flex gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded text-sm text-destructive">
-                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                    <span>{error}</span>
-                  </div>
+                    <Input 
+                      type="text" 
+                      placeholder="e.g., A7K9-P2M4" 
+                      value={inputCode} 
+                      onChange={(e) => setInputCode(e.target.value.toUpperCase())} 
+                      disabled={loading} 
+                      data-testid="input-room-code" 
+                      className="text-lg font-mono text-center tracking-widest" 
+                      maxLength={9}
+                    />
+
+                    {isRetrying && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-center py-2"
+                      >
+                        <p className="text-sm text-sage font-light">One moment…</p>
+                        <motion.div
+                          className="flex justify-center gap-1 mt-2"
+                          animate={{ opacity: [0.5, 1, 0.5] }}
+                          transition={{ duration: 1.5, repeat: Infinity }}
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-sage" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-sage" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-sage" />
+                        </motion.div>
+                      </motion.div>
+                    )}
+
+                    <Button 
+                      onClick={handleJoinRoom} 
+                      disabled={loading || !isValidRoomCode(inputCode)} 
+                      className="w-full h-12 hover-elevate" 
+                      data-testid="button-join-room"
+                    >
+                      {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Heart className="w-5 h-5 mr-2" />}
+                      {loading ? 'Connecting...' : 'Connect'}
+                    </Button>
+
+                    <Button 
+                      onClick={() => { setInputCode(''); setMode('choose'); }} 
+                      variant="ghost" 
+                      className="w-full" 
+                      disabled={loading}
+                      data-testid="button-cancel"
+                    >
+                      Back
+                    </Button>
+                  </>
                 )}
-
-                <Input 
-                  placeholder="Paste dodi:// link or room code"
-                  value={inputUrl}
-                  onChange={(e) => {
-                    setInputUrl(e.target.value);
-                    setError('');
-                  }}
-                  data-testid="input-pairing-code"
-                />
-
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={handleJoinRoom} 
-                    className="flex-1"
-                    disabled={!inputUrl.trim()}
-                    data-testid="button-submit-pairing-code"
-                  >
-                    Connect
-                  </Button>
-                  <Button 
-                    onClick={() => {
-                      setMode('choose');
-                      setInputUrl('');
-                      setError('');
-                    }} 
-                    variant="outline"
-                    data-testid="button-back-pairing"
-                  >
-                    Back
-                  </Button>
-                </div>
               </Card>
             </motion.div>
           )}
 
-          {(mode === 'pairing' || isRetrying) && loading && (
+          {mode === 'success-animation' && (
             <motion.div 
-              key="loading" 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center py-12 space-y-4"
+              key="success" 
+              initial={{ opacity: 0, scale: 0.95 }} 
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
             >
-              <motion.div 
-                animate={{ rotate: 360 }} 
-                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-              >
-                <Loader2 className="w-8 h-8 text-sage" />
-              </motion.div>
-              <div className="text-center space-y-1">
-                <p className="text-sm font-light">{isRetrying ? 'One moment…' : 'Connecting securely'}</p>
-                <p className="text-xs text-muted-foreground">
-                  {isCreator ? 'Waiting for your beloved to join...' : 'Verifying secure handshake...'}
-                </p>
-              </div>
+              <Card className="p-8 space-y-6 border-sage/30 shadow-lg text-center">
+                <motion.div 
+                  animate={{ scale: [1, 1.05, 1] }} 
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                >
+                  <Heart className="w-12 h-12 mx-auto text-blush" />
+                </motion.div>
+                <div>
+                  <h2 className="text-xl font-light">Connected</h2>
+                  <p className="text-sm text-muted-foreground mt-1">Your gardens are eternally connected</p>
+                </div>
+              </Card>
             </motion.div>
           )}
         </AnimatePresence>

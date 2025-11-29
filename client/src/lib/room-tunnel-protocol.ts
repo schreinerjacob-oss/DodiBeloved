@@ -1,7 +1,6 @@
 /**
  * Room-based tunnel protocol over PeerJS
- * Implements secure HMAC-based Secret Handshake to prevent unauthorized access
- * Prevents unauthorized users from joining the room and obtaining the master key
+ * Handles X3DH-like ephemeral key exchange + master key transmission
  */
 
 import type { DataConnection } from 'peerjs';
@@ -14,8 +13,6 @@ import {
   createTunnelKeyMessage,
   encryptWithSharedSecret,
   decryptWithSharedSecret,
-  generateProof,
-  verifyProof,
   type EphemeralKeyPair,
   type TunnelMessage,
   type MasterKeyPayload,
@@ -23,27 +20,21 @@ import {
 
 /**
  * Run tunnel protocol as creator (Device A)
- * Uses HMAC-based secret handshake for authorization
  */
 export async function runCreatorTunnel(
   conn: DataConnection,
   userId: string
 ): Promise<MasterKeyPayload> {
-  console.log('🎭 Running creator tunnel protocol with secure handshake...');
+  console.log('🎭 Running creator tunnel protocol...');
   
   // Generate ephemeral keypair
   const ephemeralKeyPair = await generateEphemeralKeyPair();
   console.log('✓ Ephemeral keypair generated');
 
-  // Send our public key with proof
+  // Send our public key
   const initMsg = createTunnelInitMessage(ephemeralKeyPair.publicKey);
-  const initProof = await generateProof(
-    JSON.stringify(initMsg),
-    ephemeralKeyPair.privateKey as any // Using private key as seed for initial proof
-  ).catch(() => '');
-  const initMsgWithProof = { ...initMsg, proof: initProof };
-  conn.send(initMsgWithProof);
-  console.log('✓ Sent tunnel-init with proof');
+  conn.send(initMsg);
+  console.log('✓ Sent tunnel-init');
 
   // Wait for joiner's public key
   const joinInitMsg = (await waitForData<TunnelMessage>(conn)) as TunnelMessage;
@@ -59,24 +50,6 @@ export async function runCreatorTunnel(
   );
   console.log('✓ Shared secret derived');
 
-  // Verify joiner's proof using derived shared secret
-  if (joinInitMsg.proof) {
-    const joinerInitNoProof = {
-      type: joinInitMsg.type,
-      publicKey: joinInitMsg.publicKey,
-    };
-    const proofValid = await verifyProof(
-      JSON.stringify(joinerInitNoProof),
-      joinInitMsg.proof,
-      sharedSecret
-    );
-    if (!proofValid) {
-      console.warn('⚠ Joiner proof verification failed - rejecting unauthorized connection');
-      throw new Error('Unauthorized: Invalid joiner proof');
-    }
-    console.log('✓ Joiner proof verified');
-  }
-
   // Generate master key + salt
   const masterKey = generateMasterKey();
   const salt = generateMasterSalt();
@@ -89,28 +62,20 @@ export async function runCreatorTunnel(
     sharedSecret
   );
   
-  // Generate proof for key message
-  const keyMsg = { type: 'tunnel-key', iv, encrypted };
-  const keyProof = await generateProof(
-    JSON.stringify(keyMsg),
-    sharedSecret
-  );
-
-  // Send encrypted master key with proof
-  conn.send({ ...keyMsg, proof: keyProof });
-  console.log('✓ Master key sent (encrypted with proof)');
+  // Send encrypted master key
+  conn.send({ type: 'tunnel-key', iv, encrypted });
+  console.log('✓ Master key sent (encrypted)');
 
   return payload;
 }
 
 /**
  * Run tunnel protocol as joiner (Device B)
- * Uses HMAC-based secret handshake for authorization
  */
 export async function runJoinerTunnel(
   conn: DataConnection
 ): Promise<MasterKeyPayload> {
-  console.log('🎭 Running joiner tunnel protocol with secure handshake...');
+  console.log('🎭 Running joiner tunnel protocol...');
 
   // Generate ephemeral keypair
   const ephemeralKeyPair = await generateEphemeralKeyPair();
@@ -130,33 +95,10 @@ export async function runJoinerTunnel(
   );
   console.log('✓ Shared secret derived');
 
-  // Verify creator's proof using derived shared secret
-  if (creatorInitMsg.proof) {
-    const creatorInitNoProof = {
-      type: creatorInitMsg.type,
-      publicKey: creatorInitMsg.publicKey,
-    };
-    const proofValid = await verifyProof(
-      JSON.stringify(creatorInitNoProof),
-      creatorInitMsg.proof,
-      sharedSecret
-    );
-    if (!proofValid) {
-      console.warn('⚠ Creator proof verification failed - rejecting unauthorized connection');
-      throw new Error('Unauthorized: Invalid creator proof');
-    }
-    console.log('✓ Creator proof verified');
-  }
-
-  // Send our public key with proof
+  // Send our public key
   const initMsg = createTunnelInitMessage(ephemeralKeyPair.publicKey);
-  const initProof = await generateProof(
-    JSON.stringify(initMsg),
-    sharedSecret
-  );
-  const initMsgWithProof = { ...initMsg, proof: initProof };
-  conn.send(initMsgWithProof);
-  console.log('✓ Sent joiner tunnel-init with proof');
+  conn.send(initMsg);
+  console.log('✓ Sent joiner tunnel-init');
 
   // Wait for encrypted master key
   const keyMsg = (await waitForData<TunnelMessage>(conn)) as TunnelMessage;
@@ -164,25 +106,6 @@ export async function runJoinerTunnel(
     throw new Error('Invalid tunnel-key message');
   }
   console.log('✓ Received encrypted master key');
-
-  // Verify key message proof
-  if (keyMsg.proof) {
-    const keyMsgNoProof = {
-      type: keyMsg.type,
-      iv: keyMsg.iv,
-      encrypted: keyMsg.encrypted,
-    };
-    const proofValid = await verifyProof(
-      JSON.stringify(keyMsgNoProof),
-      keyMsg.proof,
-      sharedSecret
-    );
-    if (!proofValid) {
-      console.warn('⚠ Key message proof verification failed - rejecting message');
-      throw new Error('Unauthorized: Invalid key message proof');
-    }
-    console.log('✓ Key message proof verified');
-  }
 
   // Decrypt master key
   const decrypted = await decryptWithSharedSecret(keyMsg.iv, keyMsg.encrypted, sharedSecret);
