@@ -14,6 +14,7 @@ import {
   type TunnelMessage,
   type MasterKeyPayload,
 } from '@/lib/tunnel-handshake';
+import type { DataConnection } from 'peerjs';
 
 interface PeerConnectionState {
   connected: boolean;

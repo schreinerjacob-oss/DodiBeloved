@@ -114,10 +114,10 @@ export function waitForMessage<T = unknown>(
       reject(new Error('Message timeout'));
     }, timeout);
 
-    const handler = (data: T) => {
+    const handler = (data: unknown) => {
       clearTimeout(timer);
       conn.off('data', handler);
-      resolve(data);
+      resolve(data as T);
     };
 
     conn.on('data', handler);

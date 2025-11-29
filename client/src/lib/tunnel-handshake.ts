@@ -140,6 +140,16 @@ export interface TunnelMessage {
   fingerprint?: string;
 }
 
+/**
+ * Message wrapper for PeerJS room protocol
+ */
+export interface RoomProtocolMessage {
+  type: 'tunnel-init' | 'tunnel-key' | 'tunnel-ack';
+  publicKey?: string;
+  iv?: string;
+  encrypted?: string;
+}
+
 export function createTunnelInitMessage(publicKey: string): TunnelMessage {
   return {
     type: 'tunnel-init',
