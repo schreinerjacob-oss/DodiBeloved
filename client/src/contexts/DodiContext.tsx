@@ -25,6 +25,7 @@ interface DodiContextType {
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
   completePairing: (partnerId: string, passphrase: string) => Promise<string>;
   completePairingWithMasterKey: (masterKey: string, salt: string, creatorId: string) => Promise<void>;
+  completePairingAsCreator: (masterKey: string, salt: string, joinerId: string) => Promise<void>;
   setPartnerIdForCreator: (newPartnerId: string) => Promise<void>;
   onPeerConnected: () => void;
   setPIN: (pin: string) => Promise<void>;
@@ -231,6 +232,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     
     let currentUserId = userId;
     
+    // Joiner: ensure we have a userId that's different from creator
     if (!currentUserId || currentUserId === creatorId) {
       do {
         currentUserId = nanoid();
@@ -257,7 +259,36 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       setShowPinSetup(true);
     }
     
-    console.log('Pairing completed with tunnel master key');
+    console.log('📋 [ID AUDIT] Joiner pairing completed:', { userId: currentUserId, partnerId: creatorId, masterKey: masterKey.substring(0, 8) + '...' });
+  };
+
+  // Called by creator after receiving joiner's ID via tunnel ACK
+  const completePairingAsCreator = async (masterKey: string, salt: string, joinerId: string) => {
+    if (!masterKey || !salt || !joinerId) {
+      throw new Error('Master key, salt, and joiner ID are required');
+    }
+    
+    if (!userId) {
+      throw new Error('Creator user ID not initialized');
+    }
+    
+    const db = await initDB();
+    
+    // Creator: keep existing userId, store joiner as partnerId
+    await db.put('settings', { key: 'passphrase', value: masterKey });
+    await db.put('settings', { key: 'salt', value: salt });
+    await db.put('settings', { key: 'partnerId', value: joinerId });
+    await db.put('settings', { key: 'pairingStatus', value: 'connected' });
+    
+    setPassphrase(masterKey);
+    setPairingStatus('connected');
+    
+    // Show PIN setup on successful pairing
+    if (!pinEnabled) {
+      setShowPinSetup(true);
+    }
+    
+    console.log('📋 [ID AUDIT] Creator pairing completed:', { userId, partnerId: joinerId, masterKey: masterKey.substring(0, 8) + '...' });
   };
 
   // Called by creator to set partner ID after joiner has joined
@@ -395,6 +426,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         initializePairing,
         completePairing,
         completePairingWithMasterKey,
+        completePairingAsCreator,
         setPartnerIdForCreator,
         onPeerConnected,
         setPIN: setPINHandler,

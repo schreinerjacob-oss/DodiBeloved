@@ -16,7 +16,7 @@ import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_
 type Mode = 'choose' | 'pairing' | 'success-animation';
 
 export default function PairingPage() {
-  const { completePairingWithMasterKey, setPartnerIdForCreator, onPeerConnected, pairingStatus, userId } = useDodi();
+  const { completePairingWithMasterKey, completePairingAsCreator, onPeerConnected, pairingStatus, userId } = useDodi();
   const { toast } = useToast();
   
   const [mode, setMode] = useState<Mode>('choose');
@@ -36,16 +36,32 @@ export default function PairingPage() {
     }
   }, [pairingStatus]);
 
-  const handleMasterKeyReceived = async (payload: any) => {
+  const handleMasterKeyReceived = async (payload: any, isCreatorRole: boolean) => {
     try {
       console.log('📋 [ID AUDIT] Master key payload received:', {
         creatorId: payload.creatorId,
         joinerId: payload.joinerId,
         hasMasterKey: !!payload.masterKey,
         hasSalt: !!payload.salt,
+        isCreatorRole,
       });
       
-      await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
+      if (isCreatorRole) {
+        // Creator: store masterKey and joiner's ID
+        if (!payload.joinerId) {
+          throw new Error('Joiner ID not received in tunnel');
+        }
+        console.log('💾 [ID AUDIT] Creator calling completePairingAsCreator with joinerId:', payload.joinerId);
+        await completePairingAsCreator(payload.masterKey, payload.salt, payload.joinerId);
+      } else {
+        // Joiner: store masterKey and creator's ID
+        if (!payload.creatorId) {
+          throw new Error('Creator ID not received in tunnel');
+        }
+        console.log('💾 [ID AUDIT] Joiner calling completePairingWithMasterKey with creatorId:', payload.creatorId);
+        await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
+      }
+      
       onPeerConnected();
       if (roomRef.current) closeRoom(roomRef.current);
       setShowSuccess(true);
@@ -99,20 +115,13 @@ export default function PairingPage() {
           hasJoinerId: !!payload.joinerId,
         });
         
-        if (!payload.joinerId) {
-          throw new Error('Joiner ID not received in tunnel');
-        }
-        
-        console.log('💾 [ID AUDIT] Creator storing partner ID:', payload.joinerId);
-        await setPartnerIdForCreator(payload.joinerId);
-        
         console.log('✅ [ID AUDIT] Creator pairing complete:', {
           myId: userId,
           partnerId: payload.joinerId,
           idMismatch: userId === payload.joinerId,
         });
         
-        await handleMasterKeyReceived(payload);
+        await handleMasterKeyReceived(payload, true);
       });
       
       connPromise.catch((error) => {
@@ -172,7 +181,7 @@ export default function PairingPage() {
         idMismatch: userId === payload.creatorId,
       });
       
-      await handleMasterKeyReceived(payload);
+      await handleMasterKeyReceived(payload, false);
     } catch (error) {
       console.error(`Join room error (${isRetry ? 'retry' : 'attempt'} ${retryCountRef.current}):`, error);
       
