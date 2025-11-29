@@ -15,6 +15,7 @@ import {
   type MasterKeyPayload,
 } from '@/lib/tunnel-handshake';
 import type { DataConnection } from 'peerjs';
+import Peer from 'peerjs';
 
 interface PeerConnectionState {
   connected: boolean;
@@ -37,7 +38,7 @@ interface UsePeerConnectionReturn {
 }
 
 export function usePeerConnection(): UsePeerConnectionReturn {
-  const { userId } = useDodi();
+  const { userId, partnerId, isPaired } = useDodi();
   const [state, setState] = useState<PeerConnectionState>({
     connected: false,
     connecting: false,
@@ -53,6 +54,8 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   const sharedSecretRef = useRef<CryptoKey | null>(null);
   const isCreatorRef = useRef<boolean>(false);
   const tunnelCompleteCallbackRef = useRef<((payload: MasterKeyPayload) => void) | null>(null);
+  const peerJsRef = useRef<Peer | null>(null);
+  const autoConnectAttemptRef = useRef<number>(0);
 
   const cleanupPeer = useCallback(() => {
     if (channelRef.current) {
@@ -438,6 +441,144 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   const setOnTunnelComplete = useCallback((cb: (payload: MasterKeyPayload) => void) => {
     tunnelCompleteCallbackRef.current = cb;
   }, []);
+
+  // Auto-connect using PeerJS when paired
+  useEffect(() => {
+    if (!userId || !partnerId || !isPaired) {
+      console.log('Cannot auto-connect: missing credentials or not paired', { userId, partnerId, isPaired });
+      return;
+    }
+
+    console.log('Setting up auto-connect via PeerJS to partner:', partnerId);
+    let peerInstance: Peer | null = null;
+
+    const setupAutoConnect = async () => {
+      try {
+        if (peerJsRef.current) {
+          console.log('PeerJS already initialized');
+          return;
+        }
+
+        // Initialize PeerJS
+        peerInstance = new Peer(userId, {
+          iceServers: [
+            { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }
+          ]
+        });
+
+        peerJsRef.current = peerInstance;
+
+        peerInstance.on('error', (err) => {
+          console.error('PeerJS error:', err);
+          setState(prev => ({ ...prev, error: `PeerJS error: ${err.message}` }));
+        });
+
+        peerInstance.on('open', () => {
+          console.log('PeerJS connection opened, attempting to connect to partner:', partnerId);
+          // Connect to partner
+          const conn = peerInstance!.connect(partnerId, { reliable: true });
+          
+          conn.on('open', () => {
+            console.log('Data connection to partner opened');
+            if (channelRef.current) {
+              // Already have a manual connection, keep it
+              conn.close();
+              return;
+            }
+            // Create a pseudo-DataChannel-like interface
+            setupAutoConnectChannel(conn);
+          });
+
+          conn.on('error', (err) => {
+            console.error('Data connection error:', err);
+            setState(prev => ({ ...prev, error: `Connection error: ${err.message}` }));
+          });
+        });
+
+        peerInstance.on('connection', (conn: DataConnection) => {
+          console.log('Incoming connection from partner');
+          if (channelRef.current) {
+            // Already connected, close duplicate
+            conn.close();
+            return;
+          }
+          setupAutoConnectChannel(conn);
+        });
+      } catch (error) {
+        console.error('Failed to setup auto-connect:', error);
+        setState(prev => ({ ...prev, error: 'Failed to setup connection' }));
+      }
+    };
+
+    const setupAutoConnectChannel = (conn: DataConnection) => {
+      // Convert DataConnection to look like RTCDataChannel for compatibility
+      const handlers: { [key: string]: Function[] } = {
+        open: [],
+        close: [],
+        message: [],
+        error: [],
+      };
+
+      const channel = {
+        readyState: 'open' as const,
+        addEventListener: (event: string, handler: Function) => {
+          if (!handlers[event]) handlers[event] = [];
+          handlers[event].push(handler);
+        },
+        removeEventListener: (event: string, handler: Function) => {
+          if (handlers[event]) {
+            handlers[event] = handlers[event].filter(h => h !== handler);
+          }
+        },
+        send: (data: string) => {
+          try {
+            conn.send(data);
+          } catch (e) {
+            console.error('Error sending via DataConnection:', e);
+          }
+        },
+        close: () => conn.close(),
+      };
+
+      conn.on('open', () => {
+        console.log('Auto-connect channel ready');
+        handlers['open'].forEach(h => h(new Event('open')));
+      });
+
+      conn.on('close', () => {
+        console.log('Auto-connect channel closed');
+        handlers['close'].forEach(h => h(new Event('close')));
+      });
+
+      conn.on('data', (data: any) => {
+        const messageEvent = new Event('message');
+        (messageEvent as any).data = typeof data === 'string' ? data : JSON.stringify(data);
+        handlers['message'].forEach(h => h(messageEvent));
+      });
+
+      conn.on('error', (err) => {
+        const errorEvent = new Event('error');
+        (errorEvent as any).error = err;
+        handlers['error'].forEach(h => h(errorEvent));
+      });
+
+      setupChannelListeners(channel as unknown as RTCDataChannel);
+    };
+
+    setupAutoConnect();
+
+    return () => {
+      if (peerJsRef.current) {
+        console.log('Closing PeerJS connection');
+        try {
+          peerJsRef.current.destroy();
+        } catch (e) {
+          console.error('Error destroying PeerJS:', e);
+        }
+        peerJsRef.current = null;
+      }
+    };
+  }, [userId, partnerId, isPaired, setupChannelListeners]);
 
   useEffect(() => {
     return () => {
