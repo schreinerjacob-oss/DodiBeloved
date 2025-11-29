@@ -93,8 +93,8 @@ export default function PrayersPage() {
 
     ws.addEventListener('message', handleMessage);
     
-    // Request partner's prayer history on connection
-    const requestHistoryTimeout = setTimeout(() => {
+    // Request partner's prayer history with retry interval
+    const requestPrayerHistory = () => {
       if (ws.readyState === WebSocket.OPEN && partnerId) {
         console.log('Requesting partner prayer history...');
         sendWS({
@@ -102,13 +102,16 @@ export default function PrayersPage() {
           data: { requesterId: userId },
         });
       }
-    }, 500);
+    };
+    
+    requestPrayerHistory();
+    const historyInterval = setInterval(requestPrayerHistory, 3000);
     
     return () => {
-      clearTimeout(requestHistoryTimeout);
+      clearInterval(historyInterval);
       ws.removeEventListener('message', handleMessage);
     };
-  }, [ws, partnerId, userId]);
+  }, [ws, partnerId, userId, sendWS]);
 
   const loadPrayers = async () => {
     const allPrayers = await getAllPrayers();

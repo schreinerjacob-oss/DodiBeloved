@@ -90,8 +90,8 @@ export default function FutureLettersPage() {
 
     ws.addEventListener('message', handleMessage);
     
-    // Request partner's future letter history on connection
-    const requestHistoryTimeout = setTimeout(() => {
+    // Request partner's future letter history with retry interval
+    const requestFutureLetterHistory = () => {
       if (ws.readyState === WebSocket.OPEN && partnerId) {
         console.log('Requesting partner future letter history...');
         sendWS({
@@ -99,13 +99,16 @@ export default function FutureLettersPage() {
           data: { requesterId: userId },
         });
       }
-    }, 500);
+    };
+    
+    requestFutureLetterHistory();
+    const historyInterval = setInterval(requestFutureLetterHistory, 3000);
     
     return () => {
-      clearTimeout(requestHistoryTimeout);
+      clearInterval(historyInterval);
       ws.removeEventListener('message', handleMessage);
     };
-  }, [ws, partnerId, userId]);
+  }, [ws, partnerId, userId, sendWS]);
 
   const loadLetters = async () => {
     const allLetters = await getAllFutureLetters();

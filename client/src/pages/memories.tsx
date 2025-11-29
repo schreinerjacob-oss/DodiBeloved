@@ -93,8 +93,8 @@ export default function MemoriesPage() {
 
     ws.addEventListener('message', handleMessage);
     
-    // Request partner's memory history on connection
-    const requestHistoryTimeout = setTimeout(() => {
+    // Request partner's memory history with retry interval
+    const requestMemoryHistory = () => {
       if (ws.readyState === WebSocket.OPEN && partnerId) {
         console.log('Requesting partner memory history...');
         sendWS({
@@ -102,13 +102,16 @@ export default function MemoriesPage() {
           data: { requesterId: userId },
         });
       }
-    }, 500);
+    };
+    
+    requestMemoryHistory();
+    const historyInterval = setInterval(requestMemoryHistory, 3000);
     
     return () => {
-      clearTimeout(requestHistoryTimeout);
+      clearInterval(historyInterval);
       ws.removeEventListener('message', handleMessage);
     };
-  }, [ws, partnerId, userId]);
+  }, [ws, partnerId, userId, sendWS]);
 
   const loadMemories = async () => {
     const allMemories = await getAllMemories();

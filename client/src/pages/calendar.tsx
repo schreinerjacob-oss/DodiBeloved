@@ -102,8 +102,8 @@ export default function CalendarPage() {
 
     ws.addEventListener('message', handleMessage);
     
-    // Request partner's calendar history on connection
-    const requestHistoryTimeout = setTimeout(() => {
+    // Request partner's calendar history with retry interval
+    const requestCalendarHistory = () => {
       if (ws.readyState === WebSocket.OPEN && partnerId) {
         console.log('Requesting partner calendar history...');
         sendWS({
@@ -111,13 +111,16 @@ export default function CalendarPage() {
           data: { requesterId: userId },
         });
       }
-    }, 500);
+    };
+    
+    requestCalendarHistory();
+    const historyInterval = setInterval(requestCalendarHistory, 3000);
     
     return () => {
-      clearTimeout(requestHistoryTimeout);
+      clearInterval(historyInterval);
       ws.removeEventListener('message', handleMessage);
     };
-  }, [ws, partnerId, userId]);
+  }, [ws, partnerId, userId, sendWS]);
 
   const loadEvents = async () => {
     const allEvents = await getAllCalendarEvents();

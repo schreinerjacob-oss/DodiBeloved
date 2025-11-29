@@ -90,8 +90,8 @@ export default function LoveLettersPage() {
 
     ws.addEventListener('message', handleMessage);
     
-    // Request partner's letter history on connection
-    const requestHistoryTimeout = setTimeout(() => {
+    // Request partner's letter history with retry interval
+    const requestLetterHistory = () => {
       if (ws.readyState === WebSocket.OPEN && partnerId) {
         console.log('Requesting partner letter history...');
         sendWS({
@@ -99,13 +99,16 @@ export default function LoveLettersPage() {
           data: { requesterId: userId },
         });
       }
-    }, 500);
+    };
+    
+    requestLetterHistory();
+    const historyInterval = setInterval(requestLetterHistory, 3000);
     
     return () => {
-      clearTimeout(requestHistoryTimeout);
+      clearInterval(historyInterval);
       ws.removeEventListener('message', handleMessage);
     };
-  }, [ws, partnerId, userId]);
+  }, [ws, partnerId, userId, sendWS]);
 
   const loadLetters = async () => {
     const allLetters = await getAllLoveLetters();

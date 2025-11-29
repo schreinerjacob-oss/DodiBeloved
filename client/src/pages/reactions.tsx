@@ -90,8 +90,8 @@ export default function ReactionsPage() {
 
     ws.addEventListener('message', handleMessage);
     
-    // Request partner's reaction history on connection
-    const requestHistoryTimeout = setTimeout(() => {
+    // Request partner's reaction history with retry interval
+    const requestReactionHistory = () => {
       if (ws.readyState === WebSocket.OPEN && partnerId) {
         console.log('Requesting partner reaction history...');
         sendWS({
@@ -99,13 +99,16 @@ export default function ReactionsPage() {
           data: { requesterId: userId },
         });
       }
-    }, 500);
+    };
+    
+    requestReactionHistory();
+    const historyInterval = setInterval(requestReactionHistory, 3000);
     
     return () => {
-      clearTimeout(requestHistoryTimeout);
+      clearInterval(historyInterval);
       ws.removeEventListener('message', handleMessage);
     };
-  }, [ws, partnerId, userId]);
+  }, [ws, partnerId, userId, sendWS]);
 
   const loadReactions = async () => {
     const allReactions = await getAllReactions();

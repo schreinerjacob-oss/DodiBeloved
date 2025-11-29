@@ -104,8 +104,8 @@ export default function DailyRitualPage() {
 
     ws.addEventListener('message', handleMessage);
     
-    // Request partner's ritual history on connection
-    const requestHistoryTimeout = setTimeout(() => {
+    // Request partner's ritual history with retry interval
+    const requestRitualHistory = () => {
       if (ws.readyState === WebSocket.OPEN && partnerId) {
         console.log('Requesting partner ritual history...');
         sendWS({
@@ -113,13 +113,16 @@ export default function DailyRitualPage() {
           data: { requesterId: userId },
         });
       }
-    }, 500);
+    };
+    
+    requestRitualHistory();
+    const historyInterval = setInterval(requestRitualHistory, 3000);
     
     return () => {
-      clearTimeout(requestHistoryTimeout);
+      clearInterval(historyInterval);
       ws.removeEventListener('message', handleMessage);
     };
-  }, [ws, partnerId, userId]);
+  }, [ws, partnerId, userId, sendWS]);
 
   const loadRituals = async () => {
     const allRituals = await getAllDailyRituals();
