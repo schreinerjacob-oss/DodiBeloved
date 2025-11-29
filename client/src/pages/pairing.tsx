@@ -10,13 +10,13 @@ import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateRoomCode, normalizeRoomCode, isValidRoomCode } from '@/lib/room-codes';
 import { initializePeer, createRoomPeerId, getRemotePeerId, waitForConnection, connectToRoom, closeRoom, type RoomConnection } from '@/lib/peerjs-room';
-import { runCreatorTunnel, runJoinerTunnel } from '@/lib/room-tunnel-protocol';
+import { runCreatorTunnel, runJoinerTunnel, sendPairingAck } from '@/lib/room-tunnel-protocol';
 import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
 
 type Mode = 'choose' | 'pairing' | 'success-animation';
 
 export default function PairingPage() {
-  const { completePairingWithMasterKey, onPeerConnected, pairingStatus, userId } = useDodi();
+  const { completePairingWithMasterKey, setPartnerIdForCreator, onPeerConnected, pairingStatus, userId } = useDodi();
   const { toast } = useToast();
   
   const [mode, setMode] = useState<Mode>('choose');
@@ -71,6 +71,9 @@ export default function PairingPage() {
       const connPromise = waitForConnection(peer, 120000).then(async (conn) => {
         roomRef.current = { peer, conn, isCreator: true, peerId: myPeerId };
         const payload = await runCreatorTunnel(conn, userId || '');
+        if (payload.joinerId) {
+          await setPartnerIdForCreator(payload.joinerId);
+        }
         await handleMasterKeyReceived(payload);
       });
       
@@ -102,6 +105,9 @@ export default function PairingPage() {
       const conn = await connectToRoom(peer, remotePeerId, 6000);
       roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
       const payload = await runJoinerTunnel(conn);
+      if (userId) {
+        await sendPairingAck(conn, userId);
+      }
       await handleMasterKeyReceived(payload);
     } catch (error) {
       console.error(`Join room error (${isRetry ? 'retry' : 'attempt'} ${retryCountRef.current}):`, error);

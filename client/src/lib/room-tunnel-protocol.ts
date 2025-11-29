@@ -66,7 +66,14 @@ export async function runCreatorTunnel(
   conn.send({ type: 'tunnel-key', iv, encrypted });
   console.log('✓ Master key sent (encrypted)');
 
-  return payload;
+  // Wait for joiner's ACK with their user ID
+  const ackMsg = (await waitForData<TunnelMessage>(conn)) as TunnelMessage;
+  if (ackMsg.type !== 'tunnel-ack' || !ackMsg.joinerId) {
+    throw new Error('Invalid pairing acknowledgment from joiner');
+  }
+  console.log('✓ Received pairing ACK from joiner:', ackMsg.joinerId);
+
+  return { ...payload, joinerId: ackMsg.joinerId };
 }
 
 /**
@@ -113,6 +120,18 @@ export async function runJoinerTunnel(
   console.log('✓ Master key decrypted and verified');
 
   return payload;
+}
+
+/**
+ * Send joiner's ACK to creator with user ID (called by joiner after tunnel)
+ */
+export async function sendPairingAck(
+  conn: DataConnection,
+  joinerId: string
+): Promise<void> {
+  console.log('🎭 Sending pairing ACK to creator...');
+  conn.send({ type: 'tunnel-ack', joinerId });
+  console.log('✓ Pairing ACK sent');
 }
 
 /**

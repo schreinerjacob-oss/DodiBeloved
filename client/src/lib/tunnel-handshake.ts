@@ -14,6 +14,7 @@ export interface MasterKeyPayload {
   masterKey: string;
   salt: string;
   creatorId: string;
+  joinerId?: string;
 }
 
 export async function generateEphemeralKeyPair(): Promise<EphemeralKeyPair> {
@@ -136,6 +137,7 @@ export interface TunnelMessage {
   type: 'tunnel-init' | 'tunnel-key' | 'tunnel-ack';
   publicKey?: string;
   iv?: string;
+  joinerId?: string;
   encrypted?: string;
   fingerprint?: string;
 }
