@@ -1,9 +1,10 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { generatePassphrase, generateSalt, arrayBufferToBase64, base64ToArrayBuffer } from '@/lib/crypto';
 import { saveSetting, getSetting, initDB, clearEncryptionCache, savePIN, verifyPIN } from '@/lib/storage-encrypted';
 import { getTrialStatus } from '@/lib/storage-subscription';
 import { useInactivityTimer } from '@/hooks/use-inactivity-timer';
 import { nanoid } from 'nanoid';
+import type { DataConnection } from 'peerjs';
 
 type PairingStatus = 'unpaired' | 'waiting' | 'connected';
 
@@ -21,6 +22,8 @@ interface DodiContextType {
   pinEnabled: boolean;
   showPinSetup: boolean;
   inactivityMinutes: number;
+  peerDataConnection: DataConnection | null;
+  setPeerDataConnection: (conn: DataConnection | null) => void;
   initializeProfile: (displayName: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
   completePairing: (partnerId: string, passphrase: string) => Promise<string>;
@@ -50,6 +53,9 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const [pinEnabled, setPinEnabled] = useState(false);
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [inactivityMinutes, setInactivityMinutesState] = useState(10);
+        peerDataConnection,
+        setPeerDataConnection,
+  const [peerDataConnection, setPeerDataConnection] = useState<DataConnection | null>(null);
 
   // Convenience getter
   const isPaired = pairingStatus === 'connected';
@@ -342,6 +348,8 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   useInactivityTimer({
     onInactivity: lockAppHandler,
     timeoutMinutes: inactivityMinutes,
+        peerDataConnection,
+        setPeerDataConnection,
     enabled: pinEnabled && pairingStatus === 'connected',
   });
 
@@ -391,6 +399,8 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         pinEnabled,
         showPinSetup,
         inactivityMinutes,
+        peerDataConnection,
+        setPeerDataConnection,
         initializeProfile,
         initializePairing,
         completePairing,
