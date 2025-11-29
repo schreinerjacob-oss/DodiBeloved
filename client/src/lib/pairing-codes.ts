@@ -1,3 +1,5 @@
+import LZString from 'lz-string';
+
 export interface PairingPayload {
   creatorId: string;
   passphrase: string;
@@ -14,11 +16,31 @@ export interface JoinerResponse {
 }
 
 export function encodePairingPayload(payload: PairingPayload): string {
-  return btoa(JSON.stringify(payload));
+  try {
+    const jsonString = JSON.stringify(payload);
+    // Compress to reduce QR code size
+    const compressed = LZString.compressToEncodedURIComponent(jsonString);
+    console.log('Pairing payload compressed:', {
+      original: jsonString.length,
+      compressed: compressed.length,
+      ratio: (compressed.length / jsonString.length * 100).toFixed(1) + '%',
+    });
+    return compressed;
+  } catch (error) {
+    console.error('Error encoding pairing payload:', error);
+    // Fallback to uncompressed if compression fails
+    return btoa(JSON.stringify(payload));
+  }
 }
 
 export function decodePairingPayload(encoded: string): PairingPayload | null {
   try {
+    // Try decompressing first
+    const decompressed = LZString.decompressFromEncodedURIComponent(encoded);
+    if (decompressed) {
+      return JSON.parse(decompressed);
+    }
+    // Fallback to old format (uncompressed base64)
     return JSON.parse(atob(encoded));
   } catch {
     return null;
@@ -40,11 +62,31 @@ export async function generateShortCode(answer: string, sessionId: string): Prom
 }
 
 export function encodeJoinerResponse(response: JoinerResponse): string {
-  return btoa(JSON.stringify(response));
+  try {
+    const jsonString = JSON.stringify(response);
+    // Compress to reduce QR code size
+    const compressed = LZString.compressToEncodedURIComponent(jsonString);
+    console.log('Joiner response compressed:', {
+      original: jsonString.length,
+      compressed: compressed.length,
+      ratio: (compressed.length / jsonString.length * 100).toFixed(1) + '%',
+    });
+    return compressed;
+  } catch (error) {
+    console.error('Error encoding joiner response:', error);
+    // Fallback to uncompressed if compression fails
+    return btoa(JSON.stringify(response));
+  }
 }
 
 export function decodeJoinerResponse(encoded: string): JoinerResponse | null {
   try {
+    // Try decompressing first
+    const decompressed = LZString.decompressFromEncodedURIComponent(encoded);
+    if (decompressed) {
+      return JSON.parse(decompressed);
+    }
+    // Fallback to old format (uncompressed base64)
     return JSON.parse(atob(encoded));
   } catch {
     return null;
