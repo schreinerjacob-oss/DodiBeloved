@@ -55,8 +55,16 @@ export async function runCreatorTunnel(
   const salt = generateMasterSalt();
   console.log('✓ Master key generated');
 
-  // Encrypt payload with shared secret
-  const payload: MasterKeyPayload = { masterKey, salt, creatorId: userId };
+  // Wait for joiner's ID (sent after tunnel-init)
+  const joinerIdMsg = (await waitForData<{ joinerId: string }>(conn)) as { joinerId: string };
+  if (!joinerIdMsg.joinerId) {
+    throw new Error('Joiner did not send their ID');
+  }
+  const joinerId = joinerIdMsg.joinerId;
+  console.log('✓ Received joiner ID:', joinerId);
+
+  // Encrypt payload with shared secret (including joiner ID for acknowledgment)
+  const payload: MasterKeyPayload = { masterKey, salt, creatorId: userId, joinerId };
   const { iv, encrypted } = await encryptWithSharedSecret(
     JSON.stringify(payload),
     sharedSecret
@@ -73,7 +81,8 @@ export async function runCreatorTunnel(
  * Run tunnel protocol as joiner (Device B)
  */
 export async function runJoinerTunnel(
-  conn: DataConnection
+  conn: DataConnection,
+  joinerId: string
 ): Promise<MasterKeyPayload> {
   console.log('🎭 Running joiner tunnel protocol...');
 
@@ -99,6 +108,10 @@ export async function runJoinerTunnel(
   const initMsg = createTunnelInitMessage(ephemeralKeyPair.publicKey);
   conn.send(initMsg);
   console.log('✓ Sent joiner tunnel-init');
+
+  // Send our ID to creator
+  conn.send({ joinerId });
+  console.log('✓ Sent joiner ID to creator');
 
   // Wait for encrypted master key
   const keyMsg = (await waitForData<TunnelMessage>(conn)) as TunnelMessage;

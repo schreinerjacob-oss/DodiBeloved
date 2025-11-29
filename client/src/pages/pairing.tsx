@@ -36,9 +36,15 @@ export default function PairingPage() {
     }
   }, [pairingStatus]);
 
-  const handleMasterKeyReceived = async (payload: any) => {
+  const handleMasterKeyReceived = async (payload: any, isCreator: boolean = false) => {
     try {
-      await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
+      if (isCreator && payload.joinerId) {
+        // Creator learning joiner's ID from encrypted payload
+        await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId, payload.joinerId);
+      } else {
+        // Joiner learning creator's ID
+        await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
+      }
       onPeerConnected();
       if (roomRef.current) closeRoom(roomRef.current);
       setShowSuccess(true);
@@ -71,7 +77,7 @@ export default function PairingPage() {
       const connPromise = waitForConnection(peer, 120000).then(async (conn) => {
         roomRef.current = { peer, conn, isCreator: true, peerId: myPeerId };
         const payload = await runCreatorTunnel(conn, userId || '');
-        await handleMasterKeyReceived(payload);
+        await handleMasterKeyReceived(payload, true);
       });
       
       connPromise.catch((error) => {
@@ -101,8 +107,8 @@ export default function PairingPage() {
       const remotePeerId = getRemotePeerId(normalCode, false);
       const conn = await connectToRoom(peer, remotePeerId, 6000);
       roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
-      const payload = await runJoinerTunnel(conn);
-      await handleMasterKeyReceived(payload);
+      const payload = await runJoinerTunnel(conn, userId || '');
+      await handleMasterKeyReceived(payload, false);
     } catch (error) {
       console.error(`Join room error (${isRetry ? 'retry' : 'attempt'} ${retryCountRef.current}):`, error);
       

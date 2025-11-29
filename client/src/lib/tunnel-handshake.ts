@@ -14,6 +14,7 @@ export interface MasterKeyPayload {
   masterKey: string;
   salt: string;
   creatorId: string;
+  joinerId?: string;
 }
 
 export async function generateEphemeralKeyPair(): Promise<EphemeralKeyPair> {

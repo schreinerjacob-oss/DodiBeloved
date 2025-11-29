@@ -24,7 +24,7 @@ interface DodiContextType {
   initializeProfile: (displayName: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
   completePairing: (partnerId: string, passphrase: string) => Promise<string>;
-  completePairingWithMasterKey: (masterKey: string, salt: string, creatorId: string) => Promise<void>;
+  completePairingWithMasterKey: (masterKey: string, salt: string, creatorId: string, joinerId?: string) => Promise<void>;
   setPartnerIdForCreator: (newPartnerId: string) => Promise<void>;
   onPeerConnected: () => void;
   setPIN: (pin: string) => Promise<void>;
@@ -223,14 +223,26 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     return currentUserId; // Return the joiner's userId for the answer QR
   };
 
-  // Called by joiner when receiving master key via tunnel
-  const completePairingWithMasterKey = async (masterKey: string, salt: string, creatorId: string) => {
+  // Called by joiner when receiving master key via tunnel, or by creator when receiving joiner ID
+  const completePairingWithMasterKey = async (masterKey: string, salt: string, creatorId: string, joinerId?: string) => {
     if (!masterKey || !salt || !creatorId) {
       throw new Error('Master key, salt, and creator ID are required');
     }
     
     let currentUserId = userId;
     
+    // If we're the creator and receiving a joinerId, validate it
+    if (joinerId && creatorId === userId) {
+      // Creator learning joiner's ID
+      await saveSetting('partnerId', joinerId);
+      setPartnerId(joinerId);
+      await saveSetting('pairingStatus', 'connected');
+      setPairingStatus('connected');
+      console.log('Creator stored joiner ID and marked as connected:', joinerId);
+      return;
+    }
+    
+    // Joiner path: validate creatorId is not same as our userId
     if (!currentUserId || currentUserId === creatorId) {
       do {
         currentUserId = nanoid();
