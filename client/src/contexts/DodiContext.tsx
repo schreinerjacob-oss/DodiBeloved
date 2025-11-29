@@ -24,7 +24,7 @@ interface DodiContextType {
   initializeProfile: (displayName: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
   completePairing: (partnerId: string, passphrase: string) => Promise<string>;
-  completePairingWithMasterKey: (masterKey: string, salt: string, partnerId: string) => Promise<void>;
+  completePairingWithMasterKey: (masterKey: string, salt: string, creatorId: string) => Promise<void>;
   setPartnerIdForCreator: (newPartnerId: string) => Promise<void>;
   onPeerConnected: () => void;
   setPIN: (pin: string) => Promise<void>;
@@ -223,24 +223,32 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     return currentUserId; // Return the joiner's userId for the answer QR
   };
 
-  // Called when completing pairing handshake
-  const completePairingWithMasterKey = async (masterKey: string, salt: string, partnerId: string) => {
-    if (!masterKey || !salt || !partnerId) {
-      throw new Error('Master key, salt, and partner ID are required');
+  // Called by joiner when receiving master key via tunnel
+  const completePairingWithMasterKey = async (masterKey: string, salt: string, creatorId: string) => {
+    if (!masterKey || !salt || !creatorId) {
+      throw new Error('Master key, salt, and creator ID are required');
     }
     
-    // Use saveSetting to write to both localStorage and IndexedDB
-    await Promise.all([
-      saveSetting('passphrase', masterKey),
-      saveSetting('salt', salt),
-      saveSetting('partnerId', partnerId),
-      saveSetting('pairingStatus', 'connected'),
-    ]);
+    let currentUserId = userId;
     
-    // Clear encryption cache to reset stale in-memory keys
-    clearEncryptionCache();
+    if (!currentUserId || currentUserId === creatorId) {
+      do {
+        currentUserId = nanoid();
+      } while (currentUserId === creatorId);
+      
+      await saveSetting('userId', currentUserId);
+      setUserId(currentUserId);
+    }
     
-    setPartnerId(partnerId);
+    const db = await initDB();
+    
+    // Store the master key as the passphrase (for compatibility with existing encryption system)
+    await db.put('settings', { key: 'passphrase', value: masterKey });
+    await db.put('settings', { key: 'salt', value: salt });
+    await db.put('settings', { key: 'partnerId', value: creatorId });
+    await db.put('settings', { key: 'pairingStatus', value: 'connected' });
+    
+    setPartnerId(creatorId);
     setPassphrase(masterKey);
     setPairingStatus('connected');
     
