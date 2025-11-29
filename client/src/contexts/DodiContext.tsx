@@ -157,25 +157,29 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Called by creator when generating pairing credentials
+  // IMPORTANT: Uses the EXISTING userId from initializeProfile - does NOT generate a new one
   const initializePairing = async () => {
-    const newUserId = nanoid();
+    if (!userId) {
+      throw new Error('User profile must be initialized before starting pairing');
+    }
+    
     const newPassphrase = generatePassphrase();
     const saltBase64 = arrayBufferToBase64(generateSalt());
     
     await Promise.all([
-      saveSetting('userId', newUserId),
       saveSetting('passphrase', newPassphrase),
       saveSetting('salt', saltBase64),
       saveSetting('pairingStatus', 'waiting'), // Creator is WAITING, not connected
     ]);
     
-    setUserId(newUserId);
+    // CRITICAL: Do NOT modify userId - it was already set by initializeProfile()
     setPassphrase(newPassphrase);
     setPartnerId(null);
     setPairingStatus('waiting'); // Stay on pairing page, show QR code
     
+    console.log('🔑 [ID AUDIT] Creator initialized for pairing - keeping existing userId:', userId);
     console.log('Creator initialized - status: waiting, ready for partner to join');
-    return { userId: newUserId, passphrase: newPassphrase };
+    return { userId: userId, passphrase: newPassphrase };
   };
 
   // Called by joiner when they scan the creator's QR code
