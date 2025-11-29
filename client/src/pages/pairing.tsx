@@ -9,6 +9,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateRoomCode, normalizeRoomCode, isValidRoomCode } from '@/lib/room-codes';
+import { generatePassphrase } from '@/lib/crypto';
 import { initializePeer, createRoomPeerId, getRemotePeerId, waitForConnection, connectToRoom, closeRoom, type RoomConnection } from '@/lib/peerjs-room';
 import { runCreatorTunnel, runJoinerTunnel } from '@/lib/room-tunnel-protocol';
 import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
@@ -66,6 +67,8 @@ export default function PairingPage() {
     setIsCreator(true);
     try {
       const code = generateRoomCode();
+      const secret = generatePassphrase();
+      
       setRoomCode(code);
       const myPeerId = createRoomPeerId(code, true);
       
@@ -76,8 +79,11 @@ export default function PairingPage() {
       
       const connPromise = waitForConnection(peer, 120000).then(async (conn) => {
         roomRef.current = { peer, conn, isCreator: true, peerId: myPeerId };
-        const payload = await runCreatorTunnel(conn, userId || '');
-        await handleMasterKeyReceived(payload, true);
+        const result = await runCreatorTunnel(conn, userId || '', secret);
+        await completePairingWithMasterKey(result.masterKey, result.salt, result.partnerId);
+        onPeerConnected();
+        closeRoom(roomRef.current);
+        setMode('success-animation');
       });
       
       connPromise.catch((error) => {
@@ -107,8 +113,12 @@ export default function PairingPage() {
       const remotePeerId = getRemotePeerId(normalCode, false);
       const conn = await connectToRoom(peer, remotePeerId, 6000);
       roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
-      const payload = await runJoinerTunnel(conn, userId || '');
-      await handleMasterKeyReceived(payload, false);
+      const secret = url.searchParams.get('secret') || '';
+      const payload = await runJoinerTunnel(conn, userId || '', secret);
+      await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
+      onPeerConnected();
+      closeRoom(roomRef.current);
+      setMode('success-animation');
     } catch (error) {
       console.error(`Join room error (${isRetry ? 'retry' : 'attempt'} ${retryCountRef.current}):`, error);
       

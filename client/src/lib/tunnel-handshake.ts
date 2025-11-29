@@ -9,13 +9,16 @@ export interface EphemeralKeyPair {
   fingerprint: string;
 }
 
-
 export interface MasterKeyPayload {
   masterKey: string;
   salt: string;
   creatorId: string;
-  joinerId?: string;
 }
+
+export type TunnelMessage = 
+  | { type: 'tunnel-init'; publicKey: string; proof?: string; fingerprint?: string; userId?: string }
+  | { type: 'tunnel-key'; iv: string; encrypted: string }
+  | { type: 'tunnel-ack' };
 
 export async function generateEphemeralKeyPair(): Promise<EphemeralKeyPair> {
   const keyPair = await window.crypto.subtle.generateKey(
@@ -132,71 +135,10 @@ export function generateMasterSalt(): string {
   return arrayBufferToBase64(saltBytes);
 }
 
-
-export interface TunnelMessage {
-  type: 'tunnel-init' | 'tunnel-key' | 'tunnel-ack';
-  publicKey?: string;
-  iv?: string;
-  encrypted?: string;
-  fingerprint?: string;
+export function createTunnelInitMessage(publicKey: string) {
+  return { type: 'tunnel-init', publicKey };
 }
 
-/**
- * Message wrapper for PeerJS room protocol
- */
-export interface RoomProtocolMessage {
-  type: 'tunnel-init' | 'tunnel-key' | 'tunnel-ack';
-  publicKey?: string;
-  iv?: string;
-  encrypted?: string;
-}
-
-export function createTunnelInitMessage(publicKey: string): TunnelMessage {
-  return {
-    type: 'tunnel-init',
-    publicKey,
-  };
-}
-
-export async function createTunnelKeyMessage(
-  payload: MasterKeyPayload,
-  sharedKey: CryptoKey
-): Promise<TunnelMessage> {
-  const { iv, encrypted } = await encryptWithSharedSecret(
-    JSON.stringify(payload),
-    sharedKey
-  );
-  
-  return {
-    type: 'tunnel-key',
-    iv,
-    encrypted,
-  };
-}
-
-export function createTunnelAckMessage(): TunnelMessage {
-  return {
-    type: 'tunnel-ack',
-  };
-}
-
-export async function extractMasterKeyPayload(
-  message: TunnelMessage,
-  sharedKey: CryptoKey
-): Promise<MasterKeyPayload | null> {
-  if (message.type !== 'tunnel-key' || !message.iv || !message.encrypted) {
-    return null;
-  }
-
-  try {
-    const decrypted = await decryptWithSharedSecret(
-      message.iv,
-      message.encrypted,
-      sharedKey
-    );
-    return JSON.parse(decrypted);
-  } catch (error) {
-    console.error('Failed to extract master key payload:', error);
-    return null;
-  }
+export function createTunnelKeyMessage(iv: string, encrypted: string) {
+  return { type: 'tunnel-key', iv, encrypted };
 }

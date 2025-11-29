@@ -1,0 +1,273 @@
+> import type { DataConnection } from 'peerjs';
+> import {
+>   generateEphemeralKeyPair,
+>   deriveSharedSecret,
+>   generateMasterKey,
+>   generateMasterSalt,
+>   encryptWithSharedSecret,
+>   decryptWithSharedSecret,
+>   type TunnelMessage,
+>   type MasterKeyPayload,
+> } from './tunnel-handshake';
+> import { arrayBufferToBase64 } from './crypto';
+>
+> // Helper: Sign data with the pairing secret using HMAC-SHA256
+> async function signData(data: string, secret: string): Promise<string> {
+>   const encoder = new TextEncoder();
+>   const keyData = encoder.encode(secret);
+>   const messageData = encoder.encode(data);
+>
+>   const key = await window.crypto.subtle.importKey(
+>     'raw',
+>     keyData,
+>     { name: 'HMAC', hash: 'SHA-256' },
+>     false,
+>     ['sign']
+>   );
+>
+>   const signature = await window.crypto.subtle.sign(
+>     'HMAC',
+>     key,
+>     messageData
+>   );
+>
+>   return arrayBufferToBase64(signature);
+> }
+>
+> /**
+>  * Run tunnel protocol as CREATOR (Device A)
+>  * Returns: The Joiner's User ID (so we can save them as our partner)
+>  */
+> export async function runCreatorTunnel(
+>   conn: DataConnection,
+>   myUserId: string,
+>   pairingSecret: string
+> ): Promise<{ masterKey: string; salt: string; partnerId: string }> {
+>   console.log('🎭 Creator: Starting SECURE tunnel protocol...');
+>   
+>   const ephemeralKeyPair = await generateEphemeralKeyPair();
+>
+>   // 1. Send our Public Key
+>   conn.send({
+>     type: 'tunnel-init',
+>     publicKey: ephemeralKeyPair.publicKey,
+>   });
+>
+>   // 2. Wait for Joiner's Response (Public Key + Proof + UserID)
+>   const joinResponse = (await waitForData<TunnelMessage>(conn)) as any; // any cast to access custom fields if needed
+>   
+>   if (joinResponse.type !== 'tunnel-init' || !joinResponse.publicKey || !joinResponse.proof) {
+>     throw new Error('Invalid protocol: Missing key or proof from joiner');
+>   }
+>
+>   // 3. Verify Joiner's Proof
+>   const expectedPayload = ephemeralKeyPair.publicKey + joinResponse.publicKey;
+>   const expectedProof = await signData(expectedPayload, pairingSecret);
+>
+>   if (joinResponse.proof !== expectedProof) {
+>     console.error('🚨 SECURITY ALERT: Invalid handshake proof!');
+>     conn.close();
+>     throw new Error('Security verification failed.');
+>   }
+>
+>   const joinerId = joinResponse.userId; // Extract Joiner's ID
+>   if (!joinerId) throw new Error('Protocol error: Joiner did not send User ID');
+>   
+>   console.log('✅ Creator: Validated partner:', joinerId);
+>
+>   // 4. Derive Shared Secret
+>   const sharedSecret = await deriveSharedSecret(
+>     ephemeralKeyPair.privateKey,
+>     joinResponse.publicKey
+>   );
+>
+>   // 5. Encrypt and Send Master Key
+>   const masterKey = generateMasterKey();
+>   const salt = generateMasterSalt();
+>   const payload: MasterKeyPayload = { masterKey, salt, creatorId: myUserId };
+>   
+>   const { iv, encrypted } = await encryptWithSharedSecret(
+>     JSON.stringify(payload),
+>     sharedSecret
+>   );
+>   
+>   conn.send({ type: 'tunnel-key', iv, encrypted });
+>   console.log('🔐 Creator: Keys sent.');
+>
+>   // Return the keys AND the partner's ID so we can save it
+>   return { masterKey, salt, partnerId: joinerId };
+> }
+>
+> /**
+>  * Run tunnel protocol as JOINER (Device B)
+>  */
+> export async function runJoinerTunnel(
+>   conn: DataConnection,
+>   myUserId: string,
+>   pairingSecret: string
+> ): Promise<MasterKeyPayload> {
+>   console.log('🎭 Joiner: Starting SECURE tunnel protocol...');
+>
+>   const ephemeralKeyPair = await generateEphemeralKeyPair();
+>
+>   // 1. Wait for Creator's Public Key
+>   const creatorInitMsg = (await waitForData<TunnelMessage>(conn)) as TunnelMessage;
+>   
+>   if (creatorInitMsg.type !== 'tunnel-init' || !creatorInitMsg.publicKey) {
+>     throw new Error('Invalid protocol: Missing creator key');
+>   }
+>
+>   // 2. Generate Proof
+>   const proofPayload = creatorInitMsg.publicKey + ephemeralKeyPair.publicKey;
+>   const proof = await signData(proofPayload, pairingSecret);
+>
+>   // 3. Send Our Public Key + Proof + Our UserID
+>   conn.send({
+>     type: 'tunnel-init',
+>     publicKey: ephemeralKeyPair.publicKey,
+>     proof: proof,
+>     userId: myUserId, // Send our ID so creator knows who to allow
+>   } as any);
+>
+>   // 4. Derive Shared Secret
+>   const sharedSecret = await deriveSharedSecret(
+>     ephemeralKeyPair.privateKey,
+>     creatorInitMsg.publicKey
+>   );
+>
+>   // 5. Wait for Encrypted Master Key
+>   const keyMsg = (await waitForData<TunnelMessage>(conn)) as TunnelMessage;
+>   if (keyMsg.type !== 'tunnel-key' || !keyMsg.iv || !keyMsg.encrypted) {
+>     throw new Error('Invalid protocol: Missing key data');
+>   }
+>
+>   // 6. Decrypt Master Key
+>   const decrypted = await decryptWithSharedSecret(keyMsg.iv, keyMsg.encrypted, sharedSecret);
+>   const payload: MasterKeyPayload = JSON.parse(decrypted);
+>
+>   return payload;
+> }
+>
+> function waitForData<T = unknown>(conn: DataConnection, timeout: number = 30000): Promise<T> {
+>   return new Promise((resolve, reject) => {
+>     const timer = setTimeout(() => reject(new Error('Tunnel timeout')), timeout);
+>     const handler = (data: unknown) => {
+>       clearTimeout(timer);
+>       conn.off('data', handler);
+>       resolve(data as T);
+>     };
+>     conn.on('data', handler);
+>   });
+> }
+> ```
+
+### Prompt 2: Update Pairing Page Logic
+**Goal:** Update `pairing.tsx` to pass the `userId` into the tunnel functions and handle the correct return values.
+
+> Update `client/src/pages/pairing.tsx` to use the new tunnel logic.
+>
+> **Key Changes:**
+> 1.  **Creator Flow:** The `runCreatorTunnel` function now returns `{ partnerId, masterKey, ... }`. Use this `partnerId` to call `setPartnerIdForCreator`.
+> 2.  **Joiner Flow:** Pass `userId` into `runJoinerTunnel`.
+>
+> Use this updated code block for the `handleCreateRoom` and `onScanSuccess` functions inside `client/src/pages/pairing.tsx`.
+>
+> ```typescript
+>   // ... imports stay same ...
+>
+>   // INSIDE COMPONENT:
+>
+>   // CREATOR FLOW
+>   const handleCreateRoom = async () => {
+>     setLoading(true);
+>     setStatusText('Creating secure room...');
+>     
+>     try {
+>       const code = generateRoomCode();
+>       const secret = generatePassphrase();
+>       
+>       setRoomCode(code);
+>       setPairingSecret(secret);
+>       
+>       const myPeerId = createRoomPeerId(code, true);
+>       const peer = initializePeer(myPeerId);
+>       
+>       setMode('pairing-creator');
+>       setStatusText('Waiting for partner to scan...');
+>       
+>       const conn = await waitForConnection(peer, 120000);
+>       setStatusText('Partner connected! Verifying security...');
+>       
+>       roomRef.current = { peer, conn, isCreator: true, peerId: myPeerId };
+>       
+>       // PASS userId, GET partnerId back
+>       const result = await runCreatorTunnel(conn, userId || '', secret);
+>       
+>       // Save the keys
+>       await completePairingWithMasterKey(result.masterKey, result.salt, result.partnerId); 
+>       
+>       // Explicitly set partner ID for creator (since they initiated)
+>       // Note: completePairingWithMasterKey sets partnerId to the 3rd arg, so we are good.
+>       
+>       onPeerConnected();
+>       setMode('success-animation');
+>
+>     } catch (error) {
+>       console.error(error);
+>       toast({ title: 'Pairing Failed', description: 'Connection lost or verification failed.', variant: 'destructive' });
+>       reset();
+>     }
+>   };
+>
+>   // JOINER FLOW
+>   const onScanSuccess = async (decodedText: string) => {
+>     if (scannerRef.current) {
+>       scannerRef.current.clear();
+>     }
+>     
+>     try {
+>       const url = new URL(decodedText);
+>       const code = url.searchParams.get('room');
+>       const secret = url.searchParams.get('secret');
+>
+>       if (!code || !secret) throw new Error('Invalid QR Code');
+>
+>       setLoading(true);
+>       setMode('pairing-joiner');
+>       setStatusText('Connecting to room...');
+>
+>       const myPeerId = createRoomPeerId(code, false);
+>       const peer = initializePeer(myPeerId);
+>       const conn = await connectToRoom(peer, getRemotePeerId(code, true));
+>       
+>       setStatusText('Verifying identity...');
+>       roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
+>
+>       // PASS userId into tunnel
+>       const payload = await runJoinerTunnel(conn, userId || '', secret);
+>       
+>       await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
+>       onPeerConnected();
+>       setMode('success-animation');
+>
+>     } catch (error) {
+>       console.error(error);
+>       toast({ title: 'Connection Failed', description: 'Could not connect securely.', variant: 'destructive' });
+>       reset();
+>     }
+>   };
+> ```
+
+### Prompt 3: Update Type Definition (To suppress TS errors)
+**Goal:** Add `userId` to the `TunnelMessage` type definition so the compiler is happy.
+
+> Update `client/src/lib/tunnel-handshake.ts`. Add `userId?: string` to the `TunnelMessage` type definition.
+>
+> ```typescript
+> export type TunnelMessage = 
+>   | { type: 'tunnel-init'; publicKey: string; proof?: string; fingerprint?: string; userId?: string }
+>   | { type: 'tunnel-key'; iv: string; encrypted: string }
+>   | { type: 'tunnel-ack' };
+> 
+
+

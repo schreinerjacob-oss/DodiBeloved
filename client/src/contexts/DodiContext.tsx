@@ -24,7 +24,7 @@ interface DodiContextType {
   initializeProfile: (displayName: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
   completePairing: (partnerId: string, passphrase: string) => Promise<string>;
-  completePairingWithMasterKey: (masterKey: string, salt: string, creatorId: string, joinerId?: string) => Promise<void>;
+  completePairingWithMasterKey: (masterKey: string, salt: string, partnerId: string) => Promise<void>;
   setPartnerIdForCreator: (newPartnerId: string) => Promise<void>;
   onPeerConnected: () => void;
   setPIN: (pin: string) => Promise<void>;
@@ -223,33 +223,10 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     return currentUserId; // Return the joiner's userId for the answer QR
   };
 
-  // Called by joiner when receiving master key via tunnel, or by creator when receiving joiner ID
-  const completePairingWithMasterKey = async (masterKey: string, salt: string, creatorId: string, joinerId?: string) => {
-    if (!masterKey || !salt || !creatorId) {
-      throw new Error('Master key, salt, and creator ID are required');
-    }
-    
-    let currentUserId = userId;
-    
-    // If we're the creator and receiving a joinerId, validate it
-    if (joinerId && creatorId === userId) {
-      // Creator learning joiner's ID
-      await saveSetting('partnerId', joinerId);
-      setPartnerId(joinerId);
-      await saveSetting('pairingStatus', 'connected');
-      setPairingStatus('connected');
-      console.log('Creator stored joiner ID and marked as connected:', joinerId);
-      return;
-    }
-    
-    // Joiner path: validate creatorId is not same as our userId
-    if (!currentUserId || currentUserId === creatorId) {
-      do {
-        currentUserId = nanoid();
-      } while (currentUserId === creatorId);
-      
-      await saveSetting('userId', currentUserId);
-      setUserId(currentUserId);
+  // Called when completing pairing handshake
+  const completePairingWithMasterKey = async (masterKey: string, salt: string, partnerId: string) => {
+    if (!masterKey || !salt || !partnerId) {
+      throw new Error('Master key, salt, and partner ID are required');
     }
     
     const db = await initDB();
@@ -257,10 +234,10 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     // Store the master key as the passphrase (for compatibility with existing encryption system)
     await db.put('settings', { key: 'passphrase', value: masterKey });
     await db.put('settings', { key: 'salt', value: salt });
-    await db.put('settings', { key: 'partnerId', value: creatorId });
+    await db.put('settings', { key: 'partnerId', value: partnerId });
     await db.put('settings', { key: 'pairingStatus', value: 'connected' });
     
-    setPartnerId(creatorId);
+    setPartnerId(partnerId);
     setPassphrase(masterKey);
     setPairingStatus('connected');
     
