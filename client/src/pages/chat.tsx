@@ -35,6 +35,26 @@ export default function ChatPage() {
     }
 
     console.log('Chat: Setting up message listener for partnerId:', partnerId);
+    
+    // Request partner's history immediately when WS connects
+    const requestPartnerHistory = () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        console.log('Chat: Requesting partner message history since:', new Date(lastSyncedTimestamp).toISOString());
+        sendWS({
+          type: 'request-history',
+          data: { 
+            requesterId: userId,
+            lastSyncedTimestamp,
+          },
+        });
+      } else {
+        console.log('Chat: WS not open yet, will retry');
+      }
+    };
+    
+    // Try immediately and then set up interval
+    requestPartnerHistory();
+    const historyInterval = setInterval(requestPartnerHistory, 3000);
 
     const handleMessage = async (event: MessageEvent) => {
       try {
@@ -51,10 +71,17 @@ export default function ChatPage() {
             setMessages(prev => {
               // Deduplicate - don't add if already exists
               if (prev.some(m => m.id === incomingMessage.id)) {
+                console.log('Chat: Message already exists, skipping');
                 return prev;
               }
               return [...prev, incomingMessage];
             });
+            
+            // Update last synced timestamp to this message's timestamp
+            const msgTime = new Date(incomingMessage.timestamp).getTime();
+            if (msgTime > lastSyncedTimestamp) {
+              setLastSyncedTimestamp(msgTime);
+            }
           }
         } else if (data.type === 'request-history') {
           // SECURITY: Only respond to history requests from our actual paired partner
@@ -132,26 +159,12 @@ export default function ChatPage() {
     ws.addEventListener('message', handleMessage);
     console.log('Chat: Message listener attached');
     
-    // Request partner's message history when we connect (with delay to ensure connection is ready)
-    const requestHistoryTimeout = setTimeout(() => {
-      if (ws.readyState === WebSocket.OPEN && partnerId) {
-        console.log('Chat: Requesting partner message history since:', new Date(lastSyncedTimestamp).toISOString());
-        sendWS({
-          type: 'request-history',
-          data: { 
-            requesterId: userId,
-            lastSyncedTimestamp,
-          },
-        });
-      }
-    }, 500);
-    
     return () => {
       console.log('Chat: Cleaning up message listener');
-      clearTimeout(requestHistoryTimeout);
+      clearInterval(historyInterval);
       ws.removeEventListener('message', handleMessage);
     };
-  }, [ws, partnerId, userId, lastSyncedTimestamp]);
+  }, [ws, partnerId, userId, lastSyncedTimestamp, sendWS]);
 
   useEffect(() => {
     if (scrollRef.current) {

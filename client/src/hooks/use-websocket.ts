@@ -14,7 +14,7 @@ export function useWebSocket() {
   const messageHandlersRef = useRef<((event: MessageEvent) => void)[]>([]);
   
   const send = useCallback((message: WSMessage) => {
-    console.log('Sending via P2P:', message.type);
+    console.log('Sending via P2P:', message.type, 'Connected:', peerState.connected, 'Tunnel:', peerState.tunnelEstablished);
     
     // Send via actual P2P connection (timestamp added automatically)
     sendP2P({
@@ -22,7 +22,12 @@ export function useWebSocket() {
       data: message.data,
       timestamp: Date.now(),
     });
-  }, [sendP2P]);
+    
+    // Log if message is being queued (not connected)
+    if (!peerState.connected || !peerState.tunnelEstablished) {
+      console.warn('P2P not ready - message will be queued. Connected:', peerState.connected, 'Tunnel:', peerState.tunnelEstablished);
+    }
+  }, [sendP2P, peerState.connected, peerState.tunnelEstablished]);
 
   // Simulate WebSocket object for backward compatibility
   const wsObject = {

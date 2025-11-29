@@ -94,18 +94,18 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   }, [state.tunnelEstablished]);
 
   const send = useCallback((message: SyncMessage) => {
-    const fullMessage = { ...message, timestamp: Date.now() };
+    const fullMessage = { ...message, timestamp: Date.now(), id: `${Date.now()}-${Math.random()}` };
     
     if (channelRef.current && channelRef.current.readyState === 'open' && state.tunnelEstablished) {
       try {
         channelRef.current.send(JSON.stringify(fullMessage));
-        console.log('P2P message sent:', message.type);
+        console.log('P2P message sent:', message.type, fullMessage.id);
       } catch (e) {
         console.error('Error sending P2P message:', e);
         messageQueueRef.current.push(fullMessage);
       }
     } else {
-      console.log('P2P not ready, queueing message:', message.type);
+      console.log('P2P not ready, queueing message:', message.type, 'Queue length:', messageQueueRef.current.length);
       messageQueueRef.current.push(fullMessage);
     }
   }, [state.tunnelEstablished]);
@@ -192,9 +192,10 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     }
 
     if (message.type === 'tunnel-ack') {
-      console.log('Tunnel ACK received - connection fully established');
+      console.log('Tunnel ACK received - connection fully established. Queue size:', messageQueueRef.current.length);
       setState(prev => ({ ...prev, tunnelEstablished: true }));
-      flushMessageQueue();
+      // Flush immediately with small delay to ensure state updates
+      setTimeout(() => flushMessageQueue(), 50);
     }
   }, [userId, sendTunnelMessage, flushMessageQueue]);
 
@@ -202,7 +203,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     channelRef.current = channel;
 
     channel.addEventListener('open', async () => {
-      console.log('Data channel opened');
+      console.log('Data channel opened, queued messages:', messageQueueRef.current.length);
       setState(prev => ({ ...prev, connected: true, connecting: false }));
       
       if (isCreatorRef.current && ephemeralKeyPairRef.current) {
