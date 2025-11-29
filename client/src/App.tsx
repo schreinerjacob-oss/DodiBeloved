@@ -5,7 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DodiProvider, useDodi } from "@/contexts/DodiContext";
-import { usePeerConnection } from "@/hooks/use-peer-connection";
+import { usePersistentConnection } from "@/hooks/use-persistent-connection";
 import ProfileSetupPage from "@/pages/profile-setup";
 import PairingPage from "@/pages/pairing";
 import PinSetupPage from "@/pages/pin-setup";
@@ -47,8 +47,8 @@ function NavItem({ href, icon: Icon, label, active, disabled }: { href: string; 
 }
 
 function PeerConnectionInitializer() {
-  // This component initializes the peer connection globally
-  usePeerConnection();
+  // This component initializes the persistent P2P connection globally
+  usePersistentConnection();
   return null;
 }
 
