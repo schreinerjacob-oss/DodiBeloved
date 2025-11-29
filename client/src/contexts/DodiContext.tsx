@@ -225,21 +225,26 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   };
 
   // Called by joiner when receiving master key via tunnel
-  const completePairingWithMasterKey = async (masterKey: string, salt: string, creatorId: string) => {
-    if (!masterKey || !salt || !creatorId) {
-      throw new Error('Master key, salt, and creator ID are required');
+  const completePairingWithMasterKey = async (masterKey: string, salt: string, remotePartnerId: string) => {
+    if (!masterKey || !salt || !remotePartnerId) {
+      throw new Error('Master key, salt, and remote partner ID are required');
     }
     
     let currentUserId = userId;
     
-    // Joiner: ensure we have a userId that's different from creator
-    if (!currentUserId || currentUserId === creatorId) {
+    // Joiner: ensure we have a userId that's different from remote partner
+    if (!currentUserId || currentUserId === remotePartnerId) {
       do {
         currentUserId = nanoid();
-      } while (currentUserId === creatorId);
+      } while (currentUserId === remotePartnerId);
       
       await saveSetting('userId', currentUserId);
       setUserId(currentUserId);
+    }
+    
+    // CRITICAL SAFETY CHECK: Prevent self-pairing
+    if (currentUserId === remotePartnerId) {
+      throw new Error('Cannot pair with yourself: local and remote partner IDs are identical');
     }
     
     const db = await initDB();
@@ -247,10 +252,10 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     // Store the master key as the passphrase (for compatibility with existing encryption system)
     await db.put('settings', { key: 'passphrase', value: masterKey });
     await db.put('settings', { key: 'salt', value: salt });
-    await db.put('settings', { key: 'partnerId', value: creatorId });
+    await db.put('settings', { key: 'partnerId', value: remotePartnerId });
     await db.put('settings', { key: 'pairingStatus', value: 'connected' });
     
-    setPartnerId(creatorId);
+    setPartnerId(remotePartnerId);
     setPassphrase(masterKey);
     setPairingStatus('connected');
     
@@ -259,25 +264,30 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       setShowPinSetup(true);
     }
     
-    console.log('📋 [ID AUDIT] Joiner pairing completed:', { userId: currentUserId, partnerId: creatorId, masterKey: masterKey.substring(0, 8) + '...' });
+    console.log('📋 [ID AUDIT] Joiner pairing completed:', { userId: currentUserId, partnerId: remotePartnerId, masterKey: masterKey.substring(0, 8) + '...', selfPairingCheck: 'PASSED' });
   };
 
   // Called by creator after receiving joiner's ID via tunnel ACK
-  const completePairingAsCreator = async (masterKey: string, salt: string, joinerId: string) => {
-    if (!masterKey || !salt || !joinerId) {
-      throw new Error('Master key, salt, and joiner ID are required');
+  const completePairingAsCreator = async (masterKey: string, salt: string, remotePartnerId: string) => {
+    if (!masterKey || !salt || !remotePartnerId) {
+      throw new Error('Master key, salt, and remote partner ID are required');
     }
     
     if (!userId) {
       throw new Error('Creator user ID not initialized');
     }
     
+    // CRITICAL SAFETY CHECK: Prevent self-pairing
+    if (userId === remotePartnerId) {
+      throw new Error('Cannot pair with yourself: creator ID and remote partner ID are identical');
+    }
+    
     const db = await initDB();
     
-    // Creator: keep existing userId, store joiner as partnerId
+    // Creator: keep existing userId, store remote partner as partnerId
     await db.put('settings', { key: 'passphrase', value: masterKey });
     await db.put('settings', { key: 'salt', value: salt });
-    await db.put('settings', { key: 'partnerId', value: joinerId });
+    await db.put('settings', { key: 'partnerId', value: remotePartnerId });
     await db.put('settings', { key: 'pairingStatus', value: 'connected' });
     
     setPassphrase(masterKey);
@@ -288,7 +298,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       setShowPinSetup(true);
     }
     
-    console.log('📋 [ID AUDIT] Creator pairing completed:', { userId, partnerId: joinerId, masterKey: masterKey.substring(0, 8) + '...' });
+    console.log('📋 [ID AUDIT] Creator pairing completed:', { userId, partnerId: remotePartnerId, masterKey: masterKey.substring(0, 8) + '...', selfPairingCheck: 'PASSED' });
   };
 
   // Called by creator to set partner ID after joiner has joined

@@ -41,6 +41,7 @@ export default function PairingPage() {
       console.log('📋 [ID AUDIT] Master key payload received:', {
         creatorId: payload.creatorId,
         joinerId: payload.joinerId,
+        myUserId: userId,
         hasMasterKey: !!payload.masterKey,
         hasSalt: !!payload.salt,
         isCreatorRole,
@@ -51,14 +52,33 @@ export default function PairingPage() {
         if (!payload.joinerId) {
           throw new Error('Joiner ID not received in tunnel');
         }
-        console.log('💾 [ID AUDIT] Creator calling completePairingAsCreator with joinerId:', payload.joinerId);
+        
+        // CRITICAL VALIDATION: Ensure we're not pairing with ourselves
+        if (userId === payload.joinerId) {
+          throw new Error(`Self-pairing detected: Creator ID (${userId}) matches Joiner ID (${payload.joinerId})`);
+        }
+        
+        console.log('💾 [ID AUDIT] Creator calling completePairingAsCreator:', { myId: userId, remotePartnerId: payload.joinerId });
         await completePairingAsCreator(payload.masterKey, payload.salt, payload.joinerId);
       } else {
         // Joiner: store masterKey and creator's ID
         if (!payload.creatorId) {
           throw new Error('Creator ID not received in tunnel');
         }
-        console.log('💾 [ID AUDIT] Joiner calling completePairingWithMasterKey with creatorId:', payload.creatorId);
+        
+        // CRITICAL VALIDATION: Ensure we're not pairing with ourselves (even if userId is stale)
+        let currentUserId = userId;
+        if (!currentUserId) {
+          // Force refresh if userId is empty - this shouldn't happen but being defensive
+          console.warn('⚠️ [ID AUDIT] Joiner userId is empty, forcing refresh');
+          currentUserId = userId || 'UNINITIALIZED';
+        }
+        
+        if (currentUserId !== 'UNINITIALIZED' && currentUserId === payload.creatorId) {
+          throw new Error(`Self-pairing detected: Joiner ID (${currentUserId}) matches Creator ID (${payload.creatorId})`);
+        }
+        
+        console.log('💾 [ID AUDIT] Joiner calling completePairingWithMasterKey:', { myId: currentUserId, remotePartnerId: payload.creatorId });
         await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
       }
       
@@ -68,9 +88,10 @@ export default function PairingPage() {
       setMode('success-animation');
     } catch (error) {
       if (roomRef.current) closeRoom(roomRef.current);
+      console.error('❌ [ID AUDIT] Pairing failed:', error);
       toast({
         title: 'Pairing Failed',
-        description: 'Could not complete connection.',
+        description: (error instanceof Error ? error.message : 'Could not complete connection.'),
         variant: 'destructive',
       });
       setMode('choose');
