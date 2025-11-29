@@ -26,7 +26,9 @@ export default function PairingPage() {
   const [copied, setCopied] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const roomRef = useRef<RoomConnection | null>(null);
+  const retryCountRef = useRef<number>(0);
 
   useEffect(() => {
     if (pairingStatus === 'connected') {
@@ -91,6 +93,58 @@ export default function PairingPage() {
     }
   };
 
+  const attemptJoinRoom = async (normalCode: string, isRetry: boolean = false) => {
+    try {
+      console.log(`🌿 ${isRetry ? 'Retrying' : 'Joining'} room as joiner:`, normalCode);
+      const myPeerId = createRoomPeerId(normalCode, false);
+      const peer = await initializePeer(myPeerId);
+      const remotePeerId = getRemotePeerId(normalCode, false);
+      const conn = await connectToRoom(peer, remotePeerId, 6000);
+      roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
+      const payload = await runJoinerTunnel(conn);
+      await handleMasterKeyReceived(payload);
+    } catch (error) {
+      console.error(`Join room error (${isRetry ? 'retry' : 'attempt'} ${retryCountRef.current}):`, error);
+      
+      // If first attempt fails and we haven't retried yet, show "One moment…" and retry
+      if (!isRetry && retryCountRef.current === 0) {
+        retryCountRef.current = 1;
+        setIsRetrying(true);
+        
+        // Wait 2 seconds then retry
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        try {
+          await attemptJoinRoom(normalCode, true);
+        } catch (retryError) {
+          console.error('Retry failed:', retryError);
+          if (roomRef.current) closeRoom(roomRef.current);
+          toast({ 
+            title: 'Connection took too long', 
+            description: 'Creator may not be ready. Please try again.',
+            variant: 'destructive' 
+          });
+          setMode('choose');
+          setLoading(false);
+          setIsRetrying(false);
+          retryCountRef.current = 0;
+        }
+      } else {
+        // Second attempt failed
+        if (roomRef.current) closeRoom(roomRef.current);
+        toast({ 
+          title: 'Connection Failed', 
+          description: 'Could not connect. Please try again.',
+          variant: 'destructive' 
+        });
+        setMode('choose');
+        setLoading(false);
+        setIsRetrying(false);
+        retryCountRef.current = 0;
+      }
+    }
+  };
+
   const handleJoinRoom = async () => {
     if (!isValidRoomCode(inputCode)) {
       toast({ title: 'Invalid code', description: 'Please enter a valid 8-character code (e.g., A7K9-P2M4)', variant: 'destructive' });
@@ -102,24 +156,10 @@ export default function PairingPage() {
     const normalCode = normalizeRoomCode(inputCode);
     setRoomCode(normalCode);
     setMode('pairing');
+    retryCountRef.current = 0;
+    setIsRetrying(false);
     
-    try {
-      console.log('🌿 Joining room as joiner:', normalCode);
-      const myPeerId = createRoomPeerId(normalCode, false);
-      const peer = await initializePeer(myPeerId);
-      const remotePeerId = getRemotePeerId(normalCode, false);
-      console.log('Connecting to:', remotePeerId);
-      const conn = await connectToRoom(peer, remotePeerId, 30000);
-      roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
-      const payload = await runJoinerTunnel(conn);
-      await handleMasterKeyReceived(payload);
-    } catch (error) {
-      console.error('Join room error:', error);
-      if (roomRef.current) closeRoom(roomRef.current);
-      toast({ title: 'Connection Failed', description: error instanceof Error ? error.message : 'Failed to join room.', variant: 'destructive' });
-      setMode('choose');
-      setLoading(false);
-    }
+    await attemptJoinRoom(normalCode, false);
   };
 
   const handleCopyCode = () => {
@@ -305,6 +345,25 @@ export default function PairingPage() {
                       className="text-lg font-mono text-center tracking-widest" 
                       maxLength={9}
                     />
+
+                    {isRetrying && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-center py-2"
+                      >
+                        <p className="text-sm text-sage font-light">One moment…</p>
+                        <motion.div
+                          className="flex justify-center gap-1 mt-2"
+                          animate={{ opacity: [0.5, 1, 0.5] }}
+                          transition={{ duration: 1.5, repeat: Infinity }}
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-sage" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-sage" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-sage" />
+                        </motion.div>
+                      </motion.div>
+                    )}
 
                     <Button 
                       onClick={handleJoinRoom} 
