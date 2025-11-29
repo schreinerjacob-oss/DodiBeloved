@@ -138,6 +138,7 @@ export interface TunnelMessage {
   iv?: string;
   encrypted?: string;
   fingerprint?: string;
+  proof?: string;
 }
 
 /**
@@ -197,5 +198,45 @@ export async function extractMasterKeyPayload(
   } catch (error) {
     console.error('Failed to extract master key payload:', error);
     return null;
+  }
+}
+
+export async function generateProof(
+  data: string,
+  sharedKey: CryptoKey
+): Promise<string> {
+  const encoder = new TextEncoder();
+  const dataBuffer = encoder.encode(data);
+  
+  const proofBuffer = await window.crypto.subtle.sign(
+    'HMAC',
+    sharedKey,
+    dataBuffer
+  );
+  
+  return arrayBufferToBase64(proofBuffer);
+}
+
+export async function verifyProof(
+  data: string,
+  proof: string,
+  sharedKey: CryptoKey
+): Promise<boolean> {
+  try {
+    const encoder = new TextEncoder();
+    const dataBuffer = encoder.encode(data);
+    const proofBuffer = base64ToArrayBuffer(proof);
+    
+    const isValid = await window.crypto.subtle.verify(
+      'HMAC',
+      sharedKey,
+      proofBuffer,
+      dataBuffer
+    );
+    
+    return isValid;
+  } catch (error) {
+    console.error('Failed to verify proof:', error);
+    return false;
   }
 }
