@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { usePeerConnection } from './use-peer-connection';
 
@@ -8,26 +8,25 @@ interface WSMessage {
 }
 
 export function useWebSocket() {
-  const { userId, partnerId, isPaired } = useDodi();
+  const { isPaired } = useDodi();
   const { send: sendP2P, state: peerState } = usePeerConnection();
-  const [connected, setConnected] = useState(false);
   const messageHandlersRef = useRef<((event: MessageEvent) => void)[]>([]);
-  
+
   const send = useCallback((message: WSMessage) => {
-    console.log('Sending via P2P:', message.type, 'Connected:', peerState.connected, 'Tunnel:', peerState.tunnelEstablished);
-    
-    // Send via actual P2P connection (timestamp added automatically)
+    console.log('Sending via P2P:', message.type, 'Connected:', peerState.connected);
+
+    // Send via P2P connection
     sendP2P({
       type: message.type,
       data: message.data,
       timestamp: Date.now(),
     });
-    
+
     // Log if message is being queued (not connected)
-    if (!peerState.connected || !peerState.tunnelEstablished) {
-      console.warn('P2P not ready - message will be queued. Connected:', peerState.connected, 'Tunnel:', peerState.tunnelEstablished);
+    if (!peerState.connected) {
+      console.warn('P2P not connected - message will be queued');
     }
-  }, [sendP2P, peerState.connected, peerState.tunnelEstablished]);
+  }, [sendP2P, peerState.connected]);
 
   // Simulate WebSocket object for backward compatibility
   const wsObject = {
@@ -52,15 +51,11 @@ export function useWebSocket() {
     },
   };
 
-  useEffect(() => {
-    setConnected(peerState.connected);
-  }, [peerState.connected]);
-
   // Listen for incoming P2P messages and dispatch as events
   useEffect(() => {
     const handleP2pMessage = (event: CustomEvent) => {
       const message = event.detail;
-      console.log('Received P2P message:', message.type);
+      console.log('WebSocket received P2P message:', message.type);
       const messageEvent = { data: JSON.stringify(message) } as MessageEvent;
       messageHandlersRef.current.forEach(handler => handler(messageEvent));
     };
@@ -71,9 +66,9 @@ export function useWebSocket() {
     };
   }, []);
 
-  return { 
-    connected: peerState.connected, 
-    send, 
-    ws: wsObject as unknown as WebSocket 
+  return {
+    connected: peerState.connected,
+    send,
+    ws: wsObject as unknown as WebSocket,
   };
 }
