@@ -176,8 +176,9 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setPartnerId(null);
     setPairingStatus('waiting'); // Stay on pairing page, show QR code
     
-    console.log('🔑 [ID AUDIT] Creator initialized for pairing - keeping existing userId:', userId);
-    console.log('Creator initialized - status: waiting, ready for partner to join');
+    console.log('🎭 [CREATOR INIT] Creator pairing initialized');
+    console.log('   MY DEVICE ID:', userId);
+    console.log('   Master key salt:', saltBase64.substring(0, 8) + '...');
     return { userId: userId, passphrase: newPassphrase };
   };
 
@@ -215,7 +216,12 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       setShowPinSetup(true);
     }
     
-    console.log('📋 [ID AUDIT] Joiner pairing completed:', { myUserId: userId, partnerId: remotePartnerId, idUnchanged: true });
+    console.log('✅ [JOINER COMPLETE] Pairing successful!');
+    console.log('   MY DEVICE ID:', userId);
+    console.log('   PARTNER DEVICE ID:', remotePartnerId);
+    console.log('   Master key:', masterKey.substring(0, 8) + '...');
+    console.log('═══ CROSSOVER VERIFICATION ═══');
+    console.log('   Device B stores Device A:', remotePartnerId);
   };
 
   // Called by creator after receiving joiner's ID via tunnel ACK
@@ -252,7 +258,12 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       setShowPinSetup(true);
     }
     
-    console.log('📋 [ID AUDIT] Creator pairing completed:', { myUserId: userId, partnerId: remotePartnerId, idUnchanged: true });
+    console.log('✅ [CREATOR COMPLETE] Pairing successful!');
+    console.log('   MY DEVICE ID:', userId);
+    console.log('   PARTNER DEVICE ID:', remotePartnerId);
+    console.log('   Master key:', masterKey.substring(0, 8) + '...');
+    console.log('═══ CROSSOVER VERIFICATION ═══');
+    console.log('   Device A stores Device B:', remotePartnerId);
   };
 
   // Called by creator to set partner ID after joiner has joined
@@ -348,6 +359,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setUserId(newUserId);
     setDisplayName(name);
     
+    console.log('✅ [DEVICE INIT] Device userId created:', newUserId);
     return newUserId;
   };
 
