@@ -93,7 +93,7 @@ function MainApp() {
 
   return (
     <div className="w-screen flex flex-col bg-background" style={{ minHeight: '100dvh' }}>
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="flex-1 overflow-hidden">
         <Switch>
           <Route path="/chat" component={ChatPage} />
           <Route path="/calls" component={CallsPage} />
