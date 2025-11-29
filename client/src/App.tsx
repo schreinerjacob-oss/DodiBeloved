@@ -5,7 +5,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DodiProvider, useDodi } from "@/contexts/DodiContext";
-import { usePersistentConnection } from "@/hooks/use-persistent-connection";
 import ProfileSetupPage from "@/pages/profile-setup";
 import PairingPage from "@/pages/pairing";
 import PinSetupPage from "@/pages/pin-setup";
@@ -44,12 +43,6 @@ function NavItem({ href, icon: Icon, label, active, disabled }: { href: string; 
       <span className="text-xs font-medium">{label}</span>
     </button>
   );
-}
-
-function PeerConnectionInitializer() {
-  // This component initializes the persistent P2P connection globally
-  usePersistentConnection();
-  return null;
 }
 
 function MainApp() {
@@ -99,11 +92,9 @@ function MainApp() {
   ];
 
   return (
-    <>
-      <PeerConnectionInitializer />
-      <div className="w-screen flex flex-col bg-background" style={{ minHeight: '100dvh' }}>
-        <div className="flex-1 overflow-hidden">
-          <Switch>
+    <div className="w-screen flex flex-col bg-background" style={{ minHeight: '100dvh' }}>
+      <div className="flex-1 overflow-hidden">
+        <Switch>
           <Route path="/chat" component={ChatPage} />
           <Route path="/calls" component={CallsPage} />
           <Route path="/memories" component={MemoriesPage} />
@@ -116,30 +107,29 @@ function MainApp() {
           <Route path="/subscription" component={SubscriptionPage} />
           <Route path="/settings" component={SettingsPage} />
           <Route path="/" component={ChatPage} />
-          </Switch>
-        </div>
-
-        <nav className="border-t bg-card/80 backdrop-blur-sm px-2 py-2 flex-shrink-0" style={{ paddingBottom: 'var(--safe-area-inset-bottom)' }}>
-          <div className="flex items-center justify-between max-w-3xl mx-auto px-2">
-            <div className="flex items-center justify-around flex-1">
-              {mainNavItems.map((item) => (
-                <NavItem
-                  key={item.href}
-                  {...item}
-                  active={location === item.href || (location === "/" && item.href === "/chat")}
-                  disabled={!isTrialActive}
-                />
-              ))}
-            </div>
-            <MoreMenu items={moreItems} disabled={!isTrialActive} />
-          </div>
-          <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
-            <Lock className="w-3 h-3" />
-            <span>{isOnline ? 'Online' : 'Offline'} • Encrypted</span>
-          </div>
-        </nav>
+        </Switch>
       </div>
-    </>
+
+      <nav className="border-t bg-card/80 backdrop-blur-sm px-2 py-2 flex-shrink-0" style={{ paddingBottom: 'var(--safe-area-inset-bottom)' }}>
+        <div className="flex items-center justify-between max-w-3xl mx-auto px-2">
+          <div className="flex items-center justify-around flex-1">
+            {mainNavItems.map((item) => (
+              <NavItem
+                key={item.href}
+                {...item}
+                active={location === item.href || (location === "/" && item.href === "/chat")}
+                disabled={!isTrialActive}
+              />
+            ))}
+          </div>
+          <MoreMenu items={moreItems} disabled={!isTrialActive} />
+        </div>
+        <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
+          <Lock className="w-3 h-3" />
+          <span>{isOnline ? 'Online' : 'Offline'} • Encrypted</span>
+        </div>
+      </nav>
+    </div>
   );
 }
 

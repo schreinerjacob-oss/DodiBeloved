@@ -8,7 +8,6 @@ import { Toggle } from '@/components/ui/toggle';
 import { Heart, Send, Image, Mic, Lock, Eye, EyeOff } from 'lucide-react';
 import { getAllMessages, saveMessage } from '@/lib/storage-encrypted';
 import { useWebSocket } from '@/hooks/use-websocket';
-import { usePersistentConnection } from '@/hooks/use-persistent-connection';
 import type { Message } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
@@ -17,7 +16,6 @@ export default function ChatPage() {
   const { userId, partnerId, isOnline } = useDodi();
   const { toast } = useToast();
   const { send: sendWS, ws, connected } = useWebSocket();
-  const { send: sendP2P, isConnected: p2pConnected } = usePersistentConnection();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -216,19 +214,11 @@ export default function ChatPage() {
       setMessages(prev => [...prev, message]);
       setNewMessage('');
 
-      // Send via P2P connection directly
-      if (p2pConnected) {
-        sendP2P(JSON.stringify({
-          type: 'message',
-          data: message,
-        }));
-      } else {
-        // Fallback to WebSocket
-        sendWS({
-          type: 'message',
-          data: message,
-        });
-      }
+      // Send via WebSocket
+      sendWS({
+        type: 'message',
+        data: message,
+      });
 
       toast({
         title: "Message sent",
