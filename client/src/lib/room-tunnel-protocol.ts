@@ -57,6 +57,8 @@ export async function runCreatorTunnel(
 
   // Encrypt payload with shared secret
   const payload: MasterKeyPayload = { masterKey, salt, creatorId: userId };
+  console.log('🔐 [TUNNEL] Creator preparing payload:', { creatorId: userId, masterKeyStart: masterKey.substring(0, 8) });
+  
   const { iv, encrypted } = await encryptWithSharedSecret(
     JSON.stringify(payload),
     sharedSecret
@@ -67,13 +69,18 @@ export async function runCreatorTunnel(
   console.log('✓ Master key sent (encrypted)');
 
   // Wait for joiner's ACK with their user ID
+  console.log('⏳ [TUNNEL] Creator waiting for joiner ACK...');
   const ackMsg = (await waitForData<TunnelMessage>(conn)) as TunnelMessage;
+  console.log('📨 [TUNNEL] Creator received ACK message:', { type: ackMsg.type, joinerId: ackMsg.joinerId });
+  
   if (ackMsg.type !== 'tunnel-ack' || !ackMsg.joinerId) {
-    throw new Error('Invalid pairing acknowledgment from joiner');
+    throw new Error(`Invalid pairing acknowledgment from joiner: ${JSON.stringify(ackMsg)}`);
   }
-  console.log('✓ Received pairing ACK from joiner:', ackMsg.joinerId);
+  console.log('✅ [TUNNEL] Creator received pairing ACK from joiner:', ackMsg.joinerId);
 
-  return { ...payload, joinerId: ackMsg.joinerId };
+  const result = { ...payload, joinerId: ackMsg.joinerId };
+  console.log('🎉 [TUNNEL] Creator tunnel complete, returning:', { creatorId: result.creatorId, joinerId: result.joinerId });
+  return result;
 }
 
 /**
@@ -117,8 +124,10 @@ export async function runJoinerTunnel(
   // Decrypt master key
   const decrypted = await decryptWithSharedSecret(keyMsg.iv, keyMsg.encrypted, sharedSecret);
   const payload: MasterKeyPayload = JSON.parse(decrypted);
+  console.log('🔐 [TUNNEL] Joiner decrypted payload:', { creatorId: payload.creatorId, masterKeyStart: payload.masterKey.substring(0, 8) });
   console.log('✓ Master key decrypted and verified');
 
+  console.log('🎉 [TUNNEL] Joiner tunnel complete, returning:', { creatorId: payload.creatorId });
   return payload;
 }
 
@@ -130,6 +139,7 @@ export async function sendPairingAck(
   joinerId: string
 ): Promise<void> {
   console.log('🎭 Sending pairing ACK to creator...');
+  console.log('📤 [TUNNEL] Joiner sending ACK with joinerId:', joinerId);
   conn.send({ type: 'tunnel-ack', joinerId });
   console.log('✓ Pairing ACK sent');
 }

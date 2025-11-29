@@ -59,6 +59,7 @@ export default function PairingPage() {
         }
         
         console.log('💾 [ID AUDIT] Creator calling completePairingAsCreator:', { myId: userId, remotePartnerId: payload.joinerId });
+        console.log('🔑 [STORE] Creator will store: { userId:', userId, 'partnerId:', payload.joinerId, '}');
         await completePairingAsCreator(payload.masterKey, payload.salt, payload.joinerId);
       } else {
         // Joiner: store masterKey and creator's ID
@@ -72,6 +73,7 @@ export default function PairingPage() {
         }
         
         console.log('💾 [ID AUDIT] Joiner calling completePairingWithMasterKey:', { myId: userId, remotePartnerId: payload.creatorId });
+        console.log('🔑 [STORE] Joiner will store: { userId:', userId, 'partnerId:', payload.creatorId, '}');
         await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
       }
       
@@ -120,6 +122,7 @@ export default function PairingPage() {
       
       const connPromise = waitForConnection(peer, 120000).then(async (conn) => {
         roomRef.current = { peer, conn, isCreator: true, peerId: myPeerId };
+        console.log('🌊 [FLOW] Creator calling runCreatorTunnel with userId:', userId);
         const payload = await runCreatorTunnel(conn, userId);
         
         console.log('📋 [ID AUDIT] Creator received tunnel payload:', {
@@ -174,6 +177,7 @@ export default function PairingPage() {
       const remotePeerId = getRemotePeerId(normalCode, false);
       const conn = await connectToRoom(peer, remotePeerId, 6000);
       roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
+      console.log('🌊 [FLOW] Joiner calling runJoinerTunnel...');
       const payload = await runJoinerTunnel(conn);
       
       console.log('📋 [ID AUDIT] Joiner received tunnel payload:', {
