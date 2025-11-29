@@ -27,7 +27,7 @@ interface UsePeerConnectionReturn {
   send: (message: SyncMessage) => void;
   peer: RTCPeerConnection | null;
   createOffer: () => Promise<string>;
-  acceptOffer: (offer: string, peerPublicKey: string, peerFingerprint: string) => Promise<{ answer: string; publicKey: string; fingerprint: string }>;
+  acceptOffer: (offer: string, peerPublicKey: string) => Promise<{ answer: string; publicKey: string; fingerprint: string }>;
   completeConnection: (answer: string, peerPublicKey: string) => void;
   disconnect: () => void;
   ephemeralKeyPair: EphemeralKeyPair | null;
@@ -52,7 +52,6 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   const sharedSecretRef = useRef<CryptoKey | null>(null);
   const isCreatorRef = useRef<boolean>(false);
   const tunnelCompleteCallbackRef = useRef<((payload: MasterKeyPayload) => void) | null>(null);
-  const expectedFingerprintRef = useRef<string | null>(null);
 
   const cleanupPeer = useCallback(() => {
     if (channelRef.current) {
@@ -74,7 +73,6 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     ephemeralKeyPairRef.current = null;
     peerPublicKeyRef.current = null;
     sharedSecretRef.current = null;
-    expectedFingerprintRef.current = null;
     setState({ connected: false, connecting: false, tunnelEstablished: false, error: null });
   }, []);
 
@@ -125,15 +123,8 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   const handleTunnelMessage = useCallback(async (message: TunnelMessage) => {
     console.log('Tunnel message received:', message.type);
 
-    if (message.type === 'tunnel-init' && message.publicKey && message.fingerprint && !isCreatorRef.current) {
+    if (message.type === 'tunnel-init' && message.publicKey && !isCreatorRef.current) {
       // Joiner receiving creator's tunnel-init
-      // SECURITY: Verify fingerprint matches what was in the QR code
-      if (expectedFingerprintRef.current && message.fingerprint !== expectedFingerprintRef.current) {
-        console.error('SECURITY: Fingerprint mismatch! Expected:', expectedFingerprintRef.current, 'Got:', message.fingerprint);
-        setState(prev => ({ ...prev, error: 'Security verification failed - fingerprint mismatch' }));
-        return;
-      }
-      
       peerPublicKeyRef.current = message.publicKey;
       
       if (ephemeralKeyPairRef.current) {
@@ -142,11 +133,10 @@ export function usePeerConnection(): UsePeerConnectionReturn {
           message.publicKey
         );
         sharedSecretRef.current = sharedSecret;
-        console.log('Shared secret derived (joiner side) - fingerprint verified');
+        console.log('Shared secret derived (joiner side)');
 
         const initResponse = createTunnelInitMessage(
-          ephemeralKeyPairRef.current.publicKey,
-          ephemeralKeyPairRef.current.fingerprint
+          ephemeralKeyPairRef.current.publicKey
         );
         sendTunnelMessage(initResponse);
       }
@@ -216,8 +206,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       
       if (isCreatorRef.current && ephemeralKeyPairRef.current) {
         const initMessage = createTunnelInitMessage(
-          ephemeralKeyPairRef.current.publicKey,
-          ephemeralKeyPairRef.current.fingerprint
+          ephemeralKeyPairRef.current.publicKey
         );
         sendTunnelMessage(initMessage);
       }
@@ -323,16 +312,11 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
   const acceptOffer = useCallback(async (
     offerString: string,
-    peerPublicKey: string,
-    peerFingerprint: string
+    peerPublicKey: string
   ): Promise<{ answer: string; publicKey: string; fingerprint: string }> => {
     cleanupPeer();
     setState({ connected: false, connecting: true, tunnelEstablished: false, error: null });
     isCreatorRef.current = false;
-    
-    // SECURITY: Store expected fingerprint for verification during tunnel handshake
-    expectedFingerprintRef.current = peerFingerprint;
-    console.log('Stored expected fingerprint for verification:', peerFingerprint);
     
     const ephemeralKeyPair = await generateEphemeralKeyPair();
     ephemeralKeyPairRef.current = ephemeralKeyPair;

@@ -140,8 +140,7 @@ export default function PairingPage() {
 
       const { answer, publicKey, fingerprint: myFingerprint } = await acceptOffer(
         tunnelOffer.offer,
-        tunnelOffer.publicKey,
-        tunnelOffer.fingerprint
+        tunnelOffer.publicKey
       );
       
       setFingerprint(myFingerprint);

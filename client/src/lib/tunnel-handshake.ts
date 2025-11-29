@@ -174,11 +174,10 @@ export interface TunnelMessage {
   fingerprint?: string;
 }
 
-export function createTunnelInitMessage(publicKey: string, fingerprint: string): TunnelMessage {
+export function createTunnelInitMessage(publicKey: string): TunnelMessage {
   return {
     type: 'tunnel-init',
     publicKey,
-    fingerprint,
   };
 }
 
