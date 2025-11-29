@@ -37,31 +37,6 @@ export default function PairingPage() {
     }
   }, [pairingStatus]);
 
-  const handleMasterKeyReceived = async (payload: any, isCreator: boolean = false) => {
-    try {
-      if (isCreator && payload.joinerId) {
-        // Creator learning joiner's ID from encrypted payload
-        await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId, payload.joinerId);
-      } else {
-        // Joiner learning creator's ID
-        await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
-      }
-      onPeerConnected();
-      if (roomRef.current) closeRoom(roomRef.current);
-      setShowSuccess(true);
-      setMode('success-animation');
-    } catch (error) {
-      if (roomRef.current) closeRoom(roomRef.current);
-      toast({
-        title: 'Pairing Failed',
-        description: 'Could not complete connection.',
-        variant: 'destructive',
-      });
-      setMode('choose');
-      setLoading(false);
-    }
-  };
-
   const handleCreateRoom = async () => {
     setLoading(true);
     setIsCreator(true);
@@ -113,8 +88,7 @@ export default function PairingPage() {
       const remotePeerId = getRemotePeerId(normalCode, false);
       const conn = await connectToRoom(peer, remotePeerId, 6000);
       roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
-      const secret = url.searchParams.get('secret') || '';
-      const payload = await runJoinerTunnel(conn, userId || '', secret);
+      const payload = await runJoinerTunnel(conn, userId || '', '');  // Secret will be from QR metadata if needed
       await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
       onPeerConnected();
       closeRoom(roomRef.current);

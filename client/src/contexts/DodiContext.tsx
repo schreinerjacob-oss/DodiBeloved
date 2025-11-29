@@ -229,13 +229,16 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       throw new Error('Master key, salt, and partner ID are required');
     }
     
-    const db = await initDB();
+    // Use saveSetting to write to both localStorage and IndexedDB
+    await Promise.all([
+      saveSetting('passphrase', masterKey),
+      saveSetting('salt', salt),
+      saveSetting('partnerId', partnerId),
+      saveSetting('pairingStatus', 'connected'),
+    ]);
     
-    // Store the master key as the passphrase (for compatibility with existing encryption system)
-    await db.put('settings', { key: 'passphrase', value: masterKey });
-    await db.put('settings', { key: 'salt', value: salt });
-    await db.put('settings', { key: 'partnerId', value: partnerId });
-    await db.put('settings', { key: 'pairingStatus', value: 'connected' });
+    // Clear encryption cache to reset stale in-memory keys
+    clearEncryptionCache();
     
     setPartnerId(partnerId);
     setPassphrase(masterKey);

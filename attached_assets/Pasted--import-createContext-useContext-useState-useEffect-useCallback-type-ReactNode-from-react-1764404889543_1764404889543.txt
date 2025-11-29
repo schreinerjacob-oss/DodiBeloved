@@ -1,0 +1,326 @@
+> import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+> import { generatePassphrase, generateSalt, arrayBufferToBase64 } from '@/lib/crypto';
+> import { saveSetting, getSetting, initDB, clearEncryptionCache, savePIN, verifyPIN } from '@/lib/storage-encrypted';
+> import { getTrialStatus } from '@/lib/storage-subscription';
+> import { useInactivityTimer } from '@/hooks/use-inactivity-timer';
+> import { nanoid } from 'nanoid';
+>
+> type PairingStatus = 'unpaired' | 'waiting' | 'connected';
+>
+> interface DodiContextType {
+>   userId: string | null;
+>   displayName: string | null;
+>   partnerId: string | null;
+>   passphrase: string | null;
+>   pairingStatus: PairingStatus;
+>   isPaired: boolean;
+>   isOnline: boolean;
+>   isTrialActive: boolean;
+>   trialDaysRemaining: number;
+>   isLocked: boolean;
+>   pinEnabled: boolean;
+>   showPinSetup: boolean;
+>   inactivityMinutes: number;
+>   initializeProfile: (displayName: string) => Promise<string>;
+>   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
+>   completePairing: (partnerId: string, passphrase: string) => Promise<string>;
+>   completePairingWithMasterKey: (masterKey: string, salt: string, creatorId: string) => Promise<void>;
+>   setPartnerIdForCreator: (newPartnerId: string) => Promise<void>;
+>   onPeerConnected: () => void;
+>   setPIN: (pin: string) => Promise<void>;
+>   unlockWithPIN: (pin: string) => Promise<boolean>;
+>   unlockWithPassphrase: (passphrase: string) => Promise<boolean>;
+>   lockApp: () => void;
+>   setInactivityMinutes: (minutes: number) => Promise<void>;
+>   logout: () => Promise<void>;
+> }
+>
+> const DodiContext = createContext<DodiContextType | undefined>(undefined);
+>
+> export function DodiProvider({ children }: { children: ReactNode }) {
+>   const [userId, setUserId] = useState<string | null>(null);
+>   const [displayName, setDisplayName] = useState<string | null>(null);
+>   const [partnerId, setPartnerId] = useState<string | null>(null);
+>   const [passphrase, setPassphrase] = useState<string | null>(null);
+>   const [pairingStatus, setPairingStatus] = useState<PairingStatus>('unpaired');
+>   const [isOnline, setIsOnline] = useState(navigator.onLine);
+>   const [isTrialActive, setIsTrialActive] = useState(true);
+>   const [trialDaysRemaining, setTrialDaysRemaining] = useState(30);
+>   const [isLocked, setIsLocked] = useState(false);
+>   const [pinEnabled, setPinEnabled] = useState(false);
+>   const [showPinSetup, setShowPinSetup] = useState(false);
+>   const [inactivityMinutes, setInactivityMinutesState] = useState(10);
+>
+>   const isPaired = pairingStatus === 'connected';
+>
+>   useEffect(() => {
+>     const loadPairingData = async () => {
+>       try {
+>         // Use getSetting (which checks localStorage then IDB) for consistent loading
+>         const [storedUserId, storedDisplayName, storedPartnerId, storedPassphrase, storedPairingStatus, storedPinEnabled, storedInactivityMinutes] = await Promise.all([
+>           getSetting('userId'),
+>           getSetting('displayName'),
+>           getSetting('partnerId'),
+>           getSetting('passphrase'),
+>           getSetting('pairingStatus'),
+>           getSetting('pinEnabled'),
+>           getSetting('inactivityMinutes'),
+>         ]);
+>
+>         if (storedUserId) {
+>           setUserId(storedUserId);
+>           setDisplayName(storedDisplayName || null);
+>         }
+>
+>         if (storedPassphrase) {
+>           setPassphrase(storedPassphrase);
+>         }
+>
+>         if (storedPartnerId) {
+>           setPartnerId(storedPartnerId);
+>         }
+>
+>         if (storedPairingStatus) {
+>           setPairingStatus(storedPairingStatus as PairingStatus);
+>         } else if (storedUserId && storedPassphrase) {
+>           const status = storedPartnerId ? 'connected' : 'waiting';
+>           setPairingStatus(status);
+>           await saveSetting('pairingStatus', status);
+>         }
+>
+>         if (storedPinEnabled === 'true') {
+>           setPinEnabled(true);
+>           setIsLocked(true);
+>         }
+>
+>         if (storedInactivityMinutes) {
+>           const minutes = parseInt(storedInactivityMinutes, 10);
+>           if (!isNaN(minutes)) setInactivityMinutesState(minutes);
+>         }
+>
+>         const trialStatus = await getTrialStatus();
+>         setIsTrialActive(trialStatus.isActive);
+>         setTrialDaysRemaining(trialStatus.daysRemaining);
+>       } catch (error) {
+>         console.error('Failed to load pairing data:', error);
+>       }
+>     };
+>
+>     loadPairingData();
+>
+>     const updateTrialStatus = async () => {
+>       const trialStatus = await getTrialStatus();
+>       setIsTrialActive(trialStatus.isActive);
+>       setTrialDaysRemaining(trialStatus.daysRemaining);
+>     };
+>     
+>     const trialCheckInterval = setInterval(updateTrialStatus, 60000);
+>     const handleVisibilityChange = () => { if (document.visibilityState === 'visible') updateTrialStatus(); };
+>     
+>     document.addEventListener('visibilitychange', handleVisibilityChange);
+>     window.addEventListener('online', () => setIsOnline(true));
+>     window.addEventListener('offline', () => setIsOnline(false));
+>
+>     return () => {
+>       clearInterval(trialCheckInterval);
+>       document.removeEventListener('visibilitychange', handleVisibilityChange);
+>       window.removeEventListener('online', () => setIsOnline(true));
+>       window.removeEventListener('offline', () => setIsOnline(false));
+>     };
+>   }, []);
+>
+>   // Initialization methods
+>   const initializeProfile = async (name: string) => {
+>     const newUserId = nanoid();
+>     await saveSetting('userId', newUserId);
+>     await saveSetting('displayName', name);
+>     setUserId(newUserId);
+>     setDisplayName(name);
+>     return newUserId;
+>   };
+>
+>   const initializePairing = async () => {
+>     const newUserId = nanoid();
+>     const newPassphrase = generatePassphrase();
+>     const saltBase64 = arrayBufferToBase64(generateSalt());
+>     
+>     await Promise.all([
+>       saveSetting('userId', newUserId),
+>       saveSetting('passphrase', newPassphrase),
+>       saveSetting('salt', saltBase64),
+>       saveSetting('pairingStatus', 'waiting'),
+>     ]);
+>     
+>     setUserId(newUserId);
+>     setPassphrase(newPassphrase);
+>     setPartnerId(null);
+>     setPairingStatus('waiting');
+>     
+>     return { userId: newUserId, passphrase: newPassphrase };
+>   };
+>
+>   const completePairing = async (newPartnerId: string, sharedPassphrase: string): Promise<string> => {
+>     if (!newPartnerId || !sharedPassphrase) throw new Error('Partner ID and passphrase are required');
+>     
+>     let currentUserId = userId || nanoid();
+>     if (currentUserId === newPartnerId) {
+>       currentUserId = nanoid();
+>       setUserId(currentUserId);
+>     }
+>     
+>     const db = await initDB();
+>     const existingSalt = await db.get('settings', 'salt');
+>     if (!existingSalt) {
+>       const saltBase64 = arrayBufferToBase64(generateSalt());
+>       await saveSetting('salt', saltBase64);
+>     }
+>     
+>     await Promise.all([
+>       saveSetting('userId', currentUserId),
+>       saveSetting('partnerId', newPartnerId),
+>       saveSetting('passphrase', sharedPassphrase),
+>       saveSetting('pairingStatus', 'waiting')
+>     ]);
+>     
+>     setPartnerId(newPartnerId);
+>     setPassphrase(sharedPassphrase);
+>     setPairingStatus('waiting');
+>     
+>     return currentUserId;
+>   };
+>
+>   // FIXED: Uses saveSetting to persist to both LocalStorage and IndexedDB
+>   const completePairingWithMasterKey = async (masterKey: string, salt: string, creatorId: string) => {
+>     if (!masterKey || !salt || !creatorId) throw new Error('Master key, salt, and creator ID are required');
+>     
+>     let currentUserId = userId || nanoid();
+>     if (currentUserId === creatorId) {
+>       currentUserId = nanoid();
+>       setUserId(currentUserId);
+>     }
+>
+>     // Clear any existing cached keys to force reload
+>     clearEncryptionCache();
+>     
+>     await Promise.all([
+>       saveSetting('userId', currentUserId),
+>       saveSetting('passphrase', masterKey),
+>       saveSetting('salt', salt),
+>       saveSetting('partnerId', creatorId),
+>       saveSetting('pairingStatus', 'connected')
+>     ]);
+>     
+>     setPartnerId(creatorId);
+>     setPassphrase(masterKey);
+>     setPairingStatus('connected');
+>     
+>     if (!pinEnabled) setShowPinSetup(true);
+>     console.log('✅ Secure pairing completed. Keys saved.');
+>   };
+>
+>   const setPartnerIdForCreator = async (newPartnerId: string) => {
+>     if (!newPartnerId) throw new Error('Partner ID is required');
+>     await saveSetting('partnerId', newPartnerId);
+>     setPartnerId(newPartnerId);
+>   };
+>
+>   const onPeerConnected = useCallback(async () => {
+>     if (pairingStatus === 'waiting' || pairingStatus === 'unpaired') {
+>       setPairingStatus('connected');
+>       await saveSetting('pairingStatus', 'connected');
+>       if (!pinEnabled) setShowPinSetup(true);
+>     }
+>   }, [pairingStatus, pinEnabled]);
+>
+>   // PIN Logic
+>   const setPINHandler = async (pin: string) => {
+>     if (pin.length < 4 || pin.length > 6) throw new Error('PIN must be 4-6 digits');
+>     await savePIN(pin);
+>     await saveSetting('pinEnabled', 'true');
+>     setPinEnabled(true);
+>     setShowPinSetup(false);
+>   };
+>
+>   const unlockWithPINHandler = async (pin: string): Promise<boolean> => {
+>     try {
+>       const isValid = await verifyPIN(pin);
+>       if (isValid) {
+>         setIsLocked(false);
+>         return true;
+>       }
+>       return false;
+>     } catch { return false; }
+>   };
+>
+>   const unlockWithPassphraseHandler = async (pass: string): Promise<boolean> => {
+>     if (pass === passphrase) {
+>       setIsLocked(false);
+>       return true;
+>     }
+>     return false;
+>   };
+>
+>   const lockAppHandler = () => setIsLocked(true);
+>   
+>   const setInactivityMinutesHandler = async (minutes: number) => {
+>     setInactivityMinutesState(minutes);
+>     await saveSetting('inactivityMinutes', String(minutes));
+>   };
+>
+>   useInactivityTimer({
+>     onInactivity: lockAppHandler,
+>     timeoutMinutes: inactivityMinutes,
+>     enabled: pinEnabled && pairingStatus === 'connected',
+>   });
+>
+>   const logout = async () => {
+>     clearEncryptionCache();
+>     const db = await initDB();
+>     await Promise.all([
+>       db.clear('settings'),
+>       db.clear('messages'),
+>       db.clear('memories'),
+>       db.clear('calendarEvents'),
+>       db.clear('dailyRituals'),
+>       db.clear('loveLetters'),
+>       db.clear('reactions')
+>     ]);
+>     localStorage.clear(); // Also clear localStorage to prevent ghosts
+>     
+>     setUserId(null);
+>     setDisplayName(null);
+>     setPartnerId(null);
+>     setPassphrase(null);
+>     setPairingStatus('unpaired');
+>     setPinEnabled(false);
+>     setIsLocked(false);
+>   };
+>
+>   return (
+>     <DodiContext.Provider
+>       value={{
+>         userId, displayName, partnerId, passphrase, pairingStatus,
+>         isPaired, isOnline, isTrialActive, trialDaysRemaining,
+>         isLocked, pinEnabled, showPinSetup, inactivityMinutes,
+>         initializeProfile, initializePairing, completePairing, completePairingWithMasterKey,
+>         setPartnerIdForCreator, onPeerConnected,
+>         setPIN: setPINHandler,
+>         unlockWithPIN: unlockWithPINHandler,
+>         unlockWithPassphrase: unlockWithPassphraseHandler,
+>         lockApp: lockAppHandler,
+>         setInactivityMinutes: setInactivityMinutesHandler,
+>         logout,
+>       }}
+>     >
+>       {children}
+>     </DodiContext.Provider>
+>   );
+> }
+>
+> export function useDodi() {
+>   const context = useContext(DodiContext);
+>   if (!context) throw new Error('useDodi must be used within a DodiProvider');
+>   return context;
+> }
+> 
+
