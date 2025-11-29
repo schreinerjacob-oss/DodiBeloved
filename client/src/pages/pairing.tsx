@@ -40,6 +40,7 @@ export default function PairingPage() {
   const [answerQrData, setAnswerQrData] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [requestingPermission, setRequestingPermission] = useState(false);
   
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const [scannerInitialized, setScannerInitialized] = useState(false);
@@ -248,14 +249,52 @@ export default function PairingPage() {
     }
   };
 
+  // Request camera permissions explicitly
+  const requestCameraPermission = async (): Promise<boolean> => {
+    try {
+      console.log('Requesting camera permission...');
+      setRequestingPermission(true);
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      console.log('Camera permission granted, stream obtained:', stream.id);
+      // Stop the stream immediately - we just wanted to check permission
+      stream.getTracks().forEach(track => track.stop());
+      setRequestingPermission(false);
+      return true;
+    } catch (error: unknown) {
+      setRequestingPermission(false);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('Camera permission denied or error:', errorMsg);
+      
+      // Provide specific feedback based on error type
+      let description = 'Unable to access camera. ';
+      if (errorMsg.includes('NotAllowedError') || errorMsg.includes('Permission denied')) {
+        description += 'Please grant camera permission in your browser settings.';
+      } else if (errorMsg.includes('NotFoundError')) {
+        description += 'No camera device found on this device.';
+      } else if (errorMsg.includes('NotReadableError')) {
+        description += 'Camera is already in use by another application.';
+      } else {
+        description += 'Please check your browser and device settings.';
+      }
+      
+      toast({
+        title: 'Camera Access Required',
+        description,
+        variant: 'destructive',
+      });
+      return false;
+    }
+  };
+
   // Scanner cleanup helper
   const cleanupScanner = () => {
     if (scannerRef.current) {
       try {
+        console.log('Cleaning up scanner...');
         scannerRef.current.clear();
         scannerRef.current = null;
       } catch (e) {
-        console.log('Scanner cleanup:', e);
+        console.log('Scanner cleanup error:', e);
       }
     }
     setScannerInitialized(false);
@@ -266,10 +305,14 @@ export default function PairingPage() {
     const shouldScan = mode === 'joiner-scanning' || mode === 'creator-scan-answer';
     
     if (shouldScan && !scannerInitialized) {
+      console.log('QR scanning mode activated:', mode);
       const timeoutId = setTimeout(() => {
         const element = document.getElementById('qr-reader');
         if (element) {
+          console.log('QR reader element found, initializing scanner...');
           initializeScanner(mode === 'creator-scan-answer');
+        } else {
+          console.error('QR reader element not found in DOM');
         }
       }, 100);
       
@@ -277,7 +320,10 @@ export default function PairingPage() {
     }
 
     return () => {
-      cleanupScanner();
+      if (shouldScan) {
+        console.log('Cleaning up scanner on mode change or unmount');
+        cleanupScanner();
+      }
     };
   }, [mode, scannerInitialized]);
 
@@ -286,6 +332,15 @@ export default function PairingPage() {
       const element = document.getElementById('qr-reader');
       if (!element) throw new Error('QR reader element not found');
       
+      console.log('Checking camera permissions...');
+      const hasPermission = await requestCameraPermission();
+      if (!hasPermission) {
+        console.log('Camera permission not granted, aborting scanner initialization');
+        setScannerInitialized(false);
+        return;
+      }
+      
+      console.log('Camera permission confirmed, creating scanner...');
       element.innerHTML = '';
       
       const scanner = new Html5QrcodeScanner(
@@ -306,14 +361,27 @@ export default function PairingPage() {
 
       const successHandler = isCreatorScanning ? handleCreatorScanAnswer : handleJoinerScanCreator;
 
+      console.log('Starting scanner.render()...');
       await scanner.render(successHandler, (error: unknown) => {
-        console.log('Scanner error:', error);
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.warn('Scanner runtime error:', errorMsg);
+        // Don't show toast for every error - these are usually just scan failures
+        if (errorMsg.includes('permission') || errorMsg.includes('Permission')) {
+          toast({
+            title: 'Camera Permission Error',
+            description: 'Camera access was denied. Please check permissions.',
+            variant: 'destructive',
+          });
+        }
       });
+      console.log('Scanner rendering successful');
     } catch (error) {
-      console.error('Failed to initialize scanner:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('Failed to initialize scanner:', errorMsg);
+      
       toast({
         title: 'Camera Error',
-        description: 'Unable to access camera. Please check permissions.',
+        description: errorMsg || 'Unable to initialize camera. Please try again.',
         variant: 'destructive',
       });
       setScannerInitialized(false);
@@ -467,7 +535,7 @@ export default function PairingPage() {
 
             <div className="p-8 space-y-3">
               <p className="text-xs text-muted-foreground text-center">
-                {loading ? 'Processing...' : 'Camera is ready'}
+                {requestingPermission ? 'Requesting camera access...' : loading ? 'Processing...' : 'Camera is ready'}
               </p>
               <Button
                 onClick={() => {
