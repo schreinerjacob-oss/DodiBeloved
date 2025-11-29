@@ -23,7 +23,6 @@ interface DodiContextType {
   inactivityMinutes: number;
   initializeProfile: (displayName: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
-  completePairing: (partnerId: string, passphrase: string) => Promise<string>;
   completePairingWithMasterKey: (masterKey: string, salt: string, creatorId: string) => Promise<void>;
   completePairingAsCreator: (masterKey: string, salt: string, joinerId: string) => Promise<void>;
   setPartnerIdForCreator: (newPartnerId: string) => Promise<void>;
@@ -182,59 +181,13 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     return { userId: userId, passphrase: newPassphrase };
   };
 
-  // Called by joiner when they scan the creator's QR code
-  // This stores credentials but keeps status as 'waiting' until P2P connection completes
-  // Returns the joiner's userId for use in the answer QR
-  const completePairing = async (newPartnerId: string, sharedPassphrase: string): Promise<string> => {
-    if (!newPartnerId || !sharedPassphrase) {
-      throw new Error('Partner ID and passphrase are required');
-    }
-    
-    let currentUserId = userId;
-    
-    if (!currentUserId || currentUserId === newPartnerId) {
-      do {
-        currentUserId = nanoid();
-      } while (currentUserId === newPartnerId);
-      
-      await saveSetting('userId', currentUserId);
-      setUserId(currentUserId);
-    }
-    
-    if (currentUserId === newPartnerId) {
-      throw new Error('Cannot pair with yourself');
-    }
-    
-    const db = await initDB();
-    
-    // Check if salt already exists, if not generate one
-    const existingSalt = await db.get('settings', 'salt');
-    if (!existingSalt) {
-      const saltBase64 = arrayBufferToBase64(generateSalt());
-      await db.put('settings', { key: 'salt', value: saltBase64 });
-    }
-    
-    await db.put('settings', { key: 'partnerId', value: newPartnerId });
-    await db.put('settings', { key: 'passphrase', value: sharedPassphrase });
-    // Keep as 'waiting' until P2P connection is established
-    await db.put('settings', { key: 'pairingStatus', value: 'waiting' });
-    
-    setPartnerId(newPartnerId);
-    setPassphrase(sharedPassphrase);
-    setPairingStatus('waiting'); // Joiner stays in waiting until P2P connects
-    
-    console.log('Joiner credentials stored - status: waiting for P2P connection');
-    
-    return currentUserId; // Return the joiner's userId for the answer QR
-  };
-
   // Called by joiner when receiving master key via tunnel
   const completePairingWithMasterKey = async (masterKey: string, salt: string, remotePartnerId: string) => {
     if (!masterKey || !salt || !remotePartnerId) {
       throw new Error('Master key, salt, and remote partner ID are required');
     }
     
-    // VALIDATION: Joiner must have their own userId already generated (from completePairing)
+    // VALIDATION: Joiner must have their own userId already generated
     if (!userId) {
       throw new Error('Joiner user ID must be generated before completing pairing');
     }
@@ -435,7 +388,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         inactivityMinutes,
         initializeProfile,
         initializePairing,
-        completePairing,
         completePairingWithMasterKey,
         completePairingAsCreator,
         setPartnerIdForCreator,
