@@ -140,9 +140,13 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         const dataChannel = peerConnection.createDataChannel('sync', { ordered: true });
         setupChannelListeners(dataChannel);
 
+        // Track ICE candidates
+        const candidates: RTCIceCandidate[] = [];
+        
         peerConnection.addEventListener('icecandidate', (event) => {
           if (event.candidate) {
             console.log('ICE candidate:', event.candidate);
+            candidates.push(event.candidate);
           }
         });
 
@@ -158,6 +162,24 @@ export function usePeerConnection(): UsePeerConnectionReturn {
           }
         };
 
+        // Wait for ICE gathering to complete
+        const onIceGatheringStateChange = () => {
+          if (peerConnection.iceGatheringState === 'complete') {
+            console.log('ICE gathering complete, generating offer signal...');
+            peerConnection.removeEventListener('icegatheringstatechange', onIceGatheringStateChange);
+            
+            const offerData = {
+              type: 'offer',
+              sdp: peerConnection.localDescription?.sdp,
+            };
+            const offerString = btoa(JSON.stringify(offerData));
+            console.log('Offer signal generated with full ICE candidates');
+            resolve(offerString);
+          }
+        };
+
+        peerConnection.addEventListener('icegatheringstatechange', onIceGatheringStateChange);
+
         // Create offer
         peerConnection.createOffer()
           .then(offer => {
@@ -165,16 +187,16 @@ export function usePeerConnection(): UsePeerConnectionReturn {
             return peerConnection.setLocalDescription(offer);
           })
           .then(() => {
-            const offerData = {
-              type: 'offer',
-              sdp: peerConnection.localDescription?.sdp,
-            };
-            const offerString = btoa(JSON.stringify(offerData));
-            console.log('Offer signal generated');
-            resolve(offerString);
+            console.log('Local description set, waiting for ICE gathering to complete...');
+            console.log('Current ICE gathering state:', peerConnection.iceGatheringState);
+            // If already complete (rare), resolve immediately
+            if (peerConnection.iceGatheringState === 'complete') {
+              onIceGatheringStateChange();
+            }
           })
           .catch(e => {
             console.error('Error creating offer:', e);
+            peerConnection.removeEventListener('icegatheringstatechange', onIceGatheringStateChange);
             reject(e);
           });
       } catch (e) {
@@ -210,9 +232,13 @@ export function usePeerConnection(): UsePeerConnectionReturn {
           setupChannelListeners(event.channel);
         };
 
+        // Track ICE candidates
+        const candidates: RTCIceCandidate[] = [];
+        
         peerConnection.addEventListener('icecandidate', (event) => {
           if (event.candidate) {
             console.log('ICE candidate:', event.candidate);
+            candidates.push(event.candidate);
           }
         });
 
@@ -228,6 +254,24 @@ export function usePeerConnection(): UsePeerConnectionReturn {
           }
         };
 
+        // Wait for ICE gathering to complete
+        const onIceGatheringStateChange = () => {
+          if (peerConnection.iceGatheringState === 'complete') {
+            console.log('ICE gathering complete, generating answer signal...');
+            peerConnection.removeEventListener('icegatheringstatechange', onIceGatheringStateChange);
+            
+            const answerData = {
+              type: 'answer',
+              sdp: peerConnection.localDescription?.sdp,
+            };
+            const answerString = btoa(JSON.stringify(answerData));
+            console.log('Answer signal generated with full ICE candidates');
+            resolve(answerString);
+          }
+        };
+
+        peerConnection.addEventListener('icegatheringstatechange', onIceGatheringStateChange);
+
         // Set remote description and create answer
         peerConnection.setRemoteDescription(new RTCSessionDescription({
           type: 'offer',
@@ -239,16 +283,16 @@ export function usePeerConnection(): UsePeerConnectionReturn {
             return peerConnection.setLocalDescription(answer);
           })
           .then(() => {
-            const answerData = {
-              type: 'answer',
-              sdp: peerConnection.localDescription?.sdp,
-            };
-            const answerString = btoa(JSON.stringify(answerData));
-            console.log('Answer signal generated');
-            resolve(answerString);
+            console.log('Local description set, waiting for ICE gathering to complete...');
+            console.log('Current ICE gathering state:', peerConnection.iceGatheringState);
+            // If already complete (rare), resolve immediately
+            if (peerConnection.iceGatheringState === 'complete') {
+              onIceGatheringStateChange();
+            }
           })
           .catch(e => {
             console.error('Error accepting offer:', e);
+            peerConnection.removeEventListener('icegatheringstatechange', onIceGatheringStateChange);
             reject(e);
           });
       } catch (e) {
