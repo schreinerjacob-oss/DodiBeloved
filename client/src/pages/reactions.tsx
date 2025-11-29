@@ -9,7 +9,7 @@ import type { Reaction } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format, isToday } from 'date-fns';
-import { useWebSocket } from '@/hooks/use-websocket';
+import { usePeerConnection } from '@/hooks/use-peer-connection';
 
 const reactionTypes = [
   { id: 'thinking-of-you', label: 'Thinking of you', icon: Heart, color: 'text-blush' },
@@ -21,7 +21,7 @@ const reactionTypes = [
 export default function ReactionsPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
-  const { send: sendWS, ws } = useWebSocket();
+  const { send: sendP2P, state: peerState } = usePeerConnection();
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [sending, setSending] = useState<string | null>(null);
 
@@ -31,9 +31,9 @@ export default function ReactionsPage() {
 
   // Listen for incoming reactions from partner and handle history sync
   useEffect(() => {
-    if (!ws || !partnerId) return;
+    if (!peerState.connected || !partnerId) return;
 
-    const handleMessage = async (event: MessageEvent) => {
+    const handleP2pMessage = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
         
@@ -58,7 +58,7 @@ export default function ReactionsPage() {
                  (r.senderId === partnerId && r.recipientId === userId)
           );
           
-          sendWS({
+          sendP2P({
             type: 'reaction-history-response',
             data: { reactions: relevantReactions, partnerId: partnerId },
           });
@@ -88,13 +88,13 @@ export default function ReactionsPage() {
       }
     };
 
-    ws.addEventListener('message', handleMessage);
+    window.addEventListener('p2p-message', handleP2pMessage as EventListener);
     
     // Request partner's reaction history with retry interval
     const requestReactionHistory = () => {
-      if (ws.readyState === WebSocket.OPEN && partnerId) {
+      if (peerState.connected && partnerId) {
         console.log('Requesting partner reaction history...');
-        sendWS({
+        sendP2P({
           type: 'request-reaction-history',
           data: { requesterId: userId },
         });
@@ -106,7 +106,7 @@ export default function ReactionsPage() {
     
     return () => {
       clearInterval(historyInterval);
-      ws.removeEventListener('message', handleMessage);
+      window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
     };
   }, [ws, partnerId, userId, sendWS]);
 
@@ -132,7 +132,7 @@ export default function ReactionsPage() {
       setReactions(prev => [reaction, ...prev]);
 
       // Send to partner via WebSocket
-      sendWS({
+      sendP2P({
         type: 'reaction',
         data: reaction,
       });

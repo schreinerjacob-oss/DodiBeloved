@@ -101,10 +101,11 @@ export default function MemoriesPage() {
       // Add to local state immediately
       setMemories(prev => [...prev, memory]);
       
-      // Send to partner via WebSocket
-      sendWS({
+      // Send to partner via P2P data channel
+      sendP2P({
         type: 'memory',
         data: memory,
+        timestamp: Date.now(),
       });
       
       setCaption('');

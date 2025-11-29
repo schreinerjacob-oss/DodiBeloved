@@ -14,12 +14,12 @@ import type { CalendarEvent } from '@/types';
 import { format, differenceInDays } from 'date-fns';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
-import { useWebSocket } from '@/hooks/use-websocket';
+import { usePeerConnection } from '@/hooks/use-peer-connection';
 
 export default function CalendarPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
-  const { send: sendWS, ws } = useWebSocket();
+  const { send: sendP2P, state: peerState } = usePeerConnection();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [anniversaryDate, setAnniversaryDate] = useState<Date | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -35,9 +35,9 @@ export default function CalendarPage() {
 
   // Listen for incoming events from partner and handle history sync
   useEffect(() => {
-    if (!ws || !partnerId) return;
+    if (!peerState.connected || !partnerId) return;
 
-    const handleMessage = async (event: MessageEvent) => {
+    const handleP2pMessage = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
         
@@ -70,7 +70,7 @@ export default function CalendarPage() {
                  (e.userId === partnerId && e.partnerId === userId)
           );
           
-          sendWS({
+          sendP2P({
             type: 'calendar-history-response',
             data: { events: relevantEvents, partnerId: partnerId },
           });
@@ -100,13 +100,13 @@ export default function CalendarPage() {
       }
     };
 
-    ws.addEventListener('message', handleMessage);
+    window.addEventListener('p2p-message', handleP2pMessage as EventListener);
     
     // Request partner's calendar history with retry interval
     const requestCalendarHistory = () => {
-      if (ws.readyState === WebSocket.OPEN && partnerId) {
+      if (peerState.connected && partnerId) {
         console.log('Requesting partner calendar history...');
-        sendWS({
+        sendP2P({
           type: 'request-calendar-history',
           data: { requesterId: userId },
         });
@@ -118,7 +118,7 @@ export default function CalendarPage() {
     
     return () => {
       clearInterval(historyInterval);
-      ws.removeEventListener('message', handleMessage);
+      window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
     };
   }, [ws, partnerId, userId, sendWS]);
 
@@ -167,7 +167,7 @@ export default function CalendarPage() {
       }
 
       // Send to partner via WebSocket
-      sendWS({
+      sendP2P({
         type: 'calendar',
         data: newEvent,
       });

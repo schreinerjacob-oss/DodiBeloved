@@ -7,16 +7,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Sparkles, Lock, Plus } from 'lucide-react';
 import { getAllPrayers, savePrayer } from '@/lib/storage-encrypted';
-import type { Prayer } from '@/types';
+import { usePeerConnection } from '@/hooks/use-peer-connection';
+import type { Prayer, SyncMessage } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { useWebSocket } from '@/hooks/use-websocket';
 
 export default function PrayersPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
-  const { send: sendWS, ws } = useWebSocket();
+  const { send: sendP2P, state: peerState } = usePeerConnection();
   const [prayers, setPrayers] = useState<Prayer[]>([]);
   const [gratitude, setGratitude] = useState('');
   const [prayer, setPrayer] = useState('');
@@ -28,19 +28,16 @@ export default function PrayersPage() {
     loadPrayers();
   }, []);
 
-  // Listen for incoming prayers from partner and handle history sync
+  // Listen for incoming prayers from partner via P2P
   useEffect(() => {
-    if (!ws || !partnerId) return;
+    if (!peerState.connected || !partnerId) return;
 
-    const handleMessage = async (event: MessageEvent) => {
+    const handleP2pMessage = async (event: CustomEvent) => {
       try {
-        const data = JSON.parse(event.data);
+        const message: SyncMessage = event.detail;
         
-        if (data.type === 'prayer') {
-          console.log('Received prayer from partner:', data.data);
-          const incomingPrayer = data.data;
-          
-          // Accept prayers/gratitude between us and our partner (either direction)
+        if (message.type === 'prayer') {
+          const incomingPrayer = message.data as Prayer;
           const isOurPrayer = (incomingPrayer.userId === userId && incomingPrayer.partnerId === partnerId) ||
                              (incomingPrayer.userId === partnerId && incomingPrayer.partnerId === userId);
           
@@ -53,65 +50,18 @@ export default function PrayersPage() {
               return [...prev, incomingPrayer];
             });
           }
-        } else if (data.type === 'request-prayer-history') {
-          console.log('Partner requesting prayer history, sending...');
-          const allPrayers = await getAllPrayers();
-          const relevantPrayers = allPrayers.filter(
-            p => (p.userId === userId && p.partnerId === partnerId) ||
-                 (p.userId === partnerId && p.partnerId === userId)
-          );
-          
-          sendWS({
-            type: 'prayer-history-response',
-            data: { prayers: relevantPrayers, partnerId: partnerId },
-          });
-        } else if (data.type === 'prayer-history-response') {
-          console.log('Received prayer history from partner');
-          const partnerPrayers: Prayer[] = data.data.prayers || [];
-          
-          for (const prayer of partnerPrayers) {
-            try {
-              await savePrayer(prayer);
-            } catch (err) {
-              console.error('Error saving partner prayer:', err);
-            }
-          }
-          
-          await loadPrayers();
-          
-          if (partnerPrayers.length > 0) {
-            toast({
-              title: "Gratitude synced",
-              description: `Synced ${partnerPrayers.length} entries with your beloved`,
-            });
-          }
         }
       } catch (e) {
-        console.log('WebSocket message parse error:', e);
+        console.error('🔗 [P2P] Error handling prayer message:', e);
       }
     };
 
-    ws.addEventListener('message', handleMessage);
-    
-    // Request partner's prayer history with retry interval
-    const requestPrayerHistory = () => {
-      if (ws.readyState === WebSocket.OPEN && partnerId) {
-        console.log('Requesting partner prayer history...');
-        sendWS({
-          type: 'request-prayer-history',
-          data: { requesterId: userId },
-        });
-      }
-    };
-    
-    requestPrayerHistory();
-    const historyInterval = setInterval(requestPrayerHistory, 3000);
+    window.addEventListener('p2p-message', handleP2pMessage as EventListener);
     
     return () => {
-      clearInterval(historyInterval);
-      ws.removeEventListener('message', handleMessage);
+      window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
     };
-  }, [ws, partnerId, userId, sendWS]);
+  }, [peerState.connected, partnerId, userId]);
 
   const loadPrayers = async () => {
     const allPrayers = await getAllPrayers();
@@ -169,10 +119,11 @@ export default function PrayersPage() {
       setPrayers(prev => [...prev, prayerEntry]);
       setTodaySubmitted(true);
 
-      // Send to partner via WebSocket
-      sendWS({
+      // Send to partner via P2P data channel
+      sendP2P({
         type: 'prayer',
         data: prayerEntry,
+        timestamp: Date.now(),
       });
 
       setGratitude('');

@@ -12,12 +12,12 @@ import type { FutureLetter } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format, isPast } from 'date-fns';
-import { useWebSocket } from '@/hooks/use-websocket';
+import { usePeerConnection } from '@/hooks/use-peer-connection';
 
 export default function FutureLettersPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
-  const { send: sendWS, ws } = useWebSocket();
+  const { send: sendP2P, state: peerState } = usePeerConnection();
   const [letters, setLetters] = useState<FutureLetter[]>([]);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -31,9 +31,9 @@ export default function FutureLettersPage() {
 
   // Listen for incoming future letters from partner and handle history sync
   useEffect(() => {
-    if (!ws || !partnerId) return;
+    if (!peerState.connected || !partnerId) return;
 
-    const handleMessage = async (event: MessageEvent) => {
+    const handleP2pMessage = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
         
@@ -58,7 +58,7 @@ export default function FutureLettersPage() {
                  (l.authorId === partnerId && l.recipientId === userId)
           );
           
-          sendWS({
+          sendP2P({
             type: 'future-letter-history-response',
             data: { letters: relevantLetters, partnerId: partnerId },
           });
@@ -88,13 +88,13 @@ export default function FutureLettersPage() {
       }
     };
 
-    ws.addEventListener('message', handleMessage);
+    window.addEventListener('p2p-message', handleP2pMessage as EventListener);
     
     // Request partner's future letter history with retry interval
     const requestFutureLetterHistory = () => {
-      if (ws.readyState === WebSocket.OPEN && partnerId) {
+      if (peerState.connected && partnerId) {
         console.log('Requesting partner future letter history...');
-        sendWS({
+        sendP2P({
           type: 'request-future-letter-history',
           data: { requesterId: userId },
         });
@@ -106,7 +106,7 @@ export default function FutureLettersPage() {
     
     return () => {
       clearInterval(historyInterval);
-      ws.removeEventListener('message', handleMessage);
+      window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
     };
   }, [ws, partnerId, userId, sendWS]);
 
@@ -142,7 +142,7 @@ export default function FutureLettersPage() {
       setLetters(prev => [...prev, letter]);
       
       // Send to partner via WebSocket
-      sendWS({
+      sendP2P({
         type: 'future-letter',
         data: letter,
       });

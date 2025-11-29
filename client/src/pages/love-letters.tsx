@@ -8,16 +8,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Pen, Lock, Heart, Plus } from 'lucide-react';
 import { getAllLoveLetters, saveLoveLetter } from '@/lib/storage-encrypted';
-import type { LoveLetter } from '@/types';
+import { usePeerConnection } from '@/hooks/use-peer-connection';
+import type { LoveLetter, SyncMessage } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { useWebSocket } from '@/hooks/use-websocket';
 
 export default function LoveLettersPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
-  const { send: sendWS, ws } = useWebSocket();
+  const { send: sendP2P, state: peerState } = usePeerConnection();
   const [letters, setLetters] = useState<LoveLetter[]>([]);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -29,18 +29,16 @@ export default function LoveLettersPage() {
     loadLetters();
   }, []);
 
-  // Listen for incoming letters from partner and handle history sync
+  // Listen for incoming letters from partner via P2P
   useEffect(() => {
-    if (!ws || !partnerId) return;
+    if (!peerState.connected || !partnerId) return;
 
-    const handleMessage = async (event: MessageEvent) => {
+    const handleP2pMessage = async (event: CustomEvent) => {
       try {
-        const data = JSON.parse(event.data);
+        const message: SyncMessage = event.detail;
         
-        if (data.type === 'letter') {
-          console.log('Received letter from partner:', data.data);
-          const incomingLetter = data.data;
-          
+        if (message.type === 'letter') {
+          const incomingLetter = message.data as LoveLetter;
           if (incomingLetter.recipientId === userId && incomingLetter.authorId === partnerId) {
             await saveLoveLetter(incomingLetter);
             setLetters(prev => {
@@ -50,65 +48,18 @@ export default function LoveLettersPage() {
               return [...prev, incomingLetter];
             });
           }
-        } else if (data.type === 'request-letter-history') {
-          console.log('Partner requesting letter history, sending...');
-          const allLetters = await getAllLoveLetters();
-          const relevantLetters = allLetters.filter(
-            l => (l.authorId === userId && l.recipientId === partnerId) ||
-                 (l.authorId === partnerId && l.recipientId === userId)
-          );
-          
-          sendWS({
-            type: 'letter-history-response',
-            data: { letters: relevantLetters, partnerId: partnerId },
-          });
-        } else if (data.type === 'letter-history-response') {
-          console.log('Received letter history from partner');
-          const partnerLetters: LoveLetter[] = data.data.letters || [];
-          
-          for (const letter of partnerLetters) {
-            try {
-              await saveLoveLetter(letter);
-            } catch (err) {
-              console.error('Error saving partner letter:', err);
-            }
-          }
-          
-          await loadLetters();
-          
-          if (partnerLetters.length > 0) {
-            toast({
-              title: "Letters synced",
-              description: `Synced ${partnerLetters.length} letters with your beloved`,
-            });
-          }
         }
       } catch (e) {
-        console.log('WebSocket message parse error:', e);
+        console.error('🔗 [P2P] Error handling letter message:', e);
       }
     };
 
-    ws.addEventListener('message', handleMessage);
-    
-    // Request partner's letter history with retry interval
-    const requestLetterHistory = () => {
-      if (ws.readyState === WebSocket.OPEN && partnerId) {
-        console.log('Requesting partner letter history...');
-        sendWS({
-          type: 'request-letter-history',
-          data: { requesterId: userId },
-        });
-      }
-    };
-    
-    requestLetterHistory();
-    const historyInterval = setInterval(requestLetterHistory, 3000);
+    window.addEventListener('p2p-message', handleP2pMessage as EventListener);
     
     return () => {
-      clearInterval(historyInterval);
-      ws.removeEventListener('message', handleMessage);
+      window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
     };
-  }, [ws, partnerId, userId, sendWS]);
+  }, [peerState.connected, partnerId, userId]);
 
   const loadLetters = async () => {
     const allLetters = await getAllLoveLetters();
@@ -132,10 +83,11 @@ export default function LoveLettersPage() {
       await saveLoveLetter(letter);
       setLetters(prev => [...prev, letter]);
       
-      // Send to partner via WebSocket
-      sendWS({
+      // Send to partner via P2P data channel
+      sendP2P({
         type: 'letter',
         data: letter,
+        timestamp: Date.now(),
       });
 
       setTitle('');

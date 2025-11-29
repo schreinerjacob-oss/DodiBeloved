@@ -10,7 +10,7 @@ import type { DailyRitual } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { useWebSocket } from '@/hooks/use-websocket';
+import { usePeerConnection } from '@/hooks/use-peer-connection';
 
 const emotions = [
   { name: 'joyful', icon: Laugh, color: 'text-yellow-500' },
@@ -26,7 +26,7 @@ const emotions = [
 export default function DailyRitualPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
-  const { send: sendWS, ws } = useWebSocket();
+  const { send: sendP2P, state: peerState } = usePeerConnection();
   const [rituals, setRituals] = useState<DailyRitual[]>([]);
   const [selectedEmotion, setSelectedEmotion] = useState('');
   const [lovedMoment, setLovedMoment] = useState('');
@@ -41,9 +41,9 @@ export default function DailyRitualPage() {
 
   // Listen for incoming rituals from partner and handle history sync
   useEffect(() => {
-    if (!ws || !partnerId) return;
+    if (!peerState.connected || !partnerId) return;
 
-    const handleMessage = async (event: MessageEvent) => {
+    const handleP2pMessage = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
         
@@ -72,7 +72,7 @@ export default function DailyRitualPage() {
                  (r.userId === partnerId && r.partnerId === userId)
           );
           
-          sendWS({
+          sendP2P({
             type: 'ritual-history-response',
             data: { rituals: relevantRituals, partnerId: partnerId },
           });
@@ -102,13 +102,13 @@ export default function DailyRitualPage() {
       }
     };
 
-    ws.addEventListener('message', handleMessage);
+    window.addEventListener('p2p-message', handleP2pMessage as EventListener);
     
     // Request partner's ritual history with retry interval
     const requestRitualHistory = () => {
-      if (ws.readyState === WebSocket.OPEN && partnerId) {
+      if (peerState.connected && partnerId) {
         console.log('Requesting partner ritual history...');
-        sendWS({
+        sendP2P({
           type: 'request-ritual-history',
           data: { requesterId: userId },
         });
@@ -120,7 +120,7 @@ export default function DailyRitualPage() {
     
     return () => {
       clearInterval(historyInterval);
-      ws.removeEventListener('message', handleMessage);
+      window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
     };
   }, [ws, partnerId, userId, sendWS]);
 
@@ -166,7 +166,7 @@ export default function DailyRitualPage() {
       setTodayCompleted(true);
 
       // Send to partner via WebSocket
-      sendWS({
+      sendP2P({
         type: 'ritual',
         data: ritual,
       });
