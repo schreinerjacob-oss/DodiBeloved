@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check } from 'lucide-react';
+import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +19,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import { savePIN, verifyPIN } from '@/lib/storage-encrypted';
 
 export default function SettingsPage() {
   const { userId, partnerId, passphrase, logout, isOnline, isTrialActive, trialDaysRemaining } = useDodi();
@@ -27,6 +37,11 @@ export default function SettingsPage() {
   const [copiedPassphrase, setCopiedPassphrase] = useState(false);
   const [copiedPartnerId, setCopiedPartnerId] = useState(false);
   const [copiedReconnect, setCopiedReconnect] = useState(false);
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
+  const [currentPin, setCurrentPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pinSaving, setPinSaving] = useState(false);
 
   const handleCopyUserId = () => {
     if (userId) {
@@ -83,6 +98,72 @@ export default function SettingsPage() {
       title: "Logged out",
       description: "Your pairing has been cleared from this device.",
     });
+  };
+
+  const handleChangePIN = async () => {
+    // Validate inputs
+    if (!currentPin.trim()) {
+      toast({
+        title: "Current PIN required",
+        description: "Please enter your current PIN to proceed.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!newPin.trim() || newPin.length < 4) {
+      toast({
+        title: "Invalid PIN",
+        description: "New PIN must be at least 4 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPin !== confirmPin) {
+      toast({
+        title: "PINs don't match",
+        description: "New PIN and confirmation must be identical.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPinSaving(true);
+    try {
+      // Verify current PIN is correct
+      const isValid = await verifyPIN(currentPin);
+      if (!isValid) {
+        toast({
+          title: "Incorrect PIN",
+          description: "The current PIN you entered is incorrect.",
+          variant: "destructive",
+        });
+        setPinSaving(false);
+        return;
+      }
+
+      // Save new PIN
+      await savePIN(newPin);
+      toast({
+        title: "PIN changed",
+        description: "Your PIN has been updated successfully.",
+      });
+
+      // Clear form and close dialog
+      setCurrentPin('');
+      setNewPin('');
+      setConfirmPin('');
+      setPinDialogOpen(false);
+    } catch (error) {
+      toast({
+        title: "Failed to change PIN",
+        description: "An error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setPinSaving(false);
+    }
   };
 
   return (
@@ -150,6 +231,82 @@ export default function SettingsPage() {
               </div>
               <ThemeToggle />
             </div>
+          </Card>
+
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <Key className="w-5 h-5 text-sage" />
+              <div className="flex-1">
+                <h3 className="font-medium">App PIN</h3>
+                <p className="text-xs text-muted-foreground">
+                  Set or change your 4-digit app unlock PIN
+                </p>
+              </div>
+            </div>
+            <Dialog open={pinDialogOpen} onOpenChange={setPinDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full" data-testid="button-change-pin">
+                  <Key className="w-4 h-4 mr-2" />
+                  Change PIN
+                </Button>
+              </DialogTrigger>
+              <DialogContent data-testid="dialog-change-pin">
+                <DialogHeader>
+                  <DialogTitle>Change Your PIN</DialogTitle>
+                  <DialogDescription>
+                    Enter your current PIN, then set a new one. PINs must be at least 4 characters.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Current PIN</label>
+                    <Input
+                      type="password"
+                      placeholder="Enter current PIN"
+                      value={currentPin}
+                      onChange={(e) => setCurrentPin(e.target.value)}
+                      data-testid="input-current-pin"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">New PIN</label>
+                    <Input
+                      type="password"
+                      placeholder="Enter new PIN (4+ characters)"
+                      value={newPin}
+                      onChange={(e) => setNewPin(e.target.value)}
+                      data-testid="input-new-pin"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Confirm New PIN</label>
+                    <Input
+                      type="password"
+                      placeholder="Re-enter new PIN"
+                      value={confirmPin}
+                      onChange={(e) => setConfirmPin(e.target.value)}
+                      data-testid="input-confirm-pin"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPinDialogOpen(false)}
+                    data-testid="button-cancel-pin-change"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleChangePIN}
+                    disabled={pinSaving}
+                    data-testid="button-confirm-pin-change"
+                  >
+                    {pinSaving ? 'Changing...' : 'Change PIN'}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </Card>
 
           <Card className="p-6 space-y-4">
