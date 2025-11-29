@@ -12,6 +12,8 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import { 
   encodePairingPayload, 
   decodePairingPayload,
+  encodeJoinerResponse,
+  decodeJoinerResponse,
   savePendingSession,
   getPendingSession,
   clearPendingSession,
@@ -66,13 +68,9 @@ export default function PairingPage() {
       setMode('creator-show-qr');
     } else if (storedJoinerResponse) {
       // Joiner: restore answer QR display
-      const answerPayload = {
-        answer: storedJoinerResponse.answer,
-        joinerId: storedJoinerResponse.joinerId,
-        sessionId: storedJoinerResponse.sessionId,
-      };
-      const answerData = `dodi-answer:${btoa(JSON.stringify(answerPayload))}`;
-      setAnswerQrData(answerData);
+      // We reconstruct the compressed payload from stored data
+      const fullAnswerString = `dodi-answer:${encodeJoinerResponse(storedJoinerResponse)}`;
+      setAnswerQrData(fullAnswerString);
       setMode('joiner-show-answer');
     }
   }, [pairingStatus]);
@@ -95,10 +93,7 @@ export default function PairingPage() {
   const handleCreatePairing = async () => {
     setLoading(true);
     try {
-      // Initialize user and get credentials
       const data = await initializePairing();
-      
-      // Generate WebRTC offer
       const offer = await createOffer();
       const sessionId = nanoid(8);
       
@@ -110,15 +105,7 @@ export default function PairingPage() {
         createdAt: Date.now(),
       };
       
-      // Save pending session for page refresh
-      savePendingSession({
-        sessionId,
-        creatorId: data.userId,
-        passphrase: data.passphrase,
-        offer,
-        createdAt: Date.now(),
-      });
-      
+      savePendingSession(payload);
       setPairingPayload(payload);
       setMode('creator-show-qr');
       
@@ -140,39 +127,33 @@ export default function PairingPage() {
     setLoading(true);
     
     try {
-      console.log('Creator scanned answer QR data:', data?.substring(0, 50));
+      console.log('Creator scanned raw data:', data?.substring(0, 20) + '...');
       
-      // Parse the answer QR data
+      // 1. Strip prefix
       const cleanData = data.replace('dodi-answer:', '');
-      const parsed = JSON.parse(atob(cleanData));
-      const { answer, joinerId } = parsed;
       
-      if (!joinerId) {
-        throw new Error('Invalid response: missing partner ID');
+      // 2. Decode using our new robust decoder (handles compression & minification)
+      const parsed = decodeJoinerResponse(cleanData);
+      
+      if (!parsed || !parsed.joinerId) {
+        throw new Error('Invalid response: could not decode partner data');
       }
       
-      console.log('Parsed answer payload, joinerId:', joinerId);
+      console.log('Parsed answer payload, joinerId:', parsed.joinerId);
       
-      // Store the partner's ID
-      console.log('Setting partner ID for creator:', joinerId);
-      await setPartnerIdForCreator(joinerId);
-      console.log('Partner ID set successfully');
-      
-      // Complete the WebRTC connection
-      console.log('Completing WebRTC connection with answer');
-      completeConnection(answer);
+      await setPartnerIdForCreator(parsed.joinerId);
+      completeConnection(parsed.answer);
       
       toast({
-        title: 'Connected!',
-        description: 'Your partner is connecting...',
+        title: 'Connecting...',
+        description: 'Verifying secure link with partner.',
       });
       
     } catch (error) {
       console.error('Parse answer error:', error);
-      console.error('Error details:', error instanceof Error ? error.message : 'Unknown error');
       toast({
         title: 'Invalid QR Code',
-        description: error instanceof Error ? error.message : 'Please scan the QR code your partner is showing.',
+        description: 'Please scan the QR code your partner is showing.',
         variant: 'destructive',
       });
       setMode('creator-show-qr');
@@ -187,47 +168,35 @@ export default function PairingPage() {
     setLoading(true);
     
     try {
-      console.log('Joiner scanned QR data:', data?.substring(0, 50));
+      console.log('Joiner scanned raw data:', data?.substring(0, 20) + '...');
       
-      // Decode the QR payload
-      const cleanData = data.replace('dodi:', '').replace('dodi-answer:', '');
+      const cleanData = data.replace('dodi:', '');
       const payload = decodePairingPayload(cleanData);
       
       if (!payload) {
-        throw new Error('Invalid QR code format - could not decode payload');
+        throw new Error('Invalid QR code - could not decode payload');
       }
       
-      console.log('Decoded payload:', { creatorId: payload.creatorId, sessionId: payload.sessionId });
+      console.log('Decoded payload successfully');
       
-      // Complete pairing with credentials - this returns the joiner's userId
-      console.log('Completing pairing with creator:', payload.creatorId);
       const joinerId = await completePairing(payload.creatorId, payload.passphrase);
-      console.log('Pairing completed, joinerId:', joinerId);
-      
-      // Generate WebRTC answer
-      console.log('Accepting offer...');
       const answer = await acceptOffer(payload.offer);
-      console.log('Answer generated');
       
-      // Create answer QR data with the confirmed joiner ID
-      const answerPayload = {
-        answer,
+      // Create the response object
+      const response = {
         joinerId,
+        answer,
         sessionId: payload.sessionId,
+        shortCode: ''
       };
       
-      const answerData = `dodi-answer:${btoa(JSON.stringify(answerPayload))}`;
+      // Encode using the new compressed format
+      const encodedAnswer = encodeJoinerResponse(response);
+      const fullAnswerString = `dodi-answer:${encodedAnswer}`;
       
-      // Save joiner response for page refresh
-      saveJoinerResponse({
-        joinerId,
-        answer,
-        shortCode: '', // Not used in QR flow
-        sessionId: payload.sessionId,
-      });
+      saveJoinerResponse(response);
       
-      console.log('Transitioning to joiner-show-answer');
-      setAnswerQrData(answerData);
+      setAnswerQrData(fullAnswerString);
       setMode('joiner-show-answer');
       
       toast({
@@ -237,10 +206,9 @@ export default function PairingPage() {
       
     } catch (error) {
       console.error('Scan process error:', error);
-      console.error('Error details:', error instanceof Error ? error.message : 'Unknown error');
       toast({
         title: 'Error processing QR',
-        description: error instanceof Error ? error.message : 'Failed to process QR code. Please try again.',
+        description: 'Failed to process QR code. Please try again.',
         variant: 'destructive',
       });
       setMode('choose');
@@ -249,110 +217,60 @@ export default function PairingPage() {
     }
   };
 
-  // Request camera permissions explicitly
+  // Request camera permissions
   const requestCameraPermission = async (): Promise<boolean> => {
     try {
-      console.log('Requesting camera permission...');
       setRequestingPermission(true);
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      console.log('Camera permission granted, stream obtained:', stream.id);
-      // Stop the stream immediately - we just wanted to check permission
       stream.getTracks().forEach(track => track.stop());
       setRequestingPermission(false);
       return true;
-    } catch (error: unknown) {
+    } catch (error) {
       setRequestingPermission(false);
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('Camera permission denied or error:', errorMsg);
-      
-      // Provide specific feedback based on error type
-      let description = 'Unable to access camera. ';
-      if (errorMsg.includes('NotAllowedError') || errorMsg.includes('Permission denied')) {
-        description += 'Please grant camera permission in your browser settings.';
-      } else if (errorMsg.includes('NotFoundError')) {
-        description += 'No camera device found on this device.';
-      } else if (errorMsg.includes('NotReadableError')) {
-        description += 'Camera is already in use by another application.';
-      } else {
-        description += 'Please check your browser and device settings.';
-      }
-      
-      toast({
-        title: 'Camera Access Required',
-        description,
-        variant: 'destructive',
-      });
+      console.error('Camera permission denied:', error);
       return false;
     }
   };
 
-  // Scanner cleanup helper
   const cleanupScanner = () => {
     if (scannerRef.current) {
       try {
-        console.log('Cleaning up scanner...');
         scannerRef.current.clear();
-        scannerRef.current = null;
-      } catch (e) {
-        console.log('Scanner cleanup error:', e);
-      }
+      } catch (e) { console.log(e); }
+      scannerRef.current = null;
     }
     setScannerInitialized(false);
   };
 
-  // Initialize QR scanner
+  // Initialize QR scanner logic
   useEffect(() => {
     const shouldScan = mode === 'joiner-scanning' || mode === 'creator-scan-answer';
-    
     if (shouldScan && !scannerInitialized) {
-      console.log('QR scanning mode activated:', mode);
       const timeoutId = setTimeout(() => {
         const element = document.getElementById('qr-reader');
         if (element) {
-          console.log('QR reader element found, initializing scanner...');
           initializeScanner(mode === 'creator-scan-answer');
-        } else {
-          console.error('QR reader element not found in DOM');
         }
       }, 100);
-      
       return () => clearTimeout(timeoutId);
     }
-
     return () => {
-      if (shouldScan) {
-        console.log('Cleaning up scanner on mode change or unmount');
-        cleanupScanner();
-      }
+      if (shouldScan) cleanupScanner();
     };
   }, [mode, scannerInitialized]);
 
   const initializeScanner = async (isCreatorScanning: boolean) => {
     try {
-      const element = document.getElementById('qr-reader');
-      if (!element) throw new Error('QR reader element not found');
-      
-      console.log('Checking camera permissions...');
       const hasPermission = await requestCameraPermission();
       if (!hasPermission) {
-        console.log('Camera permission not granted, aborting scanner initialization');
+        toast({ title: 'Camera Access Denied', description: 'Please allow camera access to scan.', variant: 'destructive' });
         setScannerInitialized(false);
         return;
       }
       
-      console.log('Camera permission confirmed, creating scanner...');
-      element.innerHTML = '';
-      
       const scanner = new Html5QrcodeScanner(
         'qr-reader',
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0,
-          rememberLastUsedCamera: true,
-          disableFlip: false,
-          showTorchButtonIfSupported: true,
-        },
+        { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0, showTorchButtonIfSupported: true },
         false
       );
 
@@ -360,46 +278,23 @@ export default function PairingPage() {
       setScannerInitialized(true);
 
       const successHandler = isCreatorScanning ? handleCreatorScanAnswer : handleJoinerScanCreator;
-
-      console.log('Starting scanner.render()...');
-      await scanner.render(successHandler, (error: unknown) => {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        console.warn('Scanner runtime error:', errorMsg);
-        // Don't show toast for every error - these are usually just scan failures
-        if (errorMsg.includes('permission') || errorMsg.includes('Permission')) {
-          toast({
-            title: 'Camera Permission Error',
-            description: 'Camera access was denied. Please check permissions.',
-            variant: 'destructive',
-          });
-        }
-      });
-      console.log('Scanner rendering successful');
+      await scanner.render(successHandler, (err) => console.warn(err));
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('Failed to initialize scanner:', errorMsg);
-      
-      toast({
-        title: 'Camera Error',
-        description: errorMsg || 'Unable to initialize camera. Please try again.',
-        variant: 'destructive',
-      });
+      console.error('Scanner init failed', error);
       setScannerInitialized(false);
     }
   };
 
   const handleCopyQrData = () => {
-    const dataToCopy = mode === 'joiner-show-answer' ? answerQrData : (pairingPayload ? `dodi:${encodePairingPayload(pairingPayload)}` : '');
+    const dataToCopy = mode === 'joiner-show-answer' 
+      ? answerQrData 
+      : (pairingPayload ? `dodi:${encodePairingPayload(pairingPayload)}` : '');
+      
     navigator.clipboard.writeText(dataToCopy);
     setCopied(true);
-    toast({
-      title: 'Copied!',
-      description: 'QR data copied to clipboard.',
-    });
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Generate QR data for creator
   const creatorQrData = pairingPayload ? `dodi:${encodePairingPayload(pairingPayload)}` : '';
 
   return (
@@ -429,33 +324,12 @@ export default function PairingPage() {
                 A completely private sanctuary that belongs only to you and your beloved.
               </p>
             </div>
-
             <div className="space-y-3">
-              <Button
-                onClick={handleCreatePairing}
-                disabled={loading}
-                className="w-full h-12 text-base"
-                data-testid="button-create-pairing"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <Heart className="w-5 h-5 mr-2" />
-                    Create Connection
-                  </>
-                )}
+              <Button onClick={handleCreatePairing} disabled={loading} className="w-full h-12 text-base">
+                {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Heart className="w-5 h-5 mr-2" />}
+                {loading ? 'Creating...' : 'Create Connection'}
               </Button>
-
-              <Button
-                onClick={() => setMode('joiner-scanning')}
-                variant="outline"
-                className="w-full h-12 text-base"
-                data-testid="button-scan-qr"
-              >
+              <Button onClick={() => setMode('joiner-scanning')} variant="outline" className="w-full h-12 text-base">
                 <Camera className="w-5 h-5 mr-2" />
                 Join with QR Code
               </Button>
@@ -468,48 +342,21 @@ export default function PairingPage() {
             <div className="text-center space-y-2">
               <Heart className="w-8 h-8 mx-auto text-accent animate-gentle-bounce" />
               <h2 className="text-xl font-light">Show This to Your Partner</h2>
-              <p className="text-sm text-muted-foreground">
-                They'll scan this code to join
-              </p>
+              <p className="text-sm text-muted-foreground">They'll scan this code to join</p>
             </div>
-
             <div className="flex justify-center p-6 bg-white rounded-lg">
               <QRCodeSVG
                 value={creatorQrData}
-                size={200}
+                size={280}
                 level="L"
                 includeMargin
-                data-testid="qr-code-creator"
               />
             </div>
-
-            <Button
-              onClick={handleCopyQrData}
-              variant="outline"
-              className="w-full"
-              data-testid="button-copy-qr"
-            >
+            <Button onClick={handleCopyQrData} variant="outline" className="w-full">
               {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-              {copied ? 'Copied!' : 'Copy QR Data'}
+              {copied ? 'Copied!' : 'Copy Data'}
             </Button>
-
-            <div className="p-4 bg-muted/50 rounded-lg text-center">
-              <Loader2 className="w-6 h-6 mx-auto animate-spin text-accent mb-2" />
-              <p className="text-sm text-muted-foreground">
-                After your partner scans, you'll automatically scan their response...
-              </p>
-            </div>
-
-            <Button
-              onClick={() => {
-                clearPendingSession();
-                setPairingPayload(null);
-                setMode('choose');
-              }}
-              variant="ghost"
-              className="w-full"
-              data-testid="button-cancel-create"
-            >
+            <Button onClick={() => { clearPendingSession(); setPairingPayload(null); setMode('choose'); }} variant="ghost" className="w-full">
               Cancel
             </Button>
           </Card>
@@ -518,35 +365,15 @@ export default function PairingPage() {
         {(mode === 'joiner-scanning' || mode === 'creator-scan-answer') && (
           <Card className="p-0 space-y-0 border-sage/30 overflow-hidden">
             <div className="p-8 space-y-4 text-center bg-gradient-to-b from-accent/5 to-transparent">
-              <div className="animate-pulse-glow">
-                <Camera className="w-8 h-8 mx-auto text-accent" />
-              </div>
               <div className="space-y-1">
                 <h2 className="text-xl font-light">
-                  {mode === 'creator-scan-answer' ? 'Scan Their Response' : 'Scan Your Partner\'s QR'}
+                  {mode === 'creator-scan-answer' ? 'Scan Their Response' : 'Scan Partner\'s QR'}
                 </h2>
-                <p className="text-sm text-muted-foreground">
-                  Point your camera at the code
-                </p>
               </div>
             </div>
-
             <div id="qr-reader" className="w-full h-80 bg-muted"></div>
-
             <div className="p-8 space-y-3">
-              <p className="text-xs text-muted-foreground text-center">
-                {requestingPermission ? 'Requesting camera access...' : loading ? 'Processing...' : 'Camera is ready'}
-              </p>
-              <Button
-                onClick={() => {
-                  cleanupScanner();
-                  setMode(mode === 'creator-scan-answer' ? 'creator-show-qr' : 'choose');
-                }}
-                variant="ghost"
-                className="w-full"
-                data-testid="button-cancel-scan"
-              >
-                <X className="w-4 h-4 mr-2" />
+              <Button onClick={() => { cleanupScanner(); setMode(mode === 'creator-scan-answer' ? 'creator-show-qr' : 'choose'); }} variant="ghost" className="w-full">
                 Back
               </Button>
             </div>
@@ -557,58 +384,25 @@ export default function PairingPage() {
           <Card className="p-8 space-y-6 border-sage/30">
             <div className="text-center space-y-2">
               <Heart className="w-8 h-8 mx-auto text-accent animate-gentle-bounce" />
-              <h2 className="text-xl font-light">Now Show This to Your Partner</h2>
-              <p className="text-sm text-muted-foreground">
-                They'll scan this to complete your connection
-              </p>
+              <h2 className="text-xl font-light">Now Show This to Partner</h2>
+              <p className="text-sm text-muted-foreground">They scan this to complete connection</p>
             </div>
-
             <div className="flex justify-center p-6 bg-white rounded-lg">
               <QRCodeSVG
                 value={answerQrData}
-                size={200}
+                size={260}
                 level="L"
                 includeMargin
-                data-testid="qr-code-answer"
               />
             </div>
-
-            <Button
-              onClick={handleCopyQrData}
-              variant="outline"
-              className="w-full"
-              data-testid="button-copy-answer"
-            >
-              {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-              {copied ? 'Copied!' : 'Copy QR Data'}
-            </Button>
-
-            {peerState.connecting && (
-              <div className="p-4 bg-muted/50 rounded-lg text-center">
-                <Loader2 className="w-6 h-6 mx-auto animate-spin text-accent mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  Waiting for partner to scan...
-                </p>
-              </div>
-            )}
-
-            {peerState.connected && (
-              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg text-center">
-                <p className="text-green-700 dark:text-green-400 font-medium">
-                  Connected! Entering your sanctuary...
-                </p>
-              </div>
-            )}
-
-            <Button
-              onClick={() => {
-                setAnswerQrData('');
-                setMode('choose');
-              }}
-              variant="ghost"
-              className="w-full"
-              data-testid="button-cancel-join"
-            >
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg text-center">
+               {peerState.connected ? (
+                 <p className="text-green-700 dark:text-green-400 font-medium">Connected! Entering sanctuary...</p>
+               ) : (
+                 <p className="text-sm text-muted-foreground">Waiting for partner to scan...</p>
+               )}
+            </div>
+             <Button onClick={() => { setAnswerQrData(''); setMode('choose'); }} variant="ghost" className="w-full">
               Start Over
             </Button>
           </Card>
@@ -616,10 +410,7 @@ export default function PairingPage() {
 
         {loading && mode === 'choose' && (
           <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-50">
-            <div className="text-center space-y-4">
-              <Loader2 className="w-12 h-12 mx-auto animate-spin text-accent" />
-              <p className="text-muted-foreground">Setting up your connection...</p>
-            </div>
+            <Loader2 className="w-12 h-12 mx-auto animate-spin text-accent" />
           </div>
         )}
       </div>
