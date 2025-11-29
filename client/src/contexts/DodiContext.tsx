@@ -230,33 +230,27 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       throw new Error('Master key, salt, and remote partner ID are required');
     }
     
-    let currentUserId = userId;
-    
-    // Joiner: ensure we have a userId that's different from remote partner
-    if (!currentUserId || currentUserId === remotePartnerId) {
-      do {
-        currentUserId = nanoid();
-      } while (currentUserId === remotePartnerId);
-      
-      await saveSetting('userId', currentUserId);
-      setUserId(currentUserId);
+    // VALIDATION: Joiner must have their own userId already generated (from completePairing)
+    if (!userId) {
+      throw new Error('Joiner user ID must be generated before completing pairing');
     }
     
-    // CRITICAL SAFETY CHECK: Prevent self-pairing
-    if (currentUserId === remotePartnerId) {
-      throw new Error('Cannot pair with yourself: local and remote partner IDs are identical');
+    // CRITICAL SAFETY CHECK: Prevent self-pairing - userId should NEVER match remotePartnerId
+    if (userId === remotePartnerId) {
+      throw new Error(`Self-pairing detected: Joiner ID (${userId}) matches Creator ID (${remotePartnerId}). Cannot proceed.`);
     }
     
     const db = await initDB();
     
-    // Store the master key as the passphrase (for compatibility with existing encryption system)
+    // NEVER modify userId - it was already generated and should remain unchanged
+    // Only store the remote partner's ID and encryption credentials
     await db.put('settings', { key: 'passphrase', value: masterKey });
     await db.put('settings', { key: 'salt', value: salt });
     await db.put('settings', { key: 'partnerId', value: remotePartnerId });
     await db.put('settings', { key: 'pairingStatus', value: 'connected' });
     
-    setPartnerId(remotePartnerId);
     setPassphrase(masterKey);
+    setPartnerId(remotePartnerId);
     setPairingStatus('connected');
     
     // Show PIN setup on successful pairing
@@ -264,7 +258,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       setShowPinSetup(true);
     }
     
-    console.log('📋 [ID AUDIT] Joiner pairing completed:', { userId: currentUserId, partnerId: remotePartnerId, masterKey: masterKey.substring(0, 8) + '...', selfPairingCheck: 'PASSED' });
+    console.log('📋 [ID AUDIT] Joiner pairing completed:', { myUserId: userId, partnerId: remotePartnerId, idUnchanged: true });
   };
 
   // Called by creator after receiving joiner's ID via tunnel ACK
@@ -273,24 +267,27 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       throw new Error('Master key, salt, and remote partner ID are required');
     }
     
+    // VALIDATION: Creator must have their own userId already generated (from initializePairing)
     if (!userId) {
-      throw new Error('Creator user ID not initialized');
+      throw new Error('Creator user ID must be generated before completing pairing');
     }
     
-    // CRITICAL SAFETY CHECK: Prevent self-pairing
+    // CRITICAL SAFETY CHECK: Prevent self-pairing - userId should NEVER match remotePartnerId
     if (userId === remotePartnerId) {
-      throw new Error('Cannot pair with yourself: creator ID and remote partner ID are identical');
+      throw new Error(`Self-pairing detected: Creator ID (${userId}) matches Joiner ID (${remotePartnerId}). Cannot proceed.`);
     }
     
     const db = await initDB();
     
-    // Creator: keep existing userId, store remote partner as partnerId
+    // NEVER modify userId - it was already generated and should remain unchanged
+    // Only store the remote partner's ID and encryption credentials
     await db.put('settings', { key: 'passphrase', value: masterKey });
     await db.put('settings', { key: 'salt', value: salt });
     await db.put('settings', { key: 'partnerId', value: remotePartnerId });
     await db.put('settings', { key: 'pairingStatus', value: 'connected' });
     
     setPassphrase(masterKey);
+    setPartnerId(remotePartnerId);
     setPairingStatus('connected');
     
     // Show PIN setup on successful pairing
@@ -298,7 +295,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       setShowPinSetup(true);
     }
     
-    console.log('📋 [ID AUDIT] Creator pairing completed:', { userId, partnerId: remotePartnerId, masterKey: masterKey.substring(0, 8) + '...', selfPairingCheck: 'PASSED' });
+    console.log('📋 [ID AUDIT] Creator pairing completed:', { myUserId: userId, partnerId: remotePartnerId, idUnchanged: true });
   };
 
   // Called by creator to set partner ID after joiner has joined

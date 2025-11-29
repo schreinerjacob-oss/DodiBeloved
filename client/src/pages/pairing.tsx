@@ -66,19 +66,12 @@ export default function PairingPage() {
           throw new Error('Creator ID not received in tunnel');
         }
         
-        // CRITICAL VALIDATION: Ensure we're not pairing with ourselves (even if userId is stale)
-        let currentUserId = userId;
-        if (!currentUserId) {
-          // Force refresh if userId is empty - this shouldn't happen but being defensive
-          console.warn('⚠️ [ID AUDIT] Joiner userId is empty, forcing refresh');
-          currentUserId = userId || 'UNINITIALIZED';
+        // CRITICAL VALIDATION: Ensure we're not pairing with ourselves
+        if (userId === payload.creatorId) {
+          throw new Error(`Self-pairing detected: Joiner ID (${userId}) matches Creator ID (${payload.creatorId})`);
         }
         
-        if (currentUserId !== 'UNINITIALIZED' && currentUserId === payload.creatorId) {
-          throw new Error(`Self-pairing detected: Joiner ID (${currentUserId}) matches Creator ID (${payload.creatorId})`);
-        }
-        
-        console.log('💾 [ID AUDIT] Joiner calling completePairingWithMasterKey:', { myId: currentUserId, remotePartnerId: payload.creatorId });
+        console.log('💾 [ID AUDIT] Joiner calling completePairingWithMasterKey:', { myId: userId, remotePartnerId: payload.creatorId });
         await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
       }
       
