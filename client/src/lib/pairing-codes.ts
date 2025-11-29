@@ -1,113 +1,19 @@
-import LZString from 'lz-string';
+const PENDING_SESSION_KEY = 'dodi-pending-tunnel';
 
-export interface PairingPayload {
-  creatorId: string;
-  passphrase: string;
-  offer: string;
+export interface PendingTunnelSession {
   sessionId: string;
+  creatorId: string;
+  offer: string;
+  publicKey: string;
+  fingerprint: string;
   createdAt: number;
 }
 
-export interface JoinerResponse {
-  joinerId: string;
-  answer: string;
-  shortCode: string;
-  sessionId: string;
-}
-
-export function encodePairingPayload(payload: PairingPayload): string {
-  try {
-    const jsonString = JSON.stringify(payload);
-    // Compress to reduce QR code size
-    const compressed = LZString.compressToEncodedURIComponent(jsonString);
-    console.log('Pairing payload compressed:', {
-      original: jsonString.length,
-      compressed: compressed.length,
-      ratio: (compressed.length / jsonString.length * 100).toFixed(1) + '%',
-    });
-    return compressed;
-  } catch (error) {
-    console.error('Error encoding pairing payload:', error);
-    // Fallback to uncompressed if compression fails
-    return btoa(JSON.stringify(payload));
-  }
-}
-
-export function decodePairingPayload(encoded: string): PairingPayload | null {
-  try {
-    // Try decompressing first
-    const decompressed = LZString.decompressFromEncodedURIComponent(encoded);
-    if (decompressed) {
-      return JSON.parse(decompressed);
-    }
-    // Fallback to old format (uncompressed base64)
-    return JSON.parse(atob(encoded));
-  } catch {
-    return null;
-  }
-}
-
-export async function generateShortCode(answer: string, sessionId: string): Promise<string> {
-  const data = `${answer}:${sessionId}`;
-  const encoder = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(data));
-  const hashArray = new Uint8Array(hashBuffer);
-  
-  let code = 0;
-  for (let i = 0; i < 4; i++) {
-    code = (code * 256 + hashArray[i]) % 1000000;
-  }
-  
-  return code.toString().padStart(6, '0');
-}
-
-export function encodeJoinerResponse(response: JoinerResponse): string {
-  try {
-    const jsonString = JSON.stringify(response);
-    // Compress to reduce QR code size
-    const compressed = LZString.compressToEncodedURIComponent(jsonString);
-    console.log('Joiner response compressed:', {
-      original: jsonString.length,
-      compressed: compressed.length,
-      ratio: (compressed.length / jsonString.length * 100).toFixed(1) + '%',
-    });
-    return compressed;
-  } catch (error) {
-    console.error('Error encoding joiner response:', error);
-    // Fallback to uncompressed if compression fails
-    return btoa(JSON.stringify(response));
-  }
-}
-
-export function decodeJoinerResponse(encoded: string): JoinerResponse | null {
-  try {
-    // Try decompressing first
-    const decompressed = LZString.decompressFromEncodedURIComponent(encoded);
-    if (decompressed) {
-      return JSON.parse(decompressed);
-    }
-    // Fallback to old format (uncompressed base64)
-    return JSON.parse(atob(encoded));
-  } catch {
-    return null;
-  }
-}
-
-const PENDING_SESSION_KEY = 'dodi-pending-session';
-
-export interface PendingSession {
-  sessionId: string;
-  creatorId: string;
-  passphrase: string;
-  offer: string;
-  createdAt: number;
-}
-
-export function savePendingSession(session: PendingSession): void {
+export function savePendingTunnelSession(session: PendingTunnelSession): void {
   localStorage.setItem(PENDING_SESSION_KEY, JSON.stringify(session));
 }
 
-export function getPendingSession(): PendingSession | null {
+export function getPendingTunnelSession(): PendingTunnelSession | null {
   const data = localStorage.getItem(PENDING_SESSION_KEY);
   if (!data) return null;
   try {
@@ -117,26 +23,6 @@ export function getPendingSession(): PendingSession | null {
   }
 }
 
-export function clearPendingSession(): void {
+export function clearPendingTunnelSession(): void {
   localStorage.removeItem(PENDING_SESSION_KEY);
-}
-
-const JOINER_RESPONSE_KEY = 'dodi-joiner-response';
-
-export function saveJoinerResponse(response: JoinerResponse): void {
-  localStorage.setItem(JOINER_RESPONSE_KEY, JSON.stringify(response));
-}
-
-export function getJoinerResponse(): JoinerResponse | null {
-  const data = localStorage.getItem(JOINER_RESPONSE_KEY);
-  if (!data) return null;
-  try {
-    return JSON.parse(data);
-  } catch {
-    return null;
-  }
-}
-
-export function clearJoinerResponse(): void {
-  localStorage.removeItem(JOINER_RESPONSE_KEY);
 }

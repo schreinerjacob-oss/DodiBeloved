@@ -1,10 +1,24 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import type { SyncMessage } from '@/types';
+import {
+  generateEphemeralKeyPair,
+  deriveSharedSecret,
+  createTunnelInitMessage,
+  createTunnelKeyMessage,
+  createTunnelAckMessage,
+  extractMasterKeyPayload,
+  generateMasterKey,
+  generateMasterSalt,
+  type EphemeralKeyPair,
+  type TunnelMessage,
+  type MasterKeyPayload,
+} from '@/lib/tunnel-handshake';
 
 interface PeerConnectionState {
   connected: boolean;
   connecting: boolean;
+  tunnelEstablished: boolean;
   error: string | null;
 }
 
@@ -13,23 +27,32 @@ interface UsePeerConnectionReturn {
   send: (message: SyncMessage) => void;
   peer: RTCPeerConnection | null;
   createOffer: () => Promise<string>;
-  acceptOffer: (offer: string) => Promise<string>;
-  completeConnection: (answer: string) => void;
+  acceptOffer: (offer: string, peerPublicKey: string, peerFingerprint: string) => Promise<{ answer: string; publicKey: string; fingerprint: string }>;
+  completeConnection: (answer: string, peerPublicKey: string) => void;
   disconnect: () => void;
+  ephemeralKeyPair: EphemeralKeyPair | null;
+  onTunnelComplete: ((payload: MasterKeyPayload) => void) | null;
+  setOnTunnelComplete: (cb: (payload: MasterKeyPayload) => void) => void;
 }
 
 export function usePeerConnection(): UsePeerConnectionReturn {
-  const { userId, partnerId, pairingStatus } = useDodi();
+  const { userId } = useDodi();
   const [state, setState] = useState<PeerConnectionState>({
     connected: false,
     connecting: false,
+    tunnelEstablished: false,
     error: null,
   });
   
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<RTCDataChannel | null>(null);
   const messageQueueRef = useRef<SyncMessage[]>([]);
-  const messageHandlersRef = useRef<Map<string, (data: unknown) => void>>(new Map());
+  const ephemeralKeyPairRef = useRef<EphemeralKeyPair | null>(null);
+  const peerPublicKeyRef = useRef<string | null>(null);
+  const sharedSecretRef = useRef<CryptoKey | null>(null);
+  const isCreatorRef = useRef<boolean>(false);
+  const tunnelCompleteCallbackRef = useRef<((payload: MasterKeyPayload) => void) | null>(null);
+  const expectedFingerprintRef = useRef<string | null>(null);
 
   const cleanupPeer = useCallback(() => {
     if (channelRef.current) {
@@ -48,11 +71,16 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       }
       peerRef.current = null;
     }
-    setState({ connected: false, connecting: false, error: null });
+    ephemeralKeyPairRef.current = null;
+    peerPublicKeyRef.current = null;
+    sharedSecretRef.current = null;
+    expectedFingerprintRef.current = null;
+    setState({ connected: false, connecting: false, tunnelEstablished: false, error: null });
   }, []);
 
   const flushMessageQueue = useCallback(() => {
     if (!channelRef.current || channelRef.current.readyState !== 'open') return;
+    if (!state.tunnelEstablished) return;
     
     while (messageQueueRef.current.length > 0) {
       const message = messageQueueRef.current.shift();
@@ -64,12 +92,12 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         }
       }
     }
-  }, []);
+  }, [state.tunnelEstablished]);
 
   const send = useCallback((message: SyncMessage) => {
     const fullMessage = { ...message, timestamp: Date.now() };
     
-    if (channelRef.current && channelRef.current.readyState === 'open') {
+    if (channelRef.current && channelRef.current.readyState === 'open' && state.tunnelEstablished) {
       try {
         channelRef.current.send(JSON.stringify(fullMessage));
         console.log('P2P message sent:', message.type);
@@ -78,37 +106,141 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         messageQueueRef.current.push(fullMessage);
       }
     } else {
-      console.log('P2P not connected, queueing message:', message.type);
+      console.log('P2P not ready, queueing message:', message.type);
       messageQueueRef.current.push(fullMessage);
     }
+  }, [state.tunnelEstablished]);
+
+  const sendTunnelMessage = useCallback((message: TunnelMessage) => {
+    if (channelRef.current && channelRef.current.readyState === 'open') {
+      try {
+        channelRef.current.send(JSON.stringify({ __tunnel: true, ...message }));
+        console.log('Tunnel message sent:', message.type);
+      } catch (e) {
+        console.error('Error sending tunnel message:', e);
+      }
+    }
   }, []);
+
+  const handleTunnelMessage = useCallback(async (message: TunnelMessage) => {
+    console.log('Tunnel message received:', message.type);
+
+    if (message.type === 'tunnel-init' && message.publicKey && message.fingerprint && !isCreatorRef.current) {
+      // Joiner receiving creator's tunnel-init
+      // SECURITY: Verify fingerprint matches what was in the QR code
+      if (expectedFingerprintRef.current && message.fingerprint !== expectedFingerprintRef.current) {
+        console.error('SECURITY: Fingerprint mismatch! Expected:', expectedFingerprintRef.current, 'Got:', message.fingerprint);
+        setState(prev => ({ ...prev, error: 'Security verification failed - fingerprint mismatch' }));
+        return;
+      }
+      
+      peerPublicKeyRef.current = message.publicKey;
+      
+      if (ephemeralKeyPairRef.current) {
+        const sharedSecret = await deriveSharedSecret(
+          ephemeralKeyPairRef.current.privateKey,
+          message.publicKey
+        );
+        sharedSecretRef.current = sharedSecret;
+        console.log('Shared secret derived (joiner side) - fingerprint verified');
+
+        const initResponse = createTunnelInitMessage(
+          ephemeralKeyPairRef.current.publicKey,
+          ephemeralKeyPairRef.current.fingerprint
+        );
+        sendTunnelMessage(initResponse);
+      }
+    }
+
+    if (message.type === 'tunnel-init' && isCreatorRef.current && message.publicKey) {
+      peerPublicKeyRef.current = message.publicKey;
+      
+      if (ephemeralKeyPairRef.current) {
+        const sharedSecret = await deriveSharedSecret(
+          ephemeralKeyPairRef.current.privateKey,
+          message.publicKey
+        );
+        sharedSecretRef.current = sharedSecret;
+        console.log('Shared secret derived (creator side)');
+
+        const masterKey = generateMasterKey();
+        const salt = generateMasterSalt();
+        
+        const payload: MasterKeyPayload = {
+          masterKey,
+          salt,
+          creatorId: userId || '',
+        };
+
+        const keyMessage = await createTunnelKeyMessage(payload, sharedSecret);
+        sendTunnelMessage(keyMessage);
+        
+        if (tunnelCompleteCallbackRef.current) {
+          tunnelCompleteCallbackRef.current(payload);
+        }
+      }
+    }
+
+    if (message.type === 'tunnel-key' && sharedSecretRef.current) {
+      const payload = await extractMasterKeyPayload(message, sharedSecretRef.current);
+      
+      if (payload) {
+        console.log('Master key received from creator');
+        
+        const ackMessage = createTunnelAckMessage();
+        sendTunnelMessage(ackMessage);
+        
+        setState(prev => ({ ...prev, tunnelEstablished: true }));
+        
+        if (tunnelCompleteCallbackRef.current) {
+          tunnelCompleteCallbackRef.current(payload);
+        }
+        
+        flushMessageQueue();
+      }
+    }
+
+    if (message.type === 'tunnel-ack') {
+      console.log('Tunnel ACK received - connection fully established');
+      setState(prev => ({ ...prev, tunnelEstablished: true }));
+      flushMessageQueue();
+    }
+  }, [userId, sendTunnelMessage, flushMessageQueue]);
 
   const setupChannelListeners = useCallback((channel: RTCDataChannel) => {
     channelRef.current = channel;
 
-    channel.addEventListener('open', () => {
+    channel.addEventListener('open', async () => {
       console.log('Data channel opened');
       setState(prev => ({ ...prev, connected: true, connecting: false }));
-      flushMessageQueue();
+      
+      if (isCreatorRef.current && ephemeralKeyPairRef.current) {
+        const initMessage = createTunnelInitMessage(
+          ephemeralKeyPairRef.current.publicKey,
+          ephemeralKeyPairRef.current.fingerprint
+        );
+        sendTunnelMessage(initMessage);
+      }
     });
 
     channel.addEventListener('close', () => {
       console.log('Data channel closed');
-      setState({ connected: false, connecting: false, error: null });
+      setState({ connected: false, connecting: false, tunnelEstablished: false, error: null });
     });
 
-    channel.addEventListener('message', (event) => {
+    channel.addEventListener('message', async (event) => {
       try {
-        const message: SyncMessage = JSON.parse(event.data);
-        console.log('P2P received:', message.type);
+        const parsed = JSON.parse(event.data);
         
-        // Dispatch to registered handlers
-        const handler = messageHandlersRef.current.get(message.type);
-        if (handler) {
-          handler(message.data);
+        if (parsed.__tunnel) {
+          const { __tunnel, ...tunnelMessage } = parsed;
+          await handleTunnelMessage(tunnelMessage as TunnelMessage);
+          return;
         }
         
-        // Also dispatch a custom event for components to listen to
+        const message: SyncMessage = parsed;
+        console.log('P2P received:', message.type);
+        
         window.dispatchEvent(new CustomEvent('p2p-message', { detail: message }));
       } catch (e) {
         console.error('Error parsing P2P message:', e);
@@ -119,12 +251,15 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       console.error('Data channel error:', event);
       setState(prev => ({ ...prev, error: 'Data channel error' }));
     });
-  }, [flushMessageQueue]);
+  }, [handleTunnelMessage, sendTunnelMessage]);
 
-  // Create offer (initiator)
   const createOffer = useCallback(async (): Promise<string> => {
     cleanupPeer();
-    setState({ connected: false, connecting: true, error: null });
+    setState({ connected: false, connecting: true, tunnelEstablished: false, error: null });
+    isCreatorRef.current = true;
+    
+    const ephemeralKeyPair = await generateEphemeralKeyPair();
+    ephemeralKeyPairRef.current = ephemeralKeyPair;
     
     return new Promise((resolve, reject) => {
       try {
@@ -136,19 +271,10 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         
         peerRef.current = peerConnection;
 
-        // Create data channel for initiator
-        const dataChannel = peerConnection.createDataChannel('sync', { ordered: true });
+        const dataChannel = peerConnection.createDataChannel('dodi-tunnel', { ordered: true });
         setupChannelListeners(dataChannel);
 
-        // Track ICE candidates
-        const candidates: RTCIceCandidate[] = [];
-        
-        peerConnection.addEventListener('icecandidate', (event) => {
-          if (event.candidate) {
-            console.log('ICE candidate:', event.candidate);
-            candidates.push(event.candidate);
-          }
-        });
+        peerConnection.addEventListener('icecandidate', () => {});
 
         peerConnection.addEventListener('error', (event) => {
           console.error('RTCPeerConnection error:', event);
@@ -162,10 +288,9 @@ export function usePeerConnection(): UsePeerConnectionReturn {
           }
         };
 
-        // Wait for ICE gathering to complete
         const onIceGatheringStateChange = () => {
           if (peerConnection.iceGatheringState === 'complete') {
-            console.log('ICE gathering complete, generating offer signal...');
+            console.log('ICE gathering complete');
             peerConnection.removeEventListener('icegatheringstatechange', onIceGatheringStateChange);
             
             const offerData = {
@@ -173,46 +298,45 @@ export function usePeerConnection(): UsePeerConnectionReturn {
               sdp: peerConnection.localDescription?.sdp,
             };
             const offerString = btoa(JSON.stringify(offerData));
-            console.log('Offer signal generated with full ICE candidates');
             resolve(offerString);
           }
         };
 
         peerConnection.addEventListener('icegatheringstatechange', onIceGatheringStateChange);
 
-        // Create offer
         peerConnection.createOffer()
-          .then(offer => {
-            console.log('Offer created');
-            return peerConnection.setLocalDescription(offer);
-          })
+          .then(offer => peerConnection.setLocalDescription(offer))
           .then(() => {
-            console.log('Local description set, waiting for ICE gathering to complete...');
-            console.log('Current ICE gathering state:', peerConnection.iceGatheringState);
-            // If already complete (rare), resolve immediately
             if (peerConnection.iceGatheringState === 'complete') {
               onIceGatheringStateChange();
             }
           })
           .catch(e => {
-            console.error('Error creating offer:', e);
             peerConnection.removeEventListener('icegatheringstatechange', onIceGatheringStateChange);
             reject(e);
           });
       } catch (e) {
-        console.error('Exception in createOffer:', {
-          message: e instanceof Error ? e.message : String(e),
-          stack: e instanceof Error ? e.stack : undefined,
-        });
         reject(e);
       }
     });
   }, [cleanupPeer, setupChannelListeners]);
 
-  // Accept offer and create answer (joiner)
-  const acceptOffer = useCallback(async (offerString: string): Promise<string> => {
+  const acceptOffer = useCallback(async (
+    offerString: string,
+    peerPublicKey: string,
+    peerFingerprint: string
+  ): Promise<{ answer: string; publicKey: string; fingerprint: string }> => {
     cleanupPeer();
-    setState({ connected: false, connecting: true, error: null });
+    setState({ connected: false, connecting: true, tunnelEstablished: false, error: null });
+    isCreatorRef.current = false;
+    
+    // SECURITY: Store expected fingerprint for verification during tunnel handshake
+    expectedFingerprintRef.current = peerFingerprint;
+    console.log('Stored expected fingerprint for verification:', peerFingerprint);
+    
+    const ephemeralKeyPair = await generateEphemeralKeyPair();
+    ephemeralKeyPairRef.current = ephemeralKeyPair;
+    peerPublicKeyRef.current = peerPublicKey;
     
     return new Promise((resolve, reject) => {
       try {
@@ -226,21 +350,12 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         
         peerRef.current = peerConnection;
 
-        // Handle incoming data channel
         peerConnection.ondatachannel = (event) => {
           console.log('Data channel received');
           setupChannelListeners(event.channel);
         };
 
-        // Track ICE candidates
-        const candidates: RTCIceCandidate[] = [];
-        
-        peerConnection.addEventListener('icecandidate', (event) => {
-          if (event.candidate) {
-            console.log('ICE candidate:', event.candidate);
-            candidates.push(event.candidate);
-          }
-        });
+        peerConnection.addEventListener('icecandidate', () => {});
 
         peerConnection.addEventListener('error', (event) => {
           console.error('RTCPeerConnection error:', event);
@@ -254,10 +369,9 @@ export function usePeerConnection(): UsePeerConnectionReturn {
           }
         };
 
-        // Wait for ICE gathering to complete
         const onIceGatheringStateChange = () => {
           if (peerConnection.iceGatheringState === 'complete') {
-            console.log('ICE gathering complete, generating answer signal...');
+            console.log('ICE gathering complete');
             peerConnection.removeEventListener('icegatheringstatechange', onIceGatheringStateChange);
             
             const answerData = {
@@ -265,52 +379,44 @@ export function usePeerConnection(): UsePeerConnectionReturn {
               sdp: peerConnection.localDescription?.sdp,
             };
             const answerString = btoa(JSON.stringify(answerData));
-            console.log('Answer signal generated with full ICE candidates');
-            resolve(answerString);
+            resolve({
+              answer: answerString,
+              publicKey: ephemeralKeyPair.publicKey,
+              fingerprint: ephemeralKeyPair.fingerprint,
+            });
           }
         };
 
         peerConnection.addEventListener('icegatheringstatechange', onIceGatheringStateChange);
 
-        // Set remote description and create answer
         peerConnection.setRemoteDescription(new RTCSessionDescription({
           type: 'offer',
           sdp: offerData.sdp,
         }))
           .then(() => peerConnection.createAnswer())
-          .then(answer => {
-            console.log('Answer created');
-            return peerConnection.setLocalDescription(answer);
-          })
+          .then(answer => peerConnection.setLocalDescription(answer))
           .then(() => {
-            console.log('Local description set, waiting for ICE gathering to complete...');
-            console.log('Current ICE gathering state:', peerConnection.iceGatheringState);
-            // If already complete (rare), resolve immediately
             if (peerConnection.iceGatheringState === 'complete') {
               onIceGatheringStateChange();
             }
           })
           .catch(e => {
-            console.error('Error accepting offer:', e);
             peerConnection.removeEventListener('icegatheringstatechange', onIceGatheringStateChange);
             reject(e);
           });
       } catch (e) {
-        console.error('Exception in acceptOffer:', {
-          message: e instanceof Error ? e.message : String(e),
-          stack: e instanceof Error ? e.stack : undefined,
-        });
         reject(e);
       }
     });
   }, [cleanupPeer, setupChannelListeners]);
 
-  // Complete connection (initiator receives answer)
-  const completeConnection = useCallback((answerString: string) => {
+  const completeConnection = useCallback((answerString: string, peerPublicKey: string) => {
     if (!peerRef.current) {
       console.error('No peer instance to complete connection');
       return;
     }
+    
+    peerPublicKeyRef.current = peerPublicKey;
     
     try {
       const answerData = JSON.parse(atob(answerString));
@@ -325,30 +431,10 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     }
   }, []);
 
-  // Try to reconnect using stored signal data
-  useEffect(() => {
-    if (pairingStatus !== 'connected' || !partnerId) return;
-    
-    // Check for stored peer signal from pairing
-    const storedSignal = localStorage.getItem('dodi-peer-signal');
-    const storedRole = localStorage.getItem('dodi-peer-role');
-    
-    if (storedSignal && storedRole) {
-      try {
-        if (storedRole === 'initiator') {
-          // We created the offer, wait for partner to connect
-          console.log('Waiting for partner to connect...');
-        } else {
-          // We joined, try to reconnect
-          console.log('Attempting to reconnect to partner...');
-        }
-      } catch (e) {
-        console.error('Error reconnecting:', e);
-      }
-    }
-  }, [pairingStatus, partnerId]);
+  const setOnTunnelComplete = useCallback((cb: (payload: MasterKeyPayload) => void) => {
+    tunnelCompleteCallbackRef.current = cb;
+  }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       cleanupPeer();
@@ -363,10 +449,12 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     acceptOffer,
     completeConnection,
     disconnect: cleanupPeer,
+    ephemeralKeyPair: ephemeralKeyPairRef.current,
+    onTunnelComplete: tunnelCompleteCallbackRef.current,
+    setOnTunnelComplete,
   };
 }
 
-// Global message handler registration
 export function registerMessageHandler(type: string, handler: (data: unknown) => void): () => void {
   const handlers = (window as unknown as { __p2pHandlers?: Map<string, (data: unknown) => void> }).__p2pHandlers || new Map();
   handlers.set(type, handler);

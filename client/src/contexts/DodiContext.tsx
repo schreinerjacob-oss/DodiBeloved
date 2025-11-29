@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { generatePassphrase, generateSalt, arrayBufferToBase64 } from '@/lib/crypto';
-import { saveSetting, getSetting, initDB, clearEncryptionCache, savePIN, getPIN, verifyPIN } from '@/lib/storage-encrypted';
+import { generatePassphrase, generateSalt, arrayBufferToBase64, base64ToArrayBuffer } from '@/lib/crypto';
+import { saveSetting, getSetting, initDB, clearEncryptionCache, savePIN, verifyPIN } from '@/lib/storage-encrypted';
 import { getTrialStatus } from '@/lib/storage-subscription';
 import { useInactivityTimer } from '@/hooks/use-inactivity-timer';
 import { nanoid } from 'nanoid';
@@ -24,6 +24,7 @@ interface DodiContextType {
   initializeProfile: (displayName: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
   completePairing: (partnerId: string, passphrase: string) => Promise<string>;
+  completePairingWithMasterKey: (masterKey: string, salt: string, creatorId: string) => Promise<void>;
   setPartnerIdForCreator: (newPartnerId: string) => Promise<void>;
   onPeerConnected: () => void;
   setPIN: (pin: string) => Promise<void>;
@@ -100,13 +101,18 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         }
 
         // Restore PIN settings
-        if (storedPinEnabled?.value === true) {
+        if (storedPinEnabled?.value === 'true' || storedPinEnabled?.value === true) {
           setPinEnabled(true);
           setIsLocked(true); // Lock on app load if PIN is enabled
         }
 
         if (storedInactivityMinutes?.value) {
-          setInactivityMinutesState(storedInactivityMinutes.value);
+          const minutes = typeof storedInactivityMinutes.value === 'string' 
+            ? parseInt(storedInactivityMinutes.value, 10) 
+            : storedInactivityMinutes.value;
+          if (!isNaN(minutes)) {
+            setInactivityMinutesState(minutes);
+          }
         }
 
         const trialStatus = await getTrialStatus();
@@ -217,6 +223,43 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     return currentUserId; // Return the joiner's userId for the answer QR
   };
 
+  // Called by joiner when receiving master key via tunnel
+  const completePairingWithMasterKey = async (masterKey: string, salt: string, creatorId: string) => {
+    if (!masterKey || !salt || !creatorId) {
+      throw new Error('Master key, salt, and creator ID are required');
+    }
+    
+    let currentUserId = userId;
+    
+    if (!currentUserId || currentUserId === creatorId) {
+      do {
+        currentUserId = nanoid();
+      } while (currentUserId === creatorId);
+      
+      await saveSetting('userId', currentUserId);
+      setUserId(currentUserId);
+    }
+    
+    const db = await initDB();
+    
+    // Store the master key as the passphrase (for compatibility with existing encryption system)
+    await db.put('settings', { key: 'passphrase', value: masterKey });
+    await db.put('settings', { key: 'salt', value: salt });
+    await db.put('settings', { key: 'partnerId', value: creatorId });
+    await db.put('settings', { key: 'pairingStatus', value: 'connected' });
+    
+    setPartnerId(creatorId);
+    setPassphrase(masterKey);
+    setPairingStatus('connected');
+    
+    // Show PIN setup on successful pairing
+    if (!pinEnabled) {
+      setShowPinSetup(true);
+    }
+    
+    console.log('Pairing completed with tunnel master key');
+  };
+
   // Called by creator to set partner ID after joiner has joined
   const setPartnerIdForCreator = async (newPartnerId: string) => {
     if (!newPartnerId) {
@@ -254,7 +297,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       throw new Error('PIN must be 4-6 digits');
     }
     await savePIN(pin);
-    await saveSetting('pinEnabled', true);
+    await saveSetting('pinEnabled', 'true');
     setPinEnabled(true);
     setShowPinSetup(false);
   };
@@ -292,7 +335,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
 
   const setInactivityMinutesHandler = async (minutes: number) => {
     setInactivityMinutesState(minutes);
-    await saveSetting('inactivityMinutes', minutes);
+    await saveSetting('inactivityMinutes', String(minutes));
   };
 
   // Inactivity timer hook
@@ -351,6 +394,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         initializeProfile,
         initializePairing,
         completePairing,
+        completePairingWithMasterKey,
         setPartnerIdForCreator,
         onPeerConnected,
         setPIN: setPINHandler,
