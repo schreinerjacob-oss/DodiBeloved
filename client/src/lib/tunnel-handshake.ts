@@ -9,11 +9,6 @@ export interface EphemeralKeyPair {
   fingerprint: string;
 }
 
-export interface TunnelOffer {
-  offer: string;
-  publicKey: string;
-  fingerprint: string;
-}
 
 export interface MasterKeyPayload {
   masterKey: string;
@@ -136,35 +131,6 @@ export function generateMasterSalt(): string {
   return arrayBufferToBase64(saltBytes);
 }
 
-export function createTunnelOffer(webRtcOffer: string, ephemeralKeyPair: EphemeralKeyPair): TunnelOffer {
-  return {
-    offer: webRtcOffer,
-    publicKey: ephemeralKeyPair.publicKey,
-    fingerprint: ephemeralKeyPair.fingerprint,
-  };
-}
-
-export function encodeTunnelOffer(tunnelOffer: TunnelOffer): string {
-  const minified = {
-    o: tunnelOffer.offer,
-    k: tunnelOffer.publicKey,
-    f: tunnelOffer.fingerprint,
-  };
-  return btoa(JSON.stringify(minified));
-}
-
-export function decodeTunnelOffer(encoded: string): TunnelOffer | null {
-  try {
-    const decoded = JSON.parse(atob(encoded));
-    return {
-      offer: decoded.o,
-      publicKey: decoded.k,
-      fingerprint: decoded.f,
-    };
-  } catch {
-    return null;
-  }
-}
 
 export interface TunnelMessage {
   type: 'tunnel-init' | 'tunnel-key' | 'tunnel-ack';

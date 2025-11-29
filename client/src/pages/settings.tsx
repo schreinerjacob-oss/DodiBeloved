@@ -7,7 +7,6 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
-import { QRCodeSVG } from 'qrcode.react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -176,33 +175,6 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="pt-3 space-y-4 border-t">
-              {userId && partnerId && passphrase && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">RECONNECTION QR CODE</p>
-                  <div className="flex justify-center p-4 bg-white rounded-lg">
-                    <QRCodeSVG
-                      value={`dodi:${userId}:${partnerId}:${passphrase}`}
-                      size={180}
-                      level="H"
-                      includeMargin
-                      data-testid="qr-reconnect-code"
-                    />
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleCopyReconnect}
-                    data-testid="button-copy-reconnect"
-                  >
-                    {copiedReconnect ? (
-                      <Check className="w-4 h-4 mr-2 text-accent" />
-                    ) : (
-                      <Copy className="w-4 h-4 mr-2" />
-                    )}
-                    {copiedReconnect ? 'Copied!' : 'Copy Reconnection String'}
-                  </Button>
-                </div>
-              )}
               {userId && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground">YOUR ID</p>
