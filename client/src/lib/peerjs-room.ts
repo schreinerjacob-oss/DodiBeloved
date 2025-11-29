@@ -12,14 +12,34 @@ export interface RoomConnection {
 }
 
 /**
- * Initialize PeerJS peer instance
+ * Initialize PeerJS peer instance and wait for it to open
  */
-export function initializePeer(peerId: string): Peer {
-  return new Peer(peerId, {
-    host: '0.peerjs.com',
-    port: 443,
-    secure: true,
-    path: '/',
+export function initializePeer(peerId: string): Promise<Peer> {
+  return new Promise((resolve, reject) => {
+    const peer = new Peer(peerId, {
+      host: '0.peerjs.com',
+      port: 443,
+      secure: true,
+      path: '/',
+      debug: 2, // Enable debug logging
+    });
+
+    const timeout = setTimeout(() => {
+      peer.destroy();
+      reject(new Error('Peer initialization timeout'));
+    }, 10000);
+
+    peer.on('open', () => {
+      clearTimeout(timeout);
+      console.log(`✓ Peer initialized: ${peerId}`);
+      resolve(peer);
+    });
+
+    peer.on('error', (err) => {
+      clearTimeout(timeout);
+      console.error('Peer error:', err);
+      reject(new Error(`Peer error: ${err.type}`));
+    });
   });
 }
 
@@ -28,16 +48,17 @@ export function initializePeer(peerId: string): Peer {
  * Generates peerId based on room code
  */
 export function createRoomPeerId(roomCode: string, isCreator: boolean): string {
-  const role = isCreator ? 'creator' : 'joiner';
-  return `dodi-${roomCode}-${role}`;
+  const role = isCreator ? 'c' : 'j';
+  // Use shorter IDs to avoid PeerJS limitations
+  return `dodi${roomCode}${role}`;
 }
 
 /**
  * Get peer ID for connecting to room
  */
 export function getRemotePeerId(roomCode: string, isCreator: boolean): string {
-  const role = isCreator ? 'joiner' : 'creator';
-  return `dodi-${roomCode}-${role}`;
+  const role = isCreator ? 'j' : 'c';
+  return `dodi${roomCode}${role}`;
 }
 
 /**
@@ -45,24 +66,38 @@ export function getRemotePeerId(roomCode: string, isCreator: boolean): string {
  */
 export function waitForConnection(
   peer: Peer,
-  timeout: number = 30000
+  timeout: number = 120000
 ): Promise<DataConnection> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error('Connection timeout'));
+      peer.off('connection', connectionHandler);
+      reject(new Error('Connection timeout - partner did not connect'));
     }, timeout);
 
-    peer.on('connection', (conn) => {
+    const connectionHandler = (conn: DataConnection) => {
+      console.log('✓ Incoming connection from:', conn.peer);
       clearTimeout(timer);
-      conn.on('open', () => {
+      peer.off('connection', connectionHandler);
+      
+      // Wait for connection to open
+      if (conn.open) {
         resolve(conn);
-      });
-    });
+      } else {
+        conn.on('open', () => {
+          resolve(conn);
+        });
+        conn.on('error', (err) => {
+          reject(err);
+        });
+      }
+    };
+
+    peer.on('connection', connectionHandler);
   });
 }
 
 /**
- * Connect to peer
+ * Connect to peer in room
  */
 export async function connectToRoom(
   peer: Peer,
@@ -71,20 +106,23 @@ export async function connectToRoom(
 ): Promise<DataConnection> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error('Connection timeout'));
+      reject(new Error('Connection timeout - creator not found'));
     }, timeout);
 
     try {
-      const conn = peer.connect(remotePeerId);
+      console.log(`🔗 Connecting to creator: ${remotePeerId}`);
+      const conn = peer.connect(remotePeerId, { reliable: true });
       
       conn.on('open', () => {
+        console.log('✓ Connection opened');
         clearTimeout(timer);
         resolve(conn);
       });
 
       conn.on('error', (err) => {
+        console.error('Connection error:', err);
         clearTimeout(timer);
-        reject(err);
+        reject(new Error(`Connection failed: ${err}`));
       });
     } catch (error) {
       clearTimeout(timer);
@@ -111,6 +149,7 @@ export function waitForMessage<T = unknown>(
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
+      conn.off('data', handler);
       reject(new Error('Message timeout'));
     }, timeout);
 
@@ -128,11 +167,15 @@ export function waitForMessage<T = unknown>(
  * Close connection and peer
  */
 export function closeRoom(room: RoomConnection): void {
-  if (room.conn) {
-    room.conn.close();
-    room.conn = null;
-  }
-  if (room.peer) {
-    room.peer.destroy();
+  try {
+    if (room.conn) {
+      room.conn.close();
+      room.conn = null;
+    }
+    if (room.peer) {
+      room.peer.destroy();
+    }
+  } catch (error) {
+    console.error('Error closing room:', error);
   }
 }

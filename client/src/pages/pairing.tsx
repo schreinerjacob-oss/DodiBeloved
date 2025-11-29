@@ -60,7 +60,9 @@ export default function PairingPage() {
       const code = generateRoomCode();
       setRoomCode(code);
       const myPeerId = createRoomPeerId(code, true);
-      const peer = initializePeer(myPeerId);
+      
+      console.log('🌿 Creating room as creator:', code);
+      const peer = await initializePeer(myPeerId);
       
       setMode('pairing');
       
@@ -71,17 +73,19 @@ export default function PairingPage() {
       });
       
       connPromise.catch((error) => {
+        console.error('Creator connection error:', error);
         if (roomRef.current) {
           closeRoom(roomRef.current);
         }
         if (mode === 'pairing') {
-          toast({ title: 'Connection Failed', description: 'Partner did not connect. Try again.', variant: 'destructive' });
+          toast({ title: 'Connection Failed', description: error instanceof Error ? error.message : 'Partner did not connect. Try again.', variant: 'destructive' });
           setMode('choose');
           setLoading(false);
         }
       });
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to create room.', variant: 'destructive' });
+      console.error('Create room error:', error);
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to create room.', variant: 'destructive' });
       setMode('choose');
       setLoading(false);
     }
@@ -100,13 +104,17 @@ export default function PairingPage() {
     setMode('pairing');
     
     try {
+      console.log('🌿 Joining room as joiner:', normalCode);
       const myPeerId = createRoomPeerId(normalCode, false);
-      const peer = initializePeer(myPeerId);
-      const conn = await connectToRoom(peer, getRemotePeerId(normalCode, false), 30000);
+      const peer = await initializePeer(myPeerId);
+      const remotePeerId = getRemotePeerId(normalCode, false);
+      console.log('Connecting to:', remotePeerId);
+      const conn = await connectToRoom(peer, remotePeerId, 30000);
       roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
       const payload = await runJoinerTunnel(conn);
       await handleMasterKeyReceived(payload);
     } catch (error) {
+      console.error('Join room error:', error);
       if (roomRef.current) closeRoom(roomRef.current);
       toast({ title: 'Connection Failed', description: error instanceof Error ? error.message : 'Failed to join room.', variant: 'destructive' });
       setMode('choose');
