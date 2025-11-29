@@ -367,9 +367,6 @@ export default function CallsPage() {
     <div className="h-full flex flex-col bg-background">
       <div className="px-6 py-4 border-b bg-card/50">
         <h2 className="text-xl font-light text-foreground">Voice & Video</h2>
-        <p className="text-xs text-muted-foreground mt-1">
-          {peerState.connected ? '✓ Connected & encrypted' : '⏳ Connecting...'}
-        </p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
