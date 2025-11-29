@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import '@/lib/node-polyfills'; // Load polyfills before SimplePeer
 import { useDodi } from '@/contexts/DodiContext';
+import SimplePeer from 'simple-peer';
 import type { SyncMessage } from '@/types';
 
 interface PeerConnectionState {
@@ -11,7 +13,7 @@ interface PeerConnectionState {
 interface UsePeerConnectionReturn {
   state: PeerConnectionState;
   send: (message: SyncMessage) => void;
-  peer: RTCPeerConnection | null;
+  peer: SimplePeer.Instance | null;
   createOffer: () => Promise<string>;
   acceptOffer: (offer: string) => Promise<string>;
   completeConnection: (answer: string) => void;
@@ -26,25 +28,16 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     error: null,
   });
   
-  const peerRef = useRef<RTCPeerConnection | null>(null);
-  const channelRef = useRef<RTCDataChannel | null>(null);
+  const peerRef = useRef<SimplePeer.Instance | null>(null);
   const messageQueueRef = useRef<SyncMessage[]>([]);
   const messageHandlersRef = useRef<Map<string, (data: unknown) => void>>(new Map());
 
   const cleanupPeer = useCallback(() => {
-    if (channelRef.current) {
-      try {
-        channelRef.current.close();
-      } catch (e) {
-        console.error('Error closing data channel:', e);
-      }
-      channelRef.current = null;
-    }
     if (peerRef.current) {
       try {
-        peerRef.current.close();
+        peerRef.current.destroy();
       } catch (e) {
-        console.error('Error closing peer connection:', e);
+        console.error('Error destroying peer:', e);
       }
       peerRef.current = null;
     }
@@ -52,26 +45,26 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   }, []);
 
   const flushMessageQueue = useCallback(() => {
-    if (!channelRef.current || channelRef.current.readyState !== 'open') return;
+    if (!peerRef.current || !state.connected) return;
     
     while (messageQueueRef.current.length > 0) {
       const message = messageQueueRef.current.shift();
       if (message) {
         try {
-          channelRef.current.send(JSON.stringify(message));
+          peerRef.current.send(JSON.stringify(message));
         } catch (e) {
           console.error('Error sending queued message:', e);
         }
       }
     }
-  }, []);
+  }, [state.connected]);
 
   const send = useCallback((message: SyncMessage) => {
     const fullMessage = { ...message, timestamp: Date.now() };
     
-    if (channelRef.current && channelRef.current.readyState === 'open') {
+    if (peerRef.current && state.connected) {
       try {
-        channelRef.current.send(JSON.stringify(fullMessage));
+        peerRef.current.send(JSON.stringify(fullMessage));
         console.log('P2P message sent:', message.type);
       } catch (e) {
         console.error('Error sending P2P message:', e);
@@ -81,25 +74,18 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       console.log('P2P not connected, queueing message:', message.type);
       messageQueueRef.current.push(fullMessage);
     }
-  }, []);
+  }, [state.connected]);
 
-  const setupChannelListeners = useCallback((channel: RTCDataChannel) => {
-    channelRef.current = channel;
-
-    channel.addEventListener('open', () => {
-      console.log('Data channel opened');
-      setState(prev => ({ ...prev, connected: true, connecting: false }));
+  const setupPeerListeners = useCallback((peer: SimplePeer.Instance) => {
+    peer.on('connect', () => {
+      console.log('P2P connected!');
+      setState({ connected: true, connecting: false, error: null });
       flushMessageQueue();
     });
 
-    channel.addEventListener('close', () => {
-      console.log('Data channel closed');
-      setState({ connected: false, connecting: false, error: null });
-    });
-
-    channel.addEventListener('message', (event) => {
+    peer.on('data', (data: Uint8Array) => {
       try {
-        const message: SyncMessage = JSON.parse(event.data);
+        const message: SyncMessage = JSON.parse(data.toString());
         console.log('P2P received:', message.type);
         
         // Dispatch to registered handlers
@@ -115,9 +101,14 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       }
     });
 
-    channel.addEventListener('error', (event) => {
-      console.error('Data channel error:', event);
-      setState(prev => ({ ...prev, error: 'Data channel error' }));
+    peer.on('error', (err) => {
+      console.error('P2P error:', err);
+      setState(prev => ({ ...prev, error: err.message }));
+    });
+
+    peer.on('close', () => {
+      console.log('P2P connection closed');
+      setState({ connected: false, connecting: false, error: null });
     });
   }, [flushMessageQueue]);
 
@@ -128,55 +119,29 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     
     return new Promise((resolve, reject) => {
       try {
-        const peerConnection = new RTCPeerConnection({
-          iceServers: [
-            { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }
-          ]
+        const peer = new SimplePeer({
+          initiator: true,
+          trickle: false,
         });
         
-        peerRef.current = peerConnection;
+        peerRef.current = peer;
+        setupPeerListeners(peer);
 
-        // Create data channel for initiator
-        const dataChannel = peerConnection.createDataChannel('sync', { ordered: true });
-        setupChannelListeners(dataChannel);
-
-        peerConnection.addEventListener('icecandidate', (event) => {
-          if (event.candidate) {
-            console.log('ICE candidate:', event.candidate);
-          }
+        peer.on('signal', (data) => {
+          console.log('Offer signal generated');
+          const offerString = btoa(JSON.stringify(data));
+          resolve(offerString);
         });
 
-        peerConnection.addEventListener('error', (event) => {
-          console.error('RTCPeerConnection error:', event);
-          reject(new Error('RTCPeerConnection error'));
-        });
-
-        peerConnection.onconnectionstatechange = () => {
-          console.log('Connection state:', peerConnection.connectionState);
-          if (peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'disconnected') {
-            reject(new Error('Connection failed'));
-          }
-        };
-
-        // Create offer
-        peerConnection.createOffer()
-          .then(offer => {
-            console.log('Offer created');
-            return peerConnection.setLocalDescription(offer);
-          })
-          .then(() => {
-            const offerData = {
-              type: 'offer',
-              sdp: peerConnection.localDescription?.sdp,
-            };
-            const offerString = btoa(JSON.stringify(offerData));
-            console.log('Offer signal generated');
-            resolve(offerString);
-          })
-          .catch(e => {
-            console.error('Error creating offer:', e);
-            reject(e);
+        peer.on('error', (err) => {
+          console.error('SimplePeer error in createOffer:', {
+            message: (err as any).message,
+            code: (err as any).code,
+            stack: (err as any).stack,
+            toString: err.toString(),
           });
+          reject(err);
+        });
       } catch (e) {
         console.error('Exception in createOffer:', {
           message: e instanceof Error ? e.message : String(e),
@@ -185,7 +150,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         reject(e);
       }
     });
-  }, [cleanupPeer, setupChannelListeners]);
+  }, [cleanupPeer, setupPeerListeners]);
 
   // Accept offer and create answer (joiner)
   const acceptOffer = useCallback(async (offerString: string): Promise<string> => {
@@ -195,62 +160,36 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     return new Promise((resolve, reject) => {
       try {
         const offerData = JSON.parse(atob(offerString));
-        
-        const peerConnection = new RTCPeerConnection({
-          iceServers: [
-            { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }
-          ]
+        const peer = new SimplePeer({
+          initiator: false,
+          trickle: false,
         });
         
-        peerRef.current = peerConnection;
+        peerRef.current = peer;
+        setupPeerListeners(peer);
 
-        // Handle incoming data channel
-        peerConnection.ondatachannel = (event) => {
-          console.log('Data channel received');
-          setupChannelListeners(event.channel);
-        };
-
-        peerConnection.addEventListener('icecandidate', (event) => {
-          if (event.candidate) {
-            console.log('ICE candidate:', event.candidate);
-          }
-        });
-
-        peerConnection.addEventListener('error', (event) => {
-          console.error('RTCPeerConnection error:', event);
-          reject(new Error('RTCPeerConnection error'));
-        });
-
-        peerConnection.onconnectionstatechange = () => {
-          console.log('Connection state:', peerConnection.connectionState);
-          if (peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'disconnected') {
-            reject(new Error('Connection failed'));
-          }
-        };
-
-        // Set remote description and create answer
-        peerConnection.setRemoteDescription(new RTCSessionDescription({
-          type: 'offer',
-          sdp: offerData.sdp,
-        }))
-          .then(() => peerConnection.createAnswer())
-          .then(answer => {
-            console.log('Answer created');
-            return peerConnection.setLocalDescription(answer);
-          })
-          .then(() => {
-            const answerData = {
-              type: 'answer',
-              sdp: peerConnection.localDescription?.sdp,
-            };
-            const answerString = btoa(JSON.stringify(answerData));
+        let signalCount = 0;
+        peer.on('signal', (data) => {
+          signalCount++;
+          // Wait for answer signal (not offer/renegotiate)
+          if (signalCount === 1 && data.type === 'answer') {
             console.log('Answer signal generated');
+            const answerString = btoa(JSON.stringify(data));
             resolve(answerString);
-          })
-          .catch(e => {
-            console.error('Error accepting offer:', e);
-            reject(e);
+          }
+        });
+
+        peer.on('error', (err) => {
+          console.error('SimplePeer error in acceptOffer:', {
+            message: (err as any).message,
+            code: (err as any).code,
+            stack: (err as any).stack,
           });
+          reject(err);
+        });
+
+        // Signal with the offer to generate answer
+        peer.signal(offerData);
       } catch (e) {
         console.error('Exception in acceptOffer:', {
           message: e instanceof Error ? e.message : String(e),
@@ -259,7 +198,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         reject(e);
       }
     });
-  }, [cleanupPeer, setupChannelListeners]);
+  }, [cleanupPeer, setupPeerListeners]);
 
   // Complete connection (initiator receives answer)
   const completeConnection = useCallback((answerString: string) => {
@@ -270,39 +209,13 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     
     try {
       const answerData = JSON.parse(atob(answerString));
-      peerRef.current.setRemoteDescription(new RTCSessionDescription({
-        type: 'answer',
-        sdp: answerData.sdp,
-      }));
-      console.log('Answer received and set');
+      peerRef.current.signal(answerData);
+      console.log('Answer signal processed');
     } catch (e) {
       console.error('Error completing connection:', e);
       setState(prev => ({ ...prev, error: 'Invalid answer signal' }));
     }
   }, []);
-
-  // Try to reconnect using stored signal data
-  useEffect(() => {
-    if (pairingStatus !== 'connected' || !partnerId) return;
-    
-    // Check for stored peer signal from pairing
-    const storedSignal = localStorage.getItem('dodi-peer-signal');
-    const storedRole = localStorage.getItem('dodi-peer-role');
-    
-    if (storedSignal && storedRole) {
-      try {
-        if (storedRole === 'initiator') {
-          // We created the offer, wait for partner to connect
-          console.log('Waiting for partner to connect...');
-        } else {
-          // We joined, try to reconnect
-          console.log('Attempting to reconnect to partner...');
-        }
-      } catch (e) {
-        console.error('Error reconnecting:', e);
-      }
-    }
-  }, [pairingStatus, partnerId]);
 
   // Cleanup on unmount
   useEffect(() => {
