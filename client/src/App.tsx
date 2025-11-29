@@ -24,6 +24,7 @@ import SubscriptionPage from "@/pages/subscription";
 import { MessageSquare, Camera, CalendarDays, Sparkles, Heart, Clock, Phone, Lock, Settings, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MoreMenu } from "@/components/more-menu";
+import { ConnectionStatus } from "@/components/connection-status";
 
 function NavItem({ href, icon: Icon, label, active, disabled }: { href: string; icon: any; label: string; active: boolean; disabled?: boolean }) {
   const [, setLocation] = useLocation();
@@ -128,9 +129,13 @@ function MainApp() {
           </div>
           <MoreMenu items={moreItems} disabled={!isTrialActive} />
         </div>
-        <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
-          <Lock className="w-3 h-3" />
-          <span>{isOnline ? 'Online' : 'Offline'} • Encrypted</span>
+        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mt-2">
+          <div className="flex items-center gap-1">
+            <Lock className="w-3 h-3" />
+            <span>Encrypted</span>
+          </div>
+          <div className="w-px h-3 bg-muted-foreground/30" />
+          <ConnectionStatus />
         </div>
       </nav>
     </div>
