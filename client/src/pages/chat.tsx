@@ -20,6 +20,7 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [isDisappearing, setIsDisappearing] = useState(false);
+  const [lastSyncedTimestamp, setLastSyncedTimestamp] = useState<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -62,20 +63,25 @@ export default function ChatPage() {
             return;
           }
           
-          console.log('Chat: Partner requesting message history, sending...');
+          const lastSyncTimestamp = data.data.lastSyncedTimestamp || 0;
+          console.log('Chat: Partner requesting message history since:', new Date(lastSyncTimestamp).toISOString());
+          
           const allMessages = await getAllMessages();
           
-          // Only send messages between us and our partner (filter out any stale data)
-          const relevantMessages = allMessages.filter(
-            m => (m.senderId === userId && m.recipientId === partnerId) ||
-                 (m.senderId === partnerId && m.recipientId === userId)
+          // Filter to only messages between us and partner, and only since last sync
+          const newMessages = allMessages.filter(
+            m => ((m.senderId === userId && m.recipientId === partnerId) ||
+                  (m.senderId === partnerId && m.recipientId === userId)) &&
+                 (new Date(m.timestamp).getTime() > lastSyncTimestamp)
           );
           
+          console.log(`Chat: Sending ${newMessages.length} new messages since last sync`);
           sendWS({
             type: 'history-response',
             data: { 
-              messages: relevantMessages,
+              messages: newMessages,
               partnerId: partnerId, // Include for validation
+              syncTimestamp: Date.now(),
             },
           });
         } else if (data.type === 'history-response') {
@@ -85,16 +91,18 @@ export default function ChatPage() {
             return;
           }
           
-          console.log('Chat: Received partner history, syncing...');
-          const partnerMessages: Message[] = data.data.messages || [];
+          const newMessages: Message[] = data.data.messages || [];
+          const syncTimestamp = data.data.syncTimestamp || Date.now();
+          
+          console.log(`Chat: Received ${newMessages.length} new messages from partner`);
           
           // Additional validation: only save messages involving our partner
-          const validMessages = partnerMessages.filter(
+          const validMessages = newMessages.filter(
             m => (m.senderId === partnerId && m.recipientId === userId) ||
                  (m.senderId === userId && m.recipientId === partnerId)
           );
           
-          // Save all validated partner messages to our IndexedDB
+          // Save all validated new messages to our IndexedDB
           for (const msg of validMessages) {
             try {
               await saveMessage(msg);
@@ -103,13 +111,16 @@ export default function ChatPage() {
             }
           }
           
+          // Update last synced timestamp
+          setLastSyncedTimestamp(syncTimestamp);
+          
           // Reload all messages from IndexedDB (includes ours + partner's, deduplicated)
           await loadMessages();
           
           if (validMessages.length > 0) {
             toast({
               title: "Messages synced",
-              description: `Synced ${validMessages.length} messages with your beloved`,
+              description: `Synced ${validMessages.length} new messages with your beloved`,
             });
           }
         }
@@ -124,10 +135,13 @@ export default function ChatPage() {
     // Request partner's message history when we connect (with delay to ensure connection is ready)
     const requestHistoryTimeout = setTimeout(() => {
       if (ws.readyState === WebSocket.OPEN && partnerId) {
-        console.log('Chat: Requesting partner message history...');
+        console.log('Chat: Requesting partner message history since:', new Date(lastSyncedTimestamp).toISOString());
         sendWS({
           type: 'request-history',
-          data: { requesterId: userId },
+          data: { 
+            requesterId: userId,
+            lastSyncedTimestamp,
+          },
         });
       }
     }, 500);
@@ -137,7 +151,7 @@ export default function ChatPage() {
       clearTimeout(requestHistoryTimeout);
       ws.removeEventListener('message', handleMessage);
     };
-  }, [ws, partnerId, userId]);
+  }, [ws, partnerId, userId, lastSyncedTimestamp]);
 
   useEffect(() => {
     if (scrollRef.current) {
