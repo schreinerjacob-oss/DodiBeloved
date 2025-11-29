@@ -7,15 +7,15 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
 import { Heart, Send, Image, Mic, Lock, Eye, EyeOff } from 'lucide-react';
 import { getAllMessages, saveMessage } from '@/lib/storage-encrypted';
-import { useWebSocket } from '@/hooks/use-websocket';
-import type { Message } from '@/types';
+import { usePeerConnection } from '@/hooks/use-peer-connection';
+import type { Message, SyncMessage } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 
 export default function ChatPage() {
   const { userId, partnerId, isOnline } = useDodi();
   const { toast } = useToast();
-  const { send: sendWS, ws, connected } = useWebSocket();
+  const { send: sendP2P, state: peerState } = usePeerConnection();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -28,143 +28,58 @@ export default function ChatPage() {
     loadMessages();
   }, []);
 
+  // Listen for incoming P2P messages
   useEffect(() => {
-    if (!ws || !partnerId) {
-      console.log('Chat: Waiting for ws or partnerId', { hasWs: !!ws, partnerId });
+    if (!peerState.connected || !partnerId) {
+      console.log('🔗 [P2P] Chat: Waiting for P2P connection or partnerId', { connected: peerState.connected, partnerId });
       return;
     }
 
-    console.log('Chat: Setting up message listener for partnerId:', partnerId);
+    console.log('🔗 [P2P] Chat: Setting up P2P message listener for partnerId:', partnerId);
     
-    // Request partner's history immediately when WS connects
-    const requestPartnerHistory = () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        console.log('Chat: Requesting partner message history since:', new Date(lastSyncedTimestamp).toISOString());
-        sendWS({
-          type: 'request-history',
-          data: { 
-            requesterId: userId,
-            lastSyncedTimestamp,
-          },
-        });
-      } else {
-        console.log('Chat: WS not open yet, will retry');
-      }
-    };
-    
-    // Try immediately and then set up interval
-    requestPartnerHistory();
-    const historyInterval = setInterval(requestPartnerHistory, 3000);
-
-    const handleMessage = async (event: MessageEvent) => {
+    const handleP2pMessage = async (event: CustomEvent) => {
       try {
-        const data = JSON.parse(event.data);
-        console.log('Chat: Received WebSocket message:', { type: data.type });
+        const message: SyncMessage = event.detail;
+        console.log('📩 [P2P] Chat: Received P2P message type:', message.type);
         
-        if (data.type === 'message') {
-          const incomingMessage = data.data;
+        if (message.type === 'message') {
+          const incomingMessage = message.data as Message;
           
           // Validate sender is our paired partner
           if (incomingMessage.senderId === partnerId) {
-            console.log('Chat: Message from partner, saving and displaying');
+            console.log('💾 [P2P] Saving partner message:', incomingMessage.id);
             await saveMessage(incomingMessage);
             setMessages(prev => {
               // Deduplicate - don't add if already exists
               if (prev.some(m => m.id === incomingMessage.id)) {
-                console.log('Chat: Message already exists, skipping');
+                console.log('⚠️ [P2P] Message already exists, skipping');
                 return prev;
               }
               return [...prev, incomingMessage];
             });
             
-            // Update last synced timestamp to this message's timestamp
+            // Update last synced timestamp
             const msgTime = new Date(incomingMessage.timestamp).getTime();
             if (msgTime > lastSyncedTimestamp) {
               setLastSyncedTimestamp(msgTime);
             }
-          }
-        } else if (data.type === 'request-history') {
-          // SECURITY: Only respond to history requests from our actual paired partner
-          if (!partnerId) {
-            console.warn('Ignoring history request - no partner paired');
-            return;
-          }
-          
-          const lastSyncTimestamp = data.data.lastSyncedTimestamp || 0;
-          console.log('Chat: Partner requesting message history since:', new Date(lastSyncTimestamp).toISOString());
-          
-          const allMessages = await getAllMessages();
-          
-          // Filter to only messages between us and partner, and only since last sync
-          const newMessages = allMessages.filter(
-            m => ((m.senderId === userId && m.recipientId === partnerId) ||
-                  (m.senderId === partnerId && m.recipientId === userId)) &&
-                 (new Date(m.timestamp).getTime() > lastSyncTimestamp)
-          );
-          
-          console.log(`Chat: Sending ${newMessages.length} new messages since last sync`);
-          sendWS({
-            type: 'history-response',
-            data: { 
-              messages: newMessages,
-              partnerId: partnerId, // Include for validation
-              syncTimestamp: Date.now(),
-            },
-          });
-        } else if (data.type === 'history-response') {
-          // SECURITY: Validate response is from our paired partner
-          if (data.data.partnerId !== userId) {
-            console.warn('Ignoring history response - partner ID mismatch');
-            return;
-          }
-          
-          const newMessages: Message[] = data.data.messages || [];
-          const syncTimestamp = data.data.syncTimestamp || Date.now();
-          
-          console.log(`Chat: Received ${newMessages.length} new messages from partner`);
-          
-          // Additional validation: only save messages involving our partner
-          const validMessages = newMessages.filter(
-            m => (m.senderId === partnerId && m.recipientId === userId) ||
-                 (m.senderId === userId && m.recipientId === partnerId)
-          );
-          
-          // Save all validated new messages to our IndexedDB
-          for (const msg of validMessages) {
-            try {
-              await saveMessage(msg);
-            } catch (err) {
-              console.error('Error saving partner message:', err);
-            }
-          }
-          
-          // Update last synced timestamp
-          setLastSyncedTimestamp(syncTimestamp);
-          
-          // Reload all messages from IndexedDB (includes ours + partner's, deduplicated)
-          await loadMessages();
-          
-          if (validMessages.length > 0) {
-            toast({
-              title: "Messages synced",
-              description: `Synced ${validMessages.length} new messages with your beloved`,
-            });
+          } else {
+            console.warn('🚫 [P2P] Message from unknown sender:', incomingMessage.senderId);
           }
         }
       } catch (error) {
-        console.error('Error handling WebSocket message:', error);
+        console.error('❌ [P2P] Error handling P2P message:', error);
       }
     };
 
-    ws.addEventListener('message', handleMessage);
-    console.log('Chat: Message listener attached');
+    window.addEventListener('p2p-message', handleP2pMessage as EventListener);
+    console.log('✅ [P2P] Chat: P2P message listener attached');
     
     return () => {
-      console.log('Chat: Cleaning up message listener');
-      clearInterval(historyInterval);
-      ws.removeEventListener('message', handleMessage);
+      console.log('🧹 [P2P] Chat: Cleaning up P2P message listener');
+      window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
     };
-  }, [ws, partnerId, userId, lastSyncedTimestamp, sendWS]);
+  }, [peerState.connected, partnerId, lastSyncedTimestamp]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -186,6 +101,15 @@ export default function ChatPage() {
       toast({
         title: "Not paired",
         description: "Please pair with your beloved first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!peerState.connected) {
+      toast({
+        title: "Connection lost",
+        description: "Waiting for P2P connection to your beloved...",
         variant: "destructive",
       });
       return;
@@ -214,10 +138,12 @@ export default function ChatPage() {
       setMessages(prev => [...prev, message]);
       setNewMessage('');
 
-      // Send via WebSocket
-      sendWS({
+      // Send via P2P data channel
+      console.log('📤 [P2P] Sending message via P2P:', messageId);
+      sendP2P({
         type: 'message',
         data: message,
+        timestamp: Date.now(),
       });
 
       toast({
@@ -230,7 +156,7 @@ export default function ChatPage() {
         }, 30000);
       }
     } catch (error) {
-      console.error('Send error:', error);
+      console.error('❌ [P2P] Send error:', error);
       toast({
         title: "Failed to send",
         description: "Could not send message. Please try again.",
@@ -310,10 +236,12 @@ export default function ChatPage() {
         // Add to local state
         setMessages(prev => [...prev, message]);
 
-        // Send via WebSocket
-        sendWS({
+        // Send via P2P data channel
+        console.log('📤 [P2P] Sending image via P2P:', messageId);
+        sendP2P({
           type: 'message',
           data: message,
+          timestamp: Date.now(),
         });
 
         toast({
@@ -355,7 +283,7 @@ export default function ChatPage() {
             <h2 className="font-medium text-foreground">my beloved</h2>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <Lock className="w-3 h-3" />
-              {isOnline ? 'Online' : 'Offline'} • Encrypted
+              {peerState.connected ? 'P2P Connected' : 'Connecting...'} • Encrypted
             </p>
           </div>
         </div>
