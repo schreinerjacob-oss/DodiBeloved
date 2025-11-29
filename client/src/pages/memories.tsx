@@ -7,16 +7,16 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Camera, Lock, Calendar, Heart, X } from 'lucide-react';
 import { getAllMemories, saveMemory } from '@/lib/storage-encrypted';
-import type { Memory } from '@/types';
+import { usePeerConnection } from '@/hooks/use-peer-connection';
+import type { Memory, SyncMessage } from '@/types';
 import { format } from 'date-fns';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
-import { useWebSocket } from '@/hooks/use-websocket';
 
 export default function MemoriesPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
-  const { send: sendWS, ws } = useWebSocket();
+  const { send: sendP2P, state: peerState } = usePeerConnection();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [caption, setCaption] = useState<string>('');
@@ -28,19 +28,16 @@ export default function MemoriesPage() {
     loadMemories();
   }, []);
 
-  // Listen for incoming memories from partner and handle history sync
+  // Listen for incoming memories from partner via P2P
   useEffect(() => {
-    if (!ws || !partnerId) return;
+    if (!peerState.connected || !partnerId) return;
 
-    const handleMessage = async (event: MessageEvent) => {
+    const handleP2pMessage = async (event: CustomEvent) => {
       try {
-        const data = JSON.parse(event.data);
+        const message: SyncMessage = event.detail;
         
-        if (data.type === 'memory') {
-          console.log('Received memory from partner:', data.data);
-          const incomingMemory = data.data;
-          
-          // Accept memories between us and our partner (either direction)
+        if (message.type === 'memory') {
+          const incomingMemory = message.data as Memory;
           const isOurMemory = (incomingMemory.userId === userId && incomingMemory.partnerId === partnerId) ||
                              (incomingMemory.userId === partnerId && incomingMemory.partnerId === userId);
           
@@ -53,65 +50,18 @@ export default function MemoriesPage() {
               return [...prev, incomingMemory];
             });
           }
-        } else if (data.type === 'request-memory-history') {
-          console.log('Partner requesting memory history, sending...');
-          const allMemories = await getAllMemories();
-          const relevantMemories = allMemories.filter(
-            m => (m.userId === userId && m.partnerId === partnerId) ||
-                 (m.userId === partnerId && m.partnerId === userId)
-          );
-          
-          sendWS({
-            type: 'memory-history-response',
-            data: { memories: relevantMemories, partnerId: partnerId },
-          });
-        } else if (data.type === 'memory-history-response') {
-          console.log('Received memory history from partner');
-          const partnerMemories: Memory[] = data.data.memories || [];
-          
-          for (const memory of partnerMemories) {
-            try {
-              await saveMemory(memory);
-            } catch (err) {
-              console.error('Error saving partner memory:', err);
-            }
-          }
-          
-          await loadMemories();
-          
-          if (partnerMemories.length > 0) {
-            toast({
-              title: "Memories synced",
-              description: `Synced ${partnerMemories.length} memories with your beloved`,
-            });
-          }
         }
       } catch (e) {
-        console.log('WebSocket message parse error:', e);
+        console.error('🔗 [P2P] Error handling memory message:', e);
       }
     };
 
-    ws.addEventListener('message', handleMessage);
-    
-    // Request partner's memory history with retry interval
-    const requestMemoryHistory = () => {
-      if (ws.readyState === WebSocket.OPEN && partnerId) {
-        console.log('Requesting partner memory history...');
-        sendWS({
-          type: 'request-memory-history',
-          data: { requesterId: userId },
-        });
-      }
-    };
-    
-    requestMemoryHistory();
-    const historyInterval = setInterval(requestMemoryHistory, 3000);
+    window.addEventListener('p2p-message', handleP2pMessage as EventListener);
     
     return () => {
-      clearInterval(historyInterval);
-      ws.removeEventListener('message', handleMessage);
+      window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
     };
-  }, [ws, partnerId, userId, sendWS]);
+  }, [peerState.connected, partnerId, userId];
 
   const loadMemories = async () => {
     const allMemories = await getAllMemories();
