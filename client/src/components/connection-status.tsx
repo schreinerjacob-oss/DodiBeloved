@@ -13,6 +13,23 @@ export function ConnectionStatus() {
   const { state } = usePeerConnection();
   const { isPaired } = useDodi();
   const [showDetails, setShowDetails] = useState(false);
+  const [persistedError, setPersistedError] = useState<string | null>(null);
+  const [errorTimeout, setErrorTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // Persist error message for 7 seconds
+  useEffect(() => {
+    if (state.error) {
+      // Clear any existing timeout
+      if (errorTimeout) clearTimeout(errorTimeout);
+      
+      // Set new error and start timer
+      setPersistedError(state.error);
+      const timeout = setTimeout(() => {
+        setPersistedError(null);
+      }, 7000);
+      setErrorTimeout(timeout);
+    }
+  }, [state.error, errorTimeout]);
 
   if (!isPaired) return null;
 
@@ -37,13 +54,13 @@ export function ConnectionStatus() {
         pulse: false,
       };
     }
-    if (state.error) {
+    if (persistedError) {
       return {
         icon: AlertCircle,
         color: 'text-destructive',
         bg: 'bg-destructive/10',
         label: 'Connection Error',
-        description: state.error,
+        description: persistedError,
         pulse: false,
       };
     }
