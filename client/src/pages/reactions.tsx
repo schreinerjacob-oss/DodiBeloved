@@ -33,9 +33,9 @@ export default function ReactionsPage() {
   useEffect(() => {
     if (!peerState.connected || !partnerId) return;
 
-    const handleP2pMessage = async (event: MessageEvent) => {
+    const handleP2pMessage = async (event: CustomEvent) => {
       try {
-        const data = JSON.parse(event.data);
+        const data = event.detail;
         
         if (data.type === 'reaction') {
           console.log('Received reaction from partner:', data.data);
@@ -108,7 +108,7 @@ export default function ReactionsPage() {
       clearInterval(historyInterval);
       window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
     };
-  }, [ws, partnerId, userId, sendWS]);
+  }, [peerState.connected, partnerId, userId, sendP2P]);
 
   const loadReactions = async () => {
     const allReactions = await getAllReactions();

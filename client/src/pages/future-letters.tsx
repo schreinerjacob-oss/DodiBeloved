@@ -33,9 +33,9 @@ export default function FutureLettersPage() {
   useEffect(() => {
     if (!peerState.connected || !partnerId) return;
 
-    const handleP2pMessage = async (event: MessageEvent) => {
+    const handleP2pMessage = async (event: CustomEvent) => {
       try {
-        const data = JSON.parse(event.data);
+        const data = event.detail;
         
         if (data.type === 'future-letter') {
           console.log('Received future letter from partner:', data.data);
@@ -108,7 +108,7 @@ export default function FutureLettersPage() {
       clearInterval(historyInterval);
       window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
     };
-  }, [ws, partnerId, userId, sendWS]);
+  }, [peerState.connected, partnerId, userId, sendP2P]);
 
   const loadLetters = async () => {
     const allLetters = await getAllFutureLetters();
