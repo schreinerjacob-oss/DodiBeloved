@@ -104,6 +104,7 @@ export interface SyncMessage {
   type: string;
   data: unknown;
   timestamp: number;
+  // data can contain ArrayBuffer for binary media (no Base64 overhead)
 }
 
 export interface Subscription {

@@ -49,6 +49,14 @@ export default function MemoriesPage() {
                              (incomingMemory.userId === partnerId && incomingMemory.partnerId === userId);
           
           if (isOurMemory) {
+            // If mediaUrl is ArrayBuffer (binary image data), convert to Blob and save
+            if (incomingMemory.mediaUrl && typeof incomingMemory.mediaUrl === 'object' && incomingMemory.mediaUrl instanceof ArrayBuffer) {
+              const { saveMediaBlob } = await import('@/lib/storage');
+              const blob = new Blob([incomingMemory.mediaUrl], { type: 'image/jpeg' });
+              await saveMediaBlob(incomingMemory.id, blob, 'memory');
+              incomingMemory.mediaUrl = null; // Clear mediaUrl from object before saving metadata
+            }
+            
             await saveMemory(incomingMemory);
             setMemories(prev => {
               if (prev.some(m => m.id === incomingMemory.id)) {
@@ -131,17 +139,14 @@ export default function MemoriesPage() {
       // Add to local state immediately
       setMemories(prev => [...prev, memory]);
       
-      // Send to partner via P2P data channel (convert compressed blob to base64 for transmission only)
-      const reader = new FileReader();
-      reader.onload = () => {
-        console.log('📤 [P2P] Sending compressed memory image via P2P:', memoryId);
-        sendP2P({
-          type: 'memory',
-          data: { ...memory, mediaUrl: reader.result as string, imageData: reader.result as string },
-          timestamp: Date.now(),
-        });
-      };
-      reader.readAsDataURL(compressedBlob);
+      // Send to partner via P2P data channel as ArrayBuffer (no Base64 overhead)
+      const arrayBuffer = await compressedBlob.arrayBuffer();
+      console.log('📤 [P2P] Sending compressed memory image via P2P:', memoryId, `(${arrayBuffer.byteLength}B)`);
+      sendP2P({
+        type: 'memory',
+        data: { ...memory, mediaUrl: arrayBuffer, imageData: '' },
+        timestamp: Date.now(),
+      });
       
       setCaption('');
       setPreview('');
