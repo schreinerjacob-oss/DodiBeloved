@@ -14,6 +14,7 @@ export interface Message {
   type?: 'text' | 'image' | 'voice';
   mediaUrl?: string | null;
   isDisappearing?: boolean | null;
+  status?: 'sending' | 'sent' | 'delivered' | 'read';
 }
 
 export interface Memory {

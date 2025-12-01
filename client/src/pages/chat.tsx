@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
-import { Heart, Send, Image, Mic, Lock, Eye, EyeOff, ChevronUp } from 'lucide-react';
+import { Heart, Send, Image, Mic, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2 } from 'lucide-react';
 import { getMessages, saveMessage } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { MessageMediaImage } from '@/components/message-media-image';
@@ -26,8 +26,11 @@ export default function ChatPage() {
   const [messageOffset, setMessageOffset] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingThrottleRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     loadMessages();
@@ -46,6 +49,28 @@ export default function ChatPage() {
       try {
         const message: SyncMessage = event.detail;
         console.log('📩 [P2P] Chat: Received P2P message type:', message.type);
+        
+        // Handle typing indicator
+        if (message.type === 'typing') {
+          console.log('⌨️ [P2P] Partner is typing...');
+          setIsPartnerTyping(true);
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = setTimeout(() => {
+            setIsPartnerTyping(false);
+            console.log('⌨️ [P2P] Typing indicator cleared');
+          }, 3000);
+          return;
+        }
+        
+        // Handle delivery receipt ACK
+        if (message.type === 'ack') {
+          const { messageId } = message.data as { messageId: string };
+          console.log('✅ [P2P] Message delivered:', messageId);
+          setMessages(prev => prev.map(m => 
+            m.id === messageId ? { ...m, status: 'delivered' } : m
+          ));
+          return;
+        }
         
         if (message.type === 'message') {
           const incomingMessage = message.data as Message;
@@ -77,6 +102,14 @@ export default function ChatPage() {
             if (msgTime > lastSyncedTimestamp) {
               setLastSyncedTimestamp(msgTime);
             }
+            
+            // SEND ACK - Confirm delivery
+            console.log('📤 [P2P] Sending delivery ACK for:', incomingMessage.id);
+            sendP2P({
+              type: 'ack',
+              data: { messageId: incomingMessage.id },
+              timestamp: Date.now(),
+            });
           } else {
             console.warn('🚫 [P2P] Message from unknown sender:', incomingMessage.senderId);
           }
@@ -155,6 +188,7 @@ export default function ChatPage() {
         mediaUrl: null,
         isDisappearing,
         timestamp: now,
+        status: 'sending',
       };
 
       // Save to IndexedDB first
@@ -172,9 +206,10 @@ export default function ChatPage() {
         timestamp: Date.now(),
       });
 
-      toast({
-        title: "Message sent",
-      });
+      // Update to sent status immediately (before ACK)
+      setMessages(prev => prev.map(m => 
+        m.id === messageId ? { ...m, status: 'sent' } : m
+      ));
       
       if (isDisappearing) {
         setTimeout(() => {
@@ -190,6 +225,24 @@ export default function ChatPage() {
       });
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleTyping = () => {
+    if (!peerState.connected || !partnerId) return;
+    
+    // Throttle typing indicator - send max once per second
+    if (!typingThrottleRef.current) {
+      console.log('⌨️ [P2P] Sending typing indicator');
+      sendP2P({
+        type: 'typing',
+        data: {},
+        timestamp: Date.now(),
+      });
+      
+      typingThrottleRef.current = setTimeout(() => {
+        typingThrottleRef.current = null;
+      }, 1000);
     }
   };
 
@@ -354,6 +407,16 @@ export default function ChatPage() {
             </Button>
           )}
 
+          {isPartnerTyping && (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-1 px-4 py-2">
+                <span className="w-1.5 h-1.5 bg-sage rounded-full animate-bounce" />
+                <span className="w-1.5 h-1.5 bg-sage rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                <span className="w-1.5 h-1.5 bg-sage rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
+              </div>
+            </div>
+          )}
+
           {messages.map((message) => {
             const isSent = message.senderId === userId;
             const isImage = message.type === 'image';
@@ -373,16 +436,36 @@ export default function ChatPage() {
                   {isImage ? (
                     <div className="space-y-2">
                       <MessageMediaImage messageId={message.id} fileName={message.content} />
-                      <p className="text-xs text-muted-foreground px-3 pb-2">
-                        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                      <div className="flex items-center justify-between px-3 pb-2">
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        {isSent && (
+                          <div className="ml-2">
+                            {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+                            {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
+                            {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
+                            {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <>
                       <p className="text-sm leading-relaxed">{message.content}</p>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        {isSent && (
+                          <div className="ml-2">
+                            {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+                            {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
+                            {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
+                            {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
+                          </div>
+                        )}
+                      </div>
                     </>
                   )}
                 </Card>
@@ -442,7 +525,10 @@ export default function ChatPage() {
 
           <Input
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={(e) => {
+              setNewMessage(e.target.value);
+              handleTyping();
+            }}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
             placeholder="Type a message..."
             className="flex-1"
