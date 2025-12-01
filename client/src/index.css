@@ -285,4 +285,23 @@
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
   }
+
+  /* Celebration animations for sacred moments */
+  @keyframes celebrate-sparkle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+  }
+
+  @keyframes gentle-pulse-glow {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(163, 230, 53, 0.1); }
+    50% { opacity: 0.95; box-shadow: 0 0 20px 10px rgba(163, 230, 53, 0); }
+  }
+
+  .animate-celebrate {
+    animation: celebrate-sparkle 0.6s ease-in-out;
+  }
+
+  .animate-gentle-pulse {
+    animation: gentle-pulse-glow 2s ease-in-out infinite;
+  }
 }

@@ -50,6 +50,24 @@ export default function ReactionsPage() {
               
               // Celebration moment when receiving reaction from beloved
               const reactionLabel = reactionTypes.find(r => r.id === incomingReaction.type)?.label || 'love';
+              
+              // Gentle audio notification
+              try {
+                const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                oscillator.connect(gain);
+                gain.connect(audioContext.destination);
+                oscillator.frequency.value = 880; // A5 note
+                oscillator.type = 'sine';
+                gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.3);
+              } catch (e) {
+                console.log('Audio notification skipped');
+              }
+              
               toast({
                 title: "Your beloved 💕",
                 description: `They're sending you ${reactionLabel}...`,

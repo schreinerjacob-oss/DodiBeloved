@@ -359,14 +359,14 @@ export default function ChatPage() {
     <div className="flex flex-col h-full bg-background">
       <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b bg-card/50">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sage to-blush flex items-center justify-center">
+          <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-sage to-blush flex items-center justify-center ${peerState.connected ? 'animate-gentle-pulse' : ''}`}>
             <Heart className="w-5 h-5 text-white" />
           </div>
           <div>
             <h2 className="font-medium text-foreground">my beloved</h2>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <Lock className="w-3 h-3" />
-              {peerState.connected ? 'P2P Connected' : 'Connecting...'} • Encrypted
+              {peerState.connected ? '✨ Right here • Encrypted' : '⏳ Connecting...'} 
             </p>
           </div>
         </div>

@@ -75,6 +75,8 @@ export default function PrayersPage() {
     };
   }, [peerState.connected, partnerId, userId]);
 
+  const [celebrationActive, setCelebrationActive] = useState(false);
+
   const loadPrayers = async () => {
     const allPrayers = await getAllPrayers();
     
@@ -89,7 +91,11 @@ export default function PrayersPage() {
       const dayPrayers = prayersByDate[dateKey];
       if (dayPrayers.length === 2) {
         dayPrayers.forEach(p => {
-          if (!p.isRevealed) p.isRevealed = true;
+          if (!p.isRevealed) {
+            p.isRevealed = true;
+            setCelebrationActive(true);
+            setTimeout(() => setCelebrationActive(false), 600);
+          }
         });
       }
     });
@@ -245,10 +251,10 @@ export default function PrayersPage() {
           )}
 
           {bothSubmittedToday && (
-            <Card className="p-6 bg-gradient-to-br from-sage/10 to-blush/10 border-sage/30">
+            <Card className={`p-6 bg-gradient-to-br from-sage/10 to-blush/10 border-sage/30 ${celebrationActive ? 'animate-celebrate' : ''}`}>
               <div className="flex items-start gap-3 mb-4">
-                <Sparkles className="w-5 h-5 text-sage mt-0.5" />
-                <h3 className="font-medium">Today's Shared Gratitude</h3>
+                <Sparkles className="w-5 h-5 text-sage mt-0.5 animate-gentle-pulse" />
+                <h3 className="font-medium">Today's Shared Gratitude ✨</h3>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 {todayPrayers.map((entry) => (
