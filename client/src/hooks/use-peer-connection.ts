@@ -26,8 +26,13 @@ let globalState: PeerConnectionState = {
   isReconnecting: false,
 };
 
+// Offline queue for P2P messages when disconnected
+let offlineQueue: SyncMessage[] = [];
+let queueFlushInProgress = false;
+
 // Subscription system - track all active hook listeners
 const listeners = new Set<(state: PeerConnectionState) => void>();
+const queueListeners = new Set<(queueSize: number) => void>();
 
 // Notify all listeners of state changes
 function notifyListeners() {
@@ -63,6 +68,32 @@ function connectToPartner(targetId: string) {
   setupConnection(conn);
 }
 
+// Flush queued messages when connection restored
+async function flushOfflineQueue(conn: DataConnection) {
+  if (queueFlushInProgress || offlineQueue.length === 0) return;
+  
+  queueFlushInProgress = true;
+  console.log('🔄 Flushing offline queue:', offlineQueue.length, 'messages');
+  
+  const toSend = [...offlineQueue];
+  offlineQueue = [];
+  queueListeners.forEach(listener => listener(0));
+  
+  // Send all queued messages in batch
+  for (const msg of toSend) {
+    try {
+      conn.send(msg);
+      console.log('📤 Queued message sent:', msg.type);
+    } catch (e) {
+      console.error('Failed to send queued message:', e);
+      offlineQueue.push(msg); // Re-queue if failed
+    }
+  }
+  
+  queueFlushInProgress = false;
+  console.log('✅ Offline queue flushed');
+}
+
 // Setup data connection - called globally
 function setupConnection(conn: DataConnection) {
   if (globalConn && globalConn.open && globalConn.peer === conn.peer && globalConn !== conn) {
@@ -76,6 +107,11 @@ function setupConnection(conn: DataConnection) {
     console.log('✨ SECURE PIPE ESTABLISHED with:', conn.peer);
     notifyListeners();
     conn.send({ type: 'ping', timestamp: Date.now() });
+    
+    // FLUSH OFFLINE QUEUE when connection established
+    if (offlineQueue.length > 0) {
+      flushOfflineQueue(conn);
+    }
   });
 
   conn.on('data', (data: any) => {
@@ -188,7 +224,10 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       globalConn.send(message);
       console.log('📤 Sent:', message.type);
     } else {
-      console.warn('⚠️ Failed to send: Pipe broken');
+      // Queue message for later when reconnected
+      console.log('📨 Queueing message (offline):', message.type);
+      offlineQueue.push(message);
+      queueListeners.forEach(listener => listener(offlineQueue.length));
       if (partnerId) connectToPartner(partnerId);
     }
   }, [partnerId]);
@@ -212,6 +251,17 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     }, 5000);
     return () => clearInterval(interval);
   }, [partnerId]);
+
+  // Subscribe to queue changes
+  useEffect(() => {
+    const queueStateHandler = (size: number) => {
+      if (size > 0) {
+        console.log('📨 Offline messages queued:', size);
+      }
+    };
+    queueListeners.add(queueStateHandler);
+    return () => queueListeners.delete(queueStateHandler);
+  }, []);
 
   return { state, send, reconnect };
 }
