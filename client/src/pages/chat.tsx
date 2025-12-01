@@ -329,6 +329,20 @@ export default function ChatPage() {
             </div>
           )}
 
+          {hasMoreMessages && messages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={loadMoreMessages}
+              disabled={loadingMore}
+              className="mx-auto w-full"
+              data-testid="button-load-more-messages"
+            >
+              <ChevronUp className="w-4 h-4 mr-2" />
+              {loadingMore ? 'Loading...' : 'Load Earlier Messages'}
+            </Button>
+          )}
+
           {messages.map((message) => {
             const isSent = message.senderId === userId;
             const isImage = message.type === 'image';

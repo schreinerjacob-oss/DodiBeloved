@@ -5,14 +5,16 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Camera, Lock, Calendar, Heart, X } from 'lucide-react';
-import { getAllMemories, saveMemory } from '@/lib/storage-encrypted';
+import { Camera, Lock, Calendar, Heart, X, ChevronUp } from 'lucide-react';
+import { getMemories, saveMemory } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { MemoryMediaImage } from '@/components/memory-media-image';
 import type { Memory, SyncMessage } from '@/types';
 import { format } from 'date-fns';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
+
+const MEMORIES_PER_PAGE = 20;
 
 export default function MemoriesPage() {
   const { userId, partnerId } = useDodi();
@@ -23,6 +25,9 @@ export default function MemoriesPage() {
   const [caption, setCaption] = useState<string>('');
   const [preview, setPreview] = useState<string>('');
   const [saving, setSaving] = useState(false);
+  const [memoryOffset, setMemoryOffset] = useState(0);
+  const [hasMoreMemories, setHasMoreMemories] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -65,8 +70,20 @@ export default function MemoriesPage() {
   }, [peerState.connected, partnerId, userId];
 
   const loadMemories = async () => {
-    const allMemories = await getAllMemories();
-    setMemories(allMemories);
+    const mems = await getMemories(MEMORIES_PER_PAGE, 0);
+    setMemories(mems);
+    setMemoryOffset(0);
+    setHasMoreMemories(mems.length === MEMORIES_PER_PAGE);
+  };
+
+  const loadMoreMemories = async () => {
+    setLoadingMore(true);
+    const newOffset = memoryOffset + MEMORIES_PER_PAGE;
+    const mems = await getMemories(MEMORIES_PER_PAGE, newOffset);
+    setMemories(prev => [...mems, ...prev]);
+    setMemoryOffset(newOffset);
+    setHasMoreMemories(mems.length === MEMORIES_PER_PAGE);
+    setLoadingMore(false);
   };
 
   const [previewFile, setPreviewFile] = useState<File | null>(null);
@@ -229,7 +246,21 @@ export default function MemoriesPage() {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
+          <div className="space-y-6 max-w-6xl mx-auto">
+            {hasMoreMemories && memories.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={loadMoreMemories}
+                disabled={loadingMore}
+                className="w-full"
+                data-testid="button-load-more-memories"
+              >
+                <ChevronUp className="w-4 h-4 mr-2" />
+                {loadingMore ? 'Loading...' : 'Load Earlier Memories'}
+              </Button>
+            )}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {memories.map((memory) => (
               <Card
                 key={memory.id}
@@ -249,6 +280,7 @@ export default function MemoriesPage() {
                 </div>
               </Card>
             ))}
+            </div>
           </div>
         )}
       </ScrollArea>
