@@ -375,10 +375,10 @@ export default function ChatPage() {
           onClick={handleThinkingOfYou}
           size="icon"
           variant="ghost"
-          className="text-accent hover:text-accent flex-shrink-0"
+          className="text-accent flex-shrink-0"
           data-testid="button-thinking-of-you"
         >
-          <Heart className="w-5 h-5 animate-pulse-glow" />
+          <Heart className="w-5 h-5 animate-gentle-pulse" />
         </Button>
       </div>
 

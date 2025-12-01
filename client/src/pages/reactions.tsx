@@ -3,6 +3,7 @@ import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 import { Heart, Sparkles, Smile, Zap, Send } from 'lucide-react';
 import { getAllReactions, saveReaction } from '@/lib/storage-encrypted';
 import type { Reaction } from '@/types';
@@ -24,9 +25,12 @@ export default function ReactionsPage() {
   const { send: sendP2P, state: peerState } = usePeerConnection();
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [sending, setSending] = useState<string | null>(null);
+  const [markedAsRead, setMarkedAsRead] = useState(false);
 
   useEffect(() => {
     loadReactions();
+    // Mark reactions as read when user opens this page
+    setMarkedAsRead(true);
   }, []);
 
   // Listen for incoming reactions from partner and handle history sync
@@ -182,13 +186,24 @@ export default function ReactionsPage() {
   const receivedReactions = reactions.filter(r => r.recipientId === userId);
   const sentReactions = reactions.filter(r => r.senderId === userId);
 
+  const unreadCount = reactions.filter(r => r.recipientId === userId && r.timestamp > new Date(Date.now() - 24*60*60*1000)).length;
+
   return (
     <div className="h-full flex flex-col bg-background">
       <div className="px-6 py-4 border-b bg-card/50">
-        <h2 className="text-xl font-light text-foreground">Quick Reactions</h2>
-        <p className="text-xs text-muted-foreground mt-1">
-          Send instant love notes
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-light text-foreground">Quick Reactions</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Send instant love notes
+            </p>
+          </div>
+          {unreadCount > 0 && (
+            <Badge className="bg-accent text-accent-foreground">
+              {unreadCount} new
+            </Badge>
+          )}
+        </div>
       </div>
 
       <ScrollArea className="flex-1 p-6">
