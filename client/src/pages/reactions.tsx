@@ -47,6 +47,14 @@ export default function ReactionsPage() {
               if (prev.some(r => r.id === incomingReaction.id)) {
                 return prev;
               }
+              
+              // Celebration moment when receiving reaction from beloved
+              const reactionLabel = reactionTypes.find(r => r.id === incomingReaction.type)?.label || 'love';
+              toast({
+                title: "Your beloved 💕",
+                description: `They're sending you ${reactionLabel}...`,
+              });
+              
               return [incomingReaction, ...prev];
             });
           }
@@ -131,15 +139,16 @@ export default function ReactionsPage() {
       await saveReaction(reaction);
       setReactions(prev => [reaction, ...prev]);
 
-      // Send to partner via WebSocket
+      // Send to partner via P2P data channel
       sendP2P({
         type: 'reaction',
         data: reaction,
       });
 
+      const reactionLabel = reactionTypes.find(r => r.id === type)?.label || 'reaction';
       toast({
-        title: "Sent! 💝",
-        description: "Your beloved will feel the love.",
+        title: "Love sent ✨",
+        description: `Your ${reactionLabel} is on its way...`,
       });
     } catch (error) {
       toast({

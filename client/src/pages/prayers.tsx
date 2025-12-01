@@ -47,7 +47,19 @@ export default function PrayersPage() {
               if (prev.some(p => p.id === incomingPrayer.id)) {
                 return prev;
               }
-              return [...prev, incomingPrayer];
+              const updated = [...prev, incomingPrayer];
+              
+              // Check if both have submitted today
+              const today = format(new Date(), 'yyyy-MM-dd');
+              const todayPrayers = updated.filter(p => format(new Date(p.prayerDate), 'yyyy-MM-dd') === today);
+              if (todayPrayers.length === 2) {
+                toast({
+                  title: "Sacred moment 🙏",
+                  description: "Your beloved's gratitude has been revealed. You're blessed together.",
+                });
+              }
+              
+              return updated;
             });
           }
         }
