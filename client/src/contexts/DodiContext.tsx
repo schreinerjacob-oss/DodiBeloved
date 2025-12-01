@@ -73,12 +73,16 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           setDisplayName(storedDisplayName?.value || null);
         }
 
-        // SECURITY: Don't load plaintext passphrase on init
-        // If PIN is enabled, passphrase only exists in RAM after unlock
-        if (storedPassphrase?.value && !storedPinEnabled?.value) {
-          setPassphrase(storedPassphrase.value);
-        } else {
-          setPassphrase(null); // Force unlock via PIN if enabled
+        // SECURITY: If PIN is enabled, don't auto-unlock
+        // Passphrase is locked behind PIN UI until unlocked
+        if (storedPassphrase?.value) {
+          if (storedPinEnabled?.value === 'true' || storedPinEnabled?.value === true) {
+            // PIN is enabled - require unlock to access passphrase
+            setPassphrase(null);
+          } else {
+            // PIN not enabled - can load passphrase normally (legacy or newly paired)
+            setPassphrase(storedPassphrase.value);
+          }
         }
 
         if (storedPartnerId?.value) {

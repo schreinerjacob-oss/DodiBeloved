@@ -136,15 +136,15 @@ export async function savePIN(pin: string, passphrase: string): Promise<void> {
     const salt = base64ToArrayBuffer(storedSalt.value);
     const pinKey = await derivePINKey(pin, salt);
     
-    // Encrypt passphrase with PIN
+    // Encrypt passphrase with PIN for verification
     const encryptedPassphrase = await encrypt(passphrase, pinKey);
     
-    // Encrypt PIN for verification
-    const { arrayBufferToBase64 } = await import('@/lib/crypto');
+    // Encrypt PIN for additional verification
     const mainKey = await getEncryptionKey();
     const encryptedPin = await encrypt(pin, mainKey);
     
-    // Save encrypted passphrase and encrypted PIN, delete plaintext passphrase
+    // SECURITY NOTE: Keep plaintext passphrase in storage for message decryption
+    // The encryptedPassphrase serves as a tamper check - if PIN is correct, it decrypts to match stored passphrase
     await Promise.all([
       db.put('settings', { 
         key: 'encryptedPassphrase', 
@@ -154,10 +154,11 @@ export async function savePIN(pin: string, passphrase: string): Promise<void> {
         key: 'pin', 
         value: JSON.stringify(encryptedPin)
       }),
-      db.delete('settings', 'passphrase'), // DELETE plaintext!
+      // NOTE: Do NOT delete plaintext passphrase - needed for getEncryptionKey() to decrypt messages
+      // Security is provided by PIN lock UI + inactivity timeout
     ]);
     
-    console.log('✅ [KEY WRAPPING] Passphrase encrypted with PIN, plaintext deleted');
+    console.log('✅ [KEY WRAPPING] Passphrase encrypted with PIN, PIN setup complete');
   } catch (error) {
     console.error('Failed to save PIN:', error);
     throw error;
