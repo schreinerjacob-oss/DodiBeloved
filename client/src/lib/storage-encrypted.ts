@@ -1,5 +1,5 @@
 import { encrypt, decrypt, deriveKey, base64ToArrayBuffer } from '@/lib/crypto';
-import { initDB as initDBRaw, getSetting as getSettingRaw, saveSetting as saveSettingRaw, saveMediaBlob, getMediaBlob, deleteMediaBlob } from '@/lib/storage';
+import { initDB as initDBRaw, getSetting as getSettingRaw, saveSetting as saveSettingRaw, saveMediaBlob, getMediaBlob, deleteMediaBlob, getMessages as getMessagesRaw, getMemories as getMemoriesRaw } from '@/lib/storage';
 import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction, EncryptedData } from '@/types';
 
 let cachedKey: CryptoKey | null = null;
@@ -8,6 +8,8 @@ let cachedPINKey: CryptoKey | null = null;
 export const initDB = initDBRaw;
 export const getSetting = getSettingRaw;
 export const saveSetting = saveSettingRaw;
+export const getMessages = getMessagesRaw;
+export const getMemories = getMemoriesRaw;
 
 export async function getEncryptionKey(): Promise<CryptoKey> {
   if (cachedKey) return cachedKey;

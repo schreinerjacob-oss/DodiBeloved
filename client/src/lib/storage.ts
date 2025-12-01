@@ -92,6 +92,12 @@ export async function getAllMessages(): Promise<Message[]> {
   return db.getAllFromIndex('messages', 'timestamp');
 }
 
+export async function getMessages(limit: number = 50, offset: number = 0): Promise<Message[]> {
+  const db = await initDB();
+  const allMessages = await db.getAllFromIndex('messages', 'timestamp');
+  return allMessages.slice(Math.max(0, allMessages.length - offset - limit), allMessages.length - offset);
+}
+
 export async function saveMemory(memory: Memory): Promise<void> {
   const db = await initDB();
   await db.put('memories', memory);
@@ -100,6 +106,12 @@ export async function saveMemory(memory: Memory): Promise<void> {
 export async function getAllMemories(): Promise<Memory[]> {
   const db = await initDB();
   return db.getAllFromIndex('memories', 'timestamp');
+}
+
+export async function getMemories(limit: number = 20, offset: number = 0): Promise<Memory[]> {
+  const db = await initDB();
+  const allMemories = await db.getAllFromIndex('memories', 'timestamp');
+  return allMemories.slice(Math.max(0, allMemories.length - offset - limit), allMemories.length - offset);
 }
 
 export async function saveCalendarEvent(event: CalendarEvent): Promise<void> {

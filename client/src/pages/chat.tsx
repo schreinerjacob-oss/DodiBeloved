@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
-import { Heart, Send, Image, Mic, Lock, Eye, EyeOff } from 'lucide-react';
-import { getAllMessages, saveMessage } from '@/lib/storage-encrypted';
+import { Heart, Send, Image, Mic, Lock, Eye, EyeOff, ChevronUp } from 'lucide-react';
+import { getMessages, saveMessage } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { MessageMediaImage } from '@/components/message-media-image';
 import type { Message, SyncMessage } from '@/types';
@@ -22,6 +22,9 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [isDisappearing, setIsDisappearing] = useState(false);
   const [lastSyncedTimestamp, setLastSyncedTimestamp] = useState<number>(0);
+  const [messageOffset, setMessageOffset] = useState(0);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -89,8 +92,20 @@ export default function ChatPage() {
   }, [messages]);
 
   const loadMessages = async () => {
-    const allMessages = await getAllMessages();
-    setMessages(allMessages);
+    const msgs = await getMessages(MESSAGES_PER_PAGE, 0);
+    setMessages(msgs);
+    setMessageOffset(0);
+    setHasMoreMessages(msgs.length === MESSAGES_PER_PAGE);
+  };
+
+  const loadMoreMessages = async () => {
+    setLoadingMore(true);
+    const newOffset = messageOffset + MESSAGES_PER_PAGE;
+    const msgs = await getMessages(MESSAGES_PER_PAGE, newOffset);
+    setMessages(prev => [...msgs, ...prev]);
+    setMessageOffset(newOffset);
+    setHasMoreMessages(msgs.length === MESSAGES_PER_PAGE);
+    setLoadingMore(false);
   };
 
   const handleSend = async () => {
