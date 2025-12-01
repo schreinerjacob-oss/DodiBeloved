@@ -359,7 +359,7 @@ export default function ChatPage() {
                       : 'bg-card border-card-border'
                   }`}
                 >
-                  {isImage && (
+                  {isImage ? (
                     <div className="space-y-2">
                       <MessageMediaImage messageId={message.id} fileName={message.content} />
                       <p className="text-xs text-muted-foreground px-3 pb-2">

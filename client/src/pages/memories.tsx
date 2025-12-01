@@ -67,7 +67,7 @@ export default function MemoriesPage() {
     return () => {
       window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
     };
-  }, [peerState.connected, partnerId, userId];
+  }, [peerState.connected, partnerId, userId]);
 
   const loadMemories = async () => {
     const mems = await getMemories(MEMORIES_PER_PAGE, 0);
