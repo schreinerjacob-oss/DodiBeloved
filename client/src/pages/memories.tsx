@@ -13,6 +13,7 @@ import type { Memory, SyncMessage } from '@/types';
 import { format } from 'date-fns';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
+import { compressImage } from '@/lib/utils';
 
 const MEMORIES_PER_PAGE = 20;
 
@@ -103,6 +104,11 @@ export default function MemoriesPage() {
     setSaving(true);
     try {
       const memoryId = nanoid();
+      
+      // Compress image to Blob (70-90% size reduction)
+      console.log('🖼️ Compressing memory image...');
+      const compressedBlob = await compressImage(previewFile);
+      
       const memory: Memory = {
         id: memoryId,
         userId,
@@ -115,9 +121,9 @@ export default function MemoriesPage() {
         createdAt: new Date(),
       };
       
-      // Save blob to IndexedDB media store (not as base64)
+      // Save compressed blob to IndexedDB media store
       const { saveMediaBlob } = await import('@/lib/storage');
-      await saveMediaBlob(memoryId, previewFile, 'memory');
+      await saveMediaBlob(memoryId, compressedBlob, 'memory');
       
       // Save memory metadata to IndexedDB
       await saveMemory(memory);
@@ -125,16 +131,17 @@ export default function MemoriesPage() {
       // Add to local state immediately
       setMemories(prev => [...prev, memory]);
       
-      // Send to partner via P2P data channel (convert blob to base64 for transmission only)
+      // Send to partner via P2P data channel (convert compressed blob to base64 for transmission only)
       const reader = new FileReader();
       reader.onload = () => {
+        console.log('📤 [P2P] Sending compressed memory image via P2P:', memoryId);
         sendP2P({
           type: 'memory',
           data: { ...memory, mediaUrl: reader.result as string, imageData: reader.result as string },
           timestamp: Date.now(),
         });
       };
-      reader.readAsDataURL(previewFile);
+      reader.readAsDataURL(compressedBlob);
       
       setCaption('');
       setPreview('');

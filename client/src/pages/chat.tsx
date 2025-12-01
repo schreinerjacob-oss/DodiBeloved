@@ -12,6 +12,7 @@ import { MessageMediaImage } from '@/components/message-media-image';
 import type { Message, SyncMessage } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
+import { compressImage } from '@/lib/utils';
 
 export default function ChatPage() {
   const { userId, partnerId, isOnline } = useDodi();
@@ -232,6 +233,10 @@ export default function ChatPage() {
       const messageId = nanoid();
       const now = new Date();
 
+      // Compress image to Blob (70-90% size reduction)
+      console.log('🖼️ Compressing image...');
+      const compressedBlob = await compressImage(file);
+
       const message: Message = {
         id: messageId,
         senderId: userId!,
@@ -243,9 +248,9 @@ export default function ChatPage() {
         timestamp: now,
       };
 
-      // Save blob to IndexedDB media store (not as base64)
+      // Save compressed blob to IndexedDB media store
       const { saveMediaBlob } = await import('@/lib/storage');
-      await saveMediaBlob(messageId, file, 'message');
+      await saveMediaBlob(messageId, compressedBlob, 'message');
 
       // Save message metadata to IndexedDB
       await saveMessage(message);
@@ -253,17 +258,17 @@ export default function ChatPage() {
       // Add to local state
       setMessages(prev => [...prev, message]);
 
-      // Send via P2P data channel (convert blob to base64 for transmission only)
+      // Send via P2P data channel (convert compressed blob to base64 for transmission only)
       const reader = new FileReader();
       reader.onload = () => {
-        console.log('📤 [P2P] Sending image via P2P:', messageId);
+        console.log('📤 [P2P] Sending compressed image via P2P:', messageId);
         sendP2P({
           type: 'message',
           data: { ...message, mediaUrl: reader.result as string },
           timestamp: Date.now(),
         });
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(compressedBlob);
 
       toast({
         title: "Image sent",
