@@ -73,8 +73,12 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           setDisplayName(storedDisplayName?.value || null);
         }
 
-        if (storedPassphrase?.value) {
+        // SECURITY: Don't load plaintext passphrase on init
+        // If PIN is enabled, passphrase only exists in RAM after unlock
+        if (storedPassphrase?.value && !storedPinEnabled?.value) {
           setPassphrase(storedPassphrase.value);
+        } else {
+          setPassphrase(null); // Force unlock via PIN if enabled
         }
 
         if (storedPartnerId?.value) {
@@ -297,22 +301,37 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     }
   }, [pairingStatus, pinEnabled]);
 
-  // PIN Management Methods
+  // PIN Management Methods - KEY WRAPPING
   const setPINHandler = async (pin: string) => {
     if (pin.length < 4 || pin.length > 6) {
       throw new Error('PIN must be 4-6 digits');
     }
-    await savePIN(pin);
+    
+    // KEY WRAPPING: Encrypt passphrase with PIN, delete plaintext
+    if (!passphrase) {
+      throw new Error('Passphrase not available to encrypt');
+    }
+    
+    const { savePIN } = await import('@/lib/storage-encrypted');
+    await savePIN(pin, passphrase);
+    
     await saveSetting('pinEnabled', 'true');
     setPinEnabled(true);
     setShowPinSetup(false);
+    
+    console.log('✅ [PIN] PIN set, passphrase encrypted and stored in RAM only');
   };
 
   const unlockWithPINHandler = async (pin: string): Promise<boolean> => {
     try {
-      const isValid = await verifyPIN(pin);
-      if (isValid) {
+      // KEY WRAPPING: Decrypt passphrase with PIN
+      const { verifyPINAndGetPassphrase } = await import('@/lib/storage-encrypted');
+      const decryptedPassphrase = await verifyPINAndGetPassphrase(pin);
+      
+      if (decryptedPassphrase) {
+        setPassphrase(decryptedPassphrase); // Load to RAM
         setIsLocked(false);
+        console.log('✅ [PIN] Unlocked, passphrase decrypted to RAM');
         return true;
       }
       return false;
@@ -337,6 +356,10 @@ export function DodiProvider({ children }: { children: ReactNode }) {
 
   const lockAppHandler = () => {
     setIsLocked(true);
+    // SECURITY: Clear passphrase from RAM when locking
+    // On page reload, passphrase is null until user enters PIN again
+    setPassphrase(null);
+    console.log('🔒 [LOCK] Passphrase cleared from RAM');
   };
 
   const setInactivityMinutesHandler = async (minutes: number) => {
@@ -365,6 +388,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     clearEncryptionCache();
+    setPassphrase(null); // SECURITY: Clear passphrase from RAM
     
     const db = await initDB();
     await db.clear('settings');
@@ -378,7 +402,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setUserId(null);
     setDisplayName(null);
     setPartnerId(null);
-    setPassphrase(null);
     setPairingStatus('unpaired');
   };
 

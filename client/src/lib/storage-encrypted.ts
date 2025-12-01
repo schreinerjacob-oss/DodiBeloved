@@ -117,53 +117,83 @@ export async function decryptReaction(encrypted: EncryptedData): Promise<Reactio
   return decryptObject(encrypted);
 }
 
-// PIN Management Functions
-async function getPINKey(): Promise<CryptoKey> {
-  if (cachedPINKey) return cachedPINKey;
-  
-  // For PIN, we use a separate derivation with the main passphrase
-  // This ensures PIN is tied to the account
-  const storedPassphrase = await getSettingRaw('passphrase');
-  const storedSalt = await getSettingRaw('salt');
-
-  if (!storedPassphrase || !storedSalt) {
-    throw new Error('No encryption credentials available');
-  }
-
-  const salt = base64ToArrayBuffer(storedSalt);
-  cachedPINKey = await deriveKey(storedPassphrase, salt);
-  return cachedPINKey;
+// PIN Management Functions - KEY WRAPPING
+// Derives a key from PIN + salt for encrypting passphrase
+async function derivePINKey(pin: string, salt: Uint8Array): Promise<CryptoKey> {
+  return deriveKey(pin, salt);
 }
 
-export async function savePIN(pin: string): Promise<void> {
+export async function savePIN(pin: string, passphrase: string): Promise<void> {
   try {
-    const key = await getPINKey();
-    const encrypted = await encrypt(pin, key);
     const db = await initDB();
-    await db.put('settings', { 
-      key: 'pin', 
-      value: JSON.stringify(encrypted)
-    });
+    const storedSalt = await getSettingRaw('salt');
+    
+    if (!storedSalt) {
+      throw new Error('Salt not available');
+    }
+
+    // Derive key from PIN + salt
+    const salt = base64ToArrayBuffer(storedSalt.value);
+    const pinKey = await derivePINKey(pin, salt);
+    
+    // Encrypt passphrase with PIN
+    const encryptedPassphrase = await encrypt(passphrase, pinKey);
+    
+    // Encrypt PIN for verification
+    const { arrayBufferToBase64 } = await import('@/lib/crypto');
+    const mainKey = await getEncryptionKey();
+    const encryptedPin = await encrypt(pin, mainKey);
+    
+    // Save encrypted passphrase and encrypted PIN, delete plaintext passphrase
+    await Promise.all([
+      db.put('settings', { 
+        key: 'encryptedPassphrase', 
+        value: JSON.stringify(encryptedPassphrase)
+      }),
+      db.put('settings', { 
+        key: 'pin', 
+        value: JSON.stringify(encryptedPin)
+      }),
+      db.delete('settings', 'passphrase'), // DELETE plaintext!
+    ]);
+    
+    console.log('✅ [KEY WRAPPING] Passphrase encrypted with PIN, plaintext deleted');
   } catch (error) {
     console.error('Failed to save PIN:', error);
     throw error;
   }
 }
 
-export async function verifyPIN(pin: string): Promise<boolean> {
+export async function verifyPINAndGetPassphrase(pin: string): Promise<string | null> {
   try {
     const db = await initDB();
-    const stored = await db.get('settings', 'pin');
+    const storedSalt = await getSettingRaw('salt');
+    const storedEncryptedPassphrase = await db.get('settings', 'encryptedPassphrase');
     
-    if (!stored?.value) {
-      return false;
+    if (!storedSalt || !storedEncryptedPassphrase) {
+      return null;
     }
 
-    const encrypted: EncryptedData = JSON.parse(stored.value);
-    const key = await getPINKey();
-    const decrypted = await decrypt(encrypted, key);
+    // Derive key from PIN + salt
+    const salt = base64ToArrayBuffer(storedSalt.value);
+    const pinKey = await derivePINKey(pin, salt);
     
-    return decrypted === pin;
+    // Try to decrypt passphrase with PIN
+    const encrypted: EncryptedData = JSON.parse(storedEncryptedPassphrase.value);
+    const passphrase = await decrypt(encrypted, pinKey);
+    
+    console.log('✅ [KEY WRAPPING] PIN verified, passphrase decrypted');
+    return passphrase;
+  } catch (error) {
+    console.error('Failed to verify PIN and decrypt passphrase:', error);
+    return null;
+  }
+}
+
+export async function verifyPIN(pin: string): Promise<boolean> {
+  try {
+    const passphrase = await verifyPINAndGetPassphrase(pin);
+    return passphrase !== null;
   } catch (error) {
     console.error('Failed to verify PIN:', error);
     return false;
