@@ -128,12 +128,19 @@ export async function savePIN(pin: string, passphrase: string): Promise<void> {
     const db = await initDB();
     const storedSalt = await getSettingRaw('salt');
     
-    if (!storedSalt) {
+    if (!storedSalt || !storedSalt.value) {
       throw new Error('Salt not available');
     }
 
-    // Derive key from PIN + salt
-    const salt = base64ToArrayBuffer(storedSalt.value);
+    // Safely decode salt with validation
+    let salt: Uint8Array;
+    try {
+      salt = base64ToArrayBuffer(storedSalt.value as string);
+    } catch (e) {
+      console.error('Failed to decode salt:', e);
+      throw new Error('Invalid salt format');
+    }
+
     const pinKey = await derivePINKey(pin, salt);
     
     // Encrypt passphrase with PIN for verification
@@ -171,16 +178,30 @@ export async function verifyPINAndGetPassphrase(pin: string): Promise<string | n
     const storedSalt = await getSettingRaw('salt');
     const storedEncryptedPassphrase = await db.get('settings', 'encryptedPassphrase');
     
-    if (!storedSalt || !storedEncryptedPassphrase) {
+    if (!storedSalt || !storedSalt.value || !storedEncryptedPassphrase) {
       return null;
     }
 
-    // Derive key from PIN + salt
-    const salt = base64ToArrayBuffer(storedSalt.value);
+    // Safely decode salt with validation
+    let salt: Uint8Array;
+    try {
+      salt = base64ToArrayBuffer(storedSalt.value as string);
+    } catch (e) {
+      console.error('Failed to decode salt:', e);
+      return null;
+    }
+
     const pinKey = await derivePINKey(pin, salt);
     
     // Try to decrypt passphrase with PIN
-    const encrypted: EncryptedData = JSON.parse(storedEncryptedPassphrase.value);
+    let encrypted: EncryptedData;
+    try {
+      encrypted = JSON.parse(storedEncryptedPassphrase.value as string);
+    } catch (e) {
+      console.error('Failed to parse encrypted passphrase:', e);
+      return null;
+    }
+
     const passphrase = await decrypt(encrypted, pinKey);
     
     console.log('✅ [KEY WRAPPING] PIN verified, passphrase decrypted');
