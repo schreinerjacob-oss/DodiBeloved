@@ -29,7 +29,11 @@ export function ConnectionStatus() {
       }, 7000);
       setErrorTimeout(timeout);
     }
-  }, [state.error, errorTimeout]);
+    
+    return () => {
+      if (errorTimeout) clearTimeout(errorTimeout);
+    };
+  }, [state.error]);
 
   if (!isPaired) return null;
 
