@@ -8,8 +8,22 @@ let cachedPINKey: CryptoKey | null = null;
 export const initDB = initDBRaw;
 export const getSetting = getSettingRaw;
 export const saveSetting = saveSettingRaw;
-export const getMessages = getMessagesRaw;
-export const getMemories = getMemoriesRaw;
+
+// Properly decrypt messages when loading from storage
+export async function getMessages(limit: number = 50, offset: number = 0): Promise<Message[]> {
+  const db = await initDBRaw();
+  const allEncrypted = await db.getAllFromIndex('messages', 'timestamp');
+  const sliced = allEncrypted.slice(Math.max(0, allEncrypted.length - offset - limit), allEncrypted.length - offset);
+  return Promise.all(sliced.map(enc => decryptMessage(enc)));
+}
+
+// Properly decrypt memories when loading from storage
+export async function getMemories(limit: number = 20, offset: number = 0): Promise<Memory[]> {
+  const db = await initDBRaw();
+  const allEncrypted = await db.getAllFromIndex('memories', 'timestamp');
+  const sliced = allEncrypted.slice(Math.max(0, allEncrypted.length - offset - limit), allEncrypted.length - offset);
+  return Promise.all(sliced.map(enc => decryptMemory(enc)));
+}
 
 export async function getEncryptionKey(): Promise<CryptoKey> {
   if (cachedKey) return cachedKey;
