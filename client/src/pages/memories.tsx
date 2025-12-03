@@ -9,7 +9,7 @@ import { Camera, Lock, Calendar, Heart, X, ChevronUp } from 'lucide-react';
 import { getMemories, saveMemory } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { MemoryMediaImage } from '@/components/memory-media-image';
-import type { Memory, SyncMessage } from '@/types';
+import type { Memory } from '@/types';
 import { format } from 'date-fns';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
@@ -35,48 +35,24 @@ export default function MemoriesPage() {
     loadMemories();
   }, []);
 
-  // Listen for incoming memories from partner via P2P
+  // Listen for memories synced by the global sync handler
   useEffect(() => {
-    if (!peerState.connected || !partnerId) return;
-
-    const handleP2pMessage = async (event: CustomEvent) => {
-      try {
-        const message: SyncMessage = event.detail;
-        
-        if (message.type === 'memory') {
-          const incomingMemory = message.data as Memory;
-          const isOurMemory = (incomingMemory.userId === userId && incomingMemory.partnerId === partnerId) ||
-                             (incomingMemory.userId === partnerId && incomingMemory.partnerId === userId);
-          
-          if (isOurMemory) {
-            // If mediaUrl is ArrayBuffer (binary image data), convert to Blob and save
-            if (incomingMemory.mediaUrl && typeof incomingMemory.mediaUrl === 'object' && incomingMemory.mediaUrl instanceof ArrayBuffer) {
-              const { saveMediaBlob } = await import('@/lib/storage');
-              const blob = new Blob([incomingMemory.mediaUrl], { type: 'image/jpeg' });
-              await saveMediaBlob(incomingMemory.id, blob, 'memory');
-              incomingMemory.mediaUrl = null; // Clear mediaUrl from object before saving metadata
-            }
-            
-            await saveMemory(incomingMemory);
-            setMemories(prev => {
-              if (prev.some(m => m.id === incomingMemory.id)) {
-                return prev;
-              }
-              return [...prev, incomingMemory];
-            });
-          }
+    const handleMemorySynced = (event: CustomEvent) => {
+      const incomingMemory = event.detail as Memory;
+      setMemories(prev => {
+        if (prev.some(m => m.id === incomingMemory.id)) {
+          return prev;
         }
-      } catch (e) {
-        console.error('🔗 [P2P] Error handling memory message:', e);
-      }
+        return [...prev, incomingMemory];
+      });
     };
 
-    window.addEventListener('p2p-message', handleP2pMessage as EventListener);
+    window.addEventListener('memory-synced', handleMemorySynced as EventListener);
     
     return () => {
-      window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
+      window.removeEventListener('memory-synced', handleMemorySynced as EventListener);
     };
-  }, [peerState.connected, partnerId, userId]);
+  }, []);
 
   const loadMemories = async () => {
     const mems = await getMemories(MEMORIES_PER_PAGE, 0);

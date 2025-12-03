@@ -27,6 +27,7 @@ import { MessageSquare, Camera, CalendarDays, Sparkles, Heart, Clock, Phone, Loc
 import { cn } from "@/lib/utils";
 import { MoreMenu } from "@/components/more-menu";
 import { ConnectionStatus } from "@/components/connection-status";
+import { GlobalSyncHandler } from "@/components/global-sync-handler";
 
 function NavItem({ href, icon: Icon, label, active, disabled }: { href: string; icon: any; label: string; active: boolean; disabled?: boolean }) {
   const [, setLocation] = useLocation();
@@ -56,6 +57,9 @@ function MainApp() {
   
   // Initialize global P2P listener even when not on chat page
   usePeerConnection();
+  
+  // Global sync handler for memories, calendar, rituals, etc.
+  // This ensures data syncs even when not on the specific page
 
   useEffect(() => {
     if (pairingStatus === 'connected' && !isTrialActive && location !== '/subscription' && location !== '/settings') {
@@ -109,6 +113,7 @@ function MainApp() {
 
   return (
     <div className="w-screen flex flex-col bg-background" style={{ minHeight: '100dvh' }}>
+      <GlobalSyncHandler />
       <div className="flex-1 overflow-hidden">
         <Switch>
           <Route path="/chat" component={ChatPage} />
