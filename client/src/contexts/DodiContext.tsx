@@ -28,6 +28,7 @@ interface DodiContextType {
   setPartnerIdForCreator: (newPartnerId: string) => Promise<void>;
   onPeerConnected: () => void;
   setPIN: (pin: string) => Promise<void>;
+  skipPINSetup: () => void;
   unlockWithPIN: (pin: string) => Promise<boolean>;
   unlockWithPassphrase: (passphrase: string) => Promise<boolean>;
   lockApp: () => void;
@@ -326,6 +327,11 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     console.log('✅ [PIN] PIN set, passphrase encrypted and stored in RAM only');
   };
 
+  const skipPINSetupHandler = () => {
+    setShowPinSetup(false);
+    console.log('⏭️ [PIN] PIN setup skipped');
+  };
+
   const unlockWithPINHandler = async (pin: string): Promise<boolean> => {
     try {
       // KEY WRAPPING: Decrypt passphrase with PIN
@@ -432,6 +438,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         setPartnerIdForCreator,
         onPeerConnected,
         setPIN: setPINHandler,
+        skipPINSetup: skipPINSetupHandler,
         unlockWithPIN: unlockWithPINHandler,
         unlockWithPassphrase: unlockWithPassphraseHandler,
         lockApp: lockAppHandler,

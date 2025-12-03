@@ -12,7 +12,7 @@ interface PinSetupProps {
 }
 
 export default function PinSetupPage({ onComplete }: PinSetupProps) {
-  const { setPIN } = useDodi();
+  const { setPIN, skipPINSetup } = useDodi();
   const { toast } = useToast();
   
   const [step, setStep] = useState<'entry' | 'confirm'>('entry');
@@ -80,6 +80,7 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
   };
 
   const handleSkip = () => {
+    skipPINSetup();
     onComplete();
   };
 
