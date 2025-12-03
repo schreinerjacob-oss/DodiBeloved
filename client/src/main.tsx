@@ -1,4 +1,7 @@
-// Global polyfill for Simple-Peer WebRTC library
+// Global polyfills for PeerJS/Simple-Peer WebRTC libraries
+import 'events';
+import 'util';
+
 if (!globalThis.global) {
   (globalThis as any).global = globalThis;
 }
