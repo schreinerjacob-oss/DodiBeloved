@@ -5,11 +5,13 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DodiProvider, useDodi } from "@/contexts/DodiContext";
+import { OnboardingProvider, useOnboarding } from "@/contexts/OnboardingContext";
 import { usePeerConnection } from "@/hooks/use-peer-connection";
 import ProfileSetupPage from "@/pages/profile-setup";
 import PairingPage from "@/pages/pairing";
 import PinSetupPage from "@/pages/pin-setup";
 import PinLockPage from "@/pages/pin-lock";
+import OnboardingPage from "@/pages/onboarding";
 import ChatPage from "@/pages/chat";
 import MemoriesPage from "@/pages/memories";
 import CalendarPage from "@/pages/calendar";
@@ -49,6 +51,7 @@ function NavItem({ href, icon: Icon, label, active, disabled }: { href: string; 
 
 function MainApp() {
   const { userId, pairingStatus, isOnline, isTrialActive, isLocked, showPinSetup } = useDodi();
+  const { hasSeenTutorial } = useOnboarding();
   const [location, setLocation] = useLocation();
   
   // Initialize global P2P listener even when not on chat page
@@ -76,6 +79,11 @@ function MainApp() {
     return <PinSetupPage onComplete={() => {
       console.log('✅ [APP] PIN setup complete callback - state will auto-update via context');
     }} />;
+  }
+
+  // Show onboarding tutorial if not seen
+  if (!hasSeenTutorial) {
+    return <OnboardingPage />;
   }
 
   // Show PIN lock screen if app is locked
@@ -150,7 +158,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <DodiProvider>
-          <MainApp />
+          <OnboardingProvider>
+            <MainApp />
+          </OnboardingProvider>
         </DodiProvider>
         <Toaster />
       </TooltipProvider>
