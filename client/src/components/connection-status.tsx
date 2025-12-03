@@ -14,25 +14,16 @@ export function ConnectionStatus() {
   const { isPaired } = useDodi();
   const [showDetails, setShowDetails] = useState(false);
   const [persistedError, setPersistedError] = useState<string | null>(null);
-  const [errorTimeout, setErrorTimeout] = useState<NodeJS.Timeout | null>(null);
 
   // Persist error message for 7 seconds
   useEffect(() => {
     if (state.error) {
-      // Clear any existing timeout
-      if (errorTimeout) clearTimeout(errorTimeout);
-      
-      // Set new error and start timer
       setPersistedError(state.error);
       const timeout = setTimeout(() => {
         setPersistedError(null);
       }, 7000);
-      setErrorTimeout(timeout);
+      return () => clearTimeout(timeout);
     }
-    
-    return () => {
-      if (errorTimeout) clearTimeout(errorTimeout);
-    };
   }, [state.error]);
 
   if (!isPaired) return null;
