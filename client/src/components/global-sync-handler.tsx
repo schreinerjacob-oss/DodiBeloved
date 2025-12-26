@@ -12,9 +12,10 @@ export function GlobalSyncHandler() {
   useEffect(() => {
     if (!peerState.connected || !partnerId || !userId) return;
 
-    const handleP2pMessage = async (event: CustomEvent) => {
+    const handleP2pMessage = async (event: any) => {
       try {
         const message: SyncMessage = event.detail;
+        const { setLastSynced, saveMemory, saveCalendarEvent, saveDailyRitual, saveLoveLetter, savePrayer, saveReaction } = await import('@/lib/storage-encrypted');
         
         // Handle memory sync
         if (message.type === 'memory') {
@@ -34,6 +35,7 @@ export function GlobalSyncHandler() {
             }
             
             await saveMemory(incomingMemory);
+            await setLastSynced('memories', Number(incomingMemory.timestamp));
             console.log('✅ [SYNC] Memory saved:', incomingMemory.id);
             
             // Notify if app in background
@@ -67,6 +69,9 @@ export function GlobalSyncHandler() {
           const letter = message.data as LoveLetter;
           console.log('💌 [SYNC] Received love letter:', letter.id);
           await saveLoveLetter(letter);
+          if (letter.timestamp) {
+            await setLastSynced('letters', Number(letter.timestamp));
+          }
           notifyNewLoveLetter();
           window.dispatchEvent(new CustomEvent('letter-synced', { detail: letter }));
         }
@@ -76,6 +81,9 @@ export function GlobalSyncHandler() {
           const prayer = message.data as Prayer;
           console.log('🙏 [SYNC] Received prayer:', prayer.id);
           await savePrayer(prayer);
+          if ((prayer as any).timestamp) {
+            await setLastSynced('prayers', Number((prayer as any).timestamp));
+          }
           window.dispatchEvent(new CustomEvent('prayer-synced', { detail: prayer }));
         }
         
@@ -85,6 +93,15 @@ export function GlobalSyncHandler() {
           console.log('💖 [SYNC] Received reaction:', reaction.id);
           await saveReaction(reaction);
           window.dispatchEvent(new CustomEvent('reaction-synced', { detail: reaction }));
+        }
+
+        // Handle chat messages (if not explicitly handled by page)
+        if (message.type === 'chat') {
+           const chatMsg = message.data as any;
+           const { saveMessage } = await import('@/lib/storage-encrypted');
+           await saveMessage(chatMsg);
+           await setLastSynced('chat', Number(chatMsg.timestamp));
+           window.dispatchEvent(new CustomEvent('chat-message-received', { detail: chatMsg }));
         }
         
       } catch (e) {

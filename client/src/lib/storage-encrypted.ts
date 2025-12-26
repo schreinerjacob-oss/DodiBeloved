@@ -25,6 +25,18 @@ export async function getMemories(limit: number = 20, offset: number = 0): Promi
   return Promise.all(sliced.map(enc => decryptMemory(enc)));
 }
 
+// Sync Tracking
+export async function getLastSynced(category: string): Promise<number> {
+  const db = await initDB();
+  const setting = await db.get('settings', `lastSynced_${category}`);
+  return setting ? Number(setting.value) : 0;
+}
+
+export async function setLastSynced(category: string, timestamp: number): Promise<void> {
+  const db = await initDB();
+  await db.put('settings', { key: `lastSynced_${category}`, value: String(timestamp) });
+}
+
 export async function getEncryptionKey(): Promise<CryptoKey> {
   if (cachedKey) return cachedKey;
   

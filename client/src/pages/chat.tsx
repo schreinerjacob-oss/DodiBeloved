@@ -27,6 +27,18 @@ export default function ChatPage() {
   const { userId, partnerId, isOnline } = useDodi();
   const { toast } = useToast();
   const { send: sendP2P, state: peerState } = usePeerConnection();
+
+  useEffect(() => {
+    const handleReconciliation = (event: any) => {
+      const count = event.detail.count;
+      toast({
+        title: "Gardens Synced",
+        description: `Reconciled ${count} missing messages from partner`,
+      });
+    };
+    window.addEventListener('reconciliation-complete', handleReconciliation);
+    return () => window.removeEventListener('reconciliation-complete', handleReconciliation);
+  }, [toast]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);

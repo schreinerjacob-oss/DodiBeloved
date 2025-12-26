@@ -136,10 +136,83 @@ function setupConnection(conn: DataConnection) {
 
   globalConn = conn;
 
-  conn.on('open', () => {
+  async function handleReconcileInit(conn: DataConnection, partnerTimestamps: any) {
+    try {
+      const { getAllMessages, getAllMemories, getAllPrayers, getAllLoveLetters } = await import('@/lib/storage-encrypted');
+      const batch: SyncMessage[] = [];
+
+      // Fetch missing chat
+      const messages = await getAllMessages();
+      messages.filter((m: any) => Number(m.timestamp) > (partnerTimestamps.chat || 0))
+              .forEach((m: any) => batch.push({ type: 'chat', data: m, timestamp: Number(m.timestamp) }));
+
+      // Fetch missing memories
+      const memories = await getAllMemories();
+      memories.filter((m: any) => Number(m.timestamp) > (partnerTimestamps.memories || 0))
+              .forEach((m: any) => batch.push({ type: 'memory', data: m, timestamp: Number(m.timestamp) }));
+
+      // Fetch missing prayers
+      const prayers = await getAllPrayers();
+      prayers.filter((p: any) => Number(p.timestamp || 0) > (partnerTimestamps.prayers || 0))
+              .forEach((p: any) => batch.push({ type: 'prayer', data: p, timestamp: Number(p.timestamp || 0) }));
+
+      // Fetch missing letters
+      const letters = await getAllLoveLetters();
+      letters.filter((l: any) => Number(l.timestamp || 0) > (partnerTimestamps.letters || 0))
+             .forEach((l: any) => batch.push({ type: 'love_letter', data: l, timestamp: Number(l.timestamp || 0) }));
+
+      if (batch.length > 0) {
+        console.log('📤 Sending reconciliation batch:', batch.length);
+        conn.send({ type: 'reconcile-data', batch });
+      }
+    } catch (e) {
+      console.error('Reconciliation push failed:', e);
+    }
+  }
+
+  async function handleReconcileData(batch: SyncMessage[]) {
+    console.log('📥 Processing reconciliation batch:', batch.length);
+    for (const msg of batch) {
+      window.dispatchEvent(new CustomEvent('p2p-message', { detail: msg }));
+    }
+    // Update lastSynced for each category based on batch
+    const { setLastSynced } = await import('@/lib/storage-encrypted');
+    const categories = ['chat', 'memory', 'prayer', 'love_letter'];
+    for (const cat of categories) {
+      const catMsgs = batch.filter(m => m.type === cat);
+      if (catMsgs.length > 0) {
+        const newest = Math.max(...catMsgs.map(m => Number((m.data as any).timestamp)));
+        const storeKey = cat === 'memory' ? 'memories' : cat === 'love_letter' ? 'letters' : cat === 'prayer' ? 'prayers' : 'chat';
+        await setLastSynced(storeKey, newest);
+      }
+    }
+    
+    if (batch.length > 0) {
+      // Note: useToast is a hook, but we are in a non-component function. 
+      // We'll use a custom event or log for now as requested.
+      console.log(`✅ Reconciled ${batch.length} missing items from partner`);
+      window.dispatchEvent(new CustomEvent('reconciliation-complete', { detail: { count: batch.length } }));
+    }
+  }
+
+  conn.on('open', async () => {
     console.log('✨ SECURE PIPE ESTABLISHED with:', conn.peer);
     notifyListeners();
     conn.send({ type: 'ping', timestamp: Date.now() });
+    
+    // START RECONCILIATION
+    try {
+      const { getLastSynced } = await import('@/lib/storage-encrypted');
+      const lastSyncedTimestamps = {
+        chat: await getLastSynced('chat'),
+        memories: await getLastSynced('memories'),
+        prayers: await getLastSynced('prayers'),
+        letters: await getLastSynced('letters'),
+      };
+      conn.send({ type: 'reconcile-init', timestamps: lastSyncedTimestamps });
+    } catch (e) {
+      console.error('Failed to initiate reconciliation:', e);
+    }
     
     // FLUSH OFFLINE QUEUE when connection established
     if (offlineQueue.length > 0) {
@@ -147,9 +220,20 @@ function setupConnection(conn: DataConnection) {
     }
   });
 
-  conn.on('data', (data: any) => {
+  conn.on('data', async (data: any) => {
     console.log('📩 INCOMING:', data.type || 'unknown');
     if (data.type === 'ping') return;
+
+    // Handle Reconciliation Protocol
+    if (data.type === 'reconcile-init') {
+      await handleReconcileInit(conn, data.timestamps);
+      return;
+    }
+    if (data.type === 'reconcile-data') {
+      await handleReconcileData(data.batch);
+      return;
+    }
+
     window.dispatchEvent(new CustomEvent('p2p-message', { detail: data }));
   });
 
