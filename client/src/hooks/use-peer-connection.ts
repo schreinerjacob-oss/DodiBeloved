@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import type { SyncMessage } from '@/types';
 import Peer, { type DataConnection } from 'peerjs';
@@ -22,6 +22,7 @@ interface UsePeerConnectionReturn {
 let globalPeer: Peer | null = null;
 let globalConn: DataConnection | null = null;
 let globalPartnerId: string | null = null;
+let globalSyncInProgress = false;
 let globalState: PeerConnectionState = {
   connected: false,
   error: null,
@@ -199,11 +200,9 @@ function setupConnection(conn: DataConnection) {
 
   globalConn = conn;
 
-  const syncInProgress = useEffect(() => { return { current: false }; }, []).current;
-
   const sync = useCallback(async (conn: DataConnection) => {
-    if (syncInProgress.current) return;
-    syncInProgress.current = true;
+    if (globalSyncInProgress) return;
+    globalSyncInProgress = true;
     
     try {
       console.log('🔄 [SYNC] Starting reconciliation handshake...');
@@ -221,7 +220,7 @@ function setupConnection(conn: DataConnection) {
       });
     } catch (err) {
       console.error('❌ [SYNC] Reconciliation initiation failed:', err);
-      syncInProgress.current = false;
+      globalSyncInProgress = false;
     }
   }, []);
 
@@ -275,7 +274,7 @@ function setupConnection(conn: DataConnection) {
     }
     
     console.log(`✅ Reconciled ${totalApplied} items from partner since last sync`);
-    syncInProgress.current = false;
+    globalSyncInProgress = false;
     window.dispatchEvent(new CustomEvent('reconciliation-complete', { detail: { count: totalApplied } }));
     import('@/lib/queryClient').then(({ queryClient }) => queryClient.invalidateQueries());
   }

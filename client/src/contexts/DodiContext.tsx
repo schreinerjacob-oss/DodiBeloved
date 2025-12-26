@@ -15,6 +15,7 @@ interface DodiContextType {
   isPaired: boolean;
   isOnline: boolean;
   isLocked: boolean;
+  isLoading: boolean;
   pinEnabled: boolean;
   showPinSetup: boolean;
   inactivityMinutes: number;
@@ -33,12 +34,14 @@ interface DodiContextType {
   lockApp: () => void;
   setInactivityMinutes: (minutes: number) => Promise<void>;
   logout: () => Promise<void>;
+  isLoading: boolean;
 }
 
 const DodiContext = createContext<DodiContextType | undefined>(undefined);
 
 export function DodiProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [passphrase, setPassphrase] = useState<string | null>(null);
@@ -49,11 +52,14 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [inactivityMinutes, setInactivityMinutesState] = useState(10);
 
+  const [isLoading, setIsLoading] = useState(true);
+
   // Convenience getter
   const isPaired = pairingStatus === 'connected';
 
   useEffect(() => {
     const loadPairingData = async () => {
+      setIsLoading(true);
       try {
         const db = await initDB();
         const [storedUserId, storedDisplayName, storedPartnerId, storedPassphrase, storedPairingStatus, storedPinEnabled, storedInactivityMinutes] = await Promise.all([
@@ -65,6 +71,12 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           db.get('settings', 'pinEnabled'),
           db.get('settings', 'inactivityMinutes'),
         ]);
+
+        console.log('📦 [DodiContext] Loading stored data:', {
+          userId: storedUserId?.value,
+          partnerId: storedPartnerId?.value,
+          pairingStatus: storedPairingStatus?.value
+        });
 
         if (storedUserId?.value) {
           setUserId(storedUserId.value);
@@ -122,6 +134,8 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         console.error('Failed to load pairing data:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -435,6 +449,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         lockApp: lockAppHandler,
         setInactivityMinutes: setInactivityMinutesHandler,
         logout,
+        isLoading,
       }}
     >
       {children}
