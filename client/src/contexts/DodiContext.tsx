@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { generatePassphrase, generateSalt, arrayBufferToBase64, base64ToArrayBuffer } from '@/lib/crypto';
-import { saveSetting, getSetting, initDB, clearEncryptionCache, savePIN, verifyPIN } from '@/lib/storage-encrypted';
+import { generatePassphrase, generateSalt, arrayBufferToBase64 } from '@/lib/crypto';
+import { saveSetting, getSetting, initDB, clearEncryptionCache } from '@/lib/storage-encrypted';
 import { useInactivityTimer } from '@/hooks/use-inactivity-timer';
 import { nanoid } from 'nanoid';
 
@@ -15,7 +15,6 @@ interface DodiContextType {
   isPaired: boolean;
   isOnline: boolean;
   isLocked: boolean;
-  isLoading: boolean;
   pinEnabled: boolean;
   showPinSetup: boolean;
   inactivityMinutes: number;
@@ -41,7 +40,6 @@ const DodiContext = createContext<DodiContextType | undefined>(undefined);
 
 export function DodiProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [passphrase, setPassphrase] = useState<string | null>(null);
@@ -51,8 +49,8 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const [pinEnabled, setPinEnabled] = useState(false);
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [inactivityMinutes, setInactivityMinutesState] = useState(10);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Convenience getter
   const isPaired = pairingStatus === 'connected';
 
   useEffect(() => {
@@ -70,35 +68,33 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           db.get('settings', 'inactivityMinutes'),
         ]);
 
-        console.log('📦 [DodiContext] Loading stored data:', {
-          userId: storedUserId?.value,
-          partnerId: storedPartnerId?.value,
-          pairingStatus: storedPairingStatus?.value
-        });
-
-        if (storedUserId?.value) {
-          setUserId(storedUserId.value);
-          setDisplayName(storedDisplayName?.value || null);
+        const storedUserIdObj = storedUserId as any;
+        if (storedUserIdObj?.value) {
+          setUserId(storedUserIdObj.value);
+          const storedDisplayNameObj = storedDisplayName as any;
+          setDisplayName(storedDisplayNameObj?.value || null);
         }
 
-        if (storedPassphrase?.value) {
-          if (storedPinEnabled?.value === 'true' || storedPinEnabled?.value === true) {
+        const storedPassphraseObj = storedPassphrase as any;
+        if (storedPassphraseObj?.value) {
+          const storedPinEnabledObj = storedPinEnabled as any;
+          if (storedPinEnabledObj?.value === 'true' || storedPinEnabledObj?.value === true) {
             setPassphrase(null);
           } else {
-            setPassphrase(storedPassphrase.value);
+            setPassphrase(storedPassphraseObj.value);
           }
         }
 
-        if (storedPartnerId?.value) {
-          setPartnerId(storedPartnerId.value);
+        const storedPartnerIdObj = storedPartnerId as any;
+        if (storedPartnerIdObj?.value) {
+          setPartnerId(storedPartnerIdObj.value);
         }
 
-        if (storedPairingStatus?.value) {
-          const status = storedPairingStatus.value as PairingStatus;
-          setPairingStatus(status);
-          console.log('Restored pairing status:', status);
-        } else if (storedUserId?.value && storedPassphrase?.value) {
-          if (storedPartnerId?.value) {
+        const storedPairingStatusObj = storedPairingStatus as any;
+        if (storedPairingStatusObj?.value) {
+          setPairingStatus(storedPairingStatusObj.value as PairingStatus);
+        } else if (userId && storedPassphraseObj?.value) {
+          if (storedPartnerIdObj?.value) {
             setPairingStatus('connected');
             await db.put('settings', { key: 'pairingStatus', value: 'connected' });
           } else {
@@ -107,15 +103,17 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        if (storedPinEnabled?.value === 'true' || storedPinEnabled?.value === true) {
+        const storedPinEnabledObjFinal = storedPinEnabled as any;
+        if (storedPinEnabledObjFinal?.value === 'true' || storedPinEnabledObjFinal?.value === true) {
           setPinEnabled(true);
           setIsLocked(true);
         }
 
-        if (storedInactivityMinutes?.value) {
-          const minutes = typeof storedInactivityMinutes.value === 'string' 
-            ? parseInt(storedInactivityMinutes.value, 10) 
-            : storedInactivityMinutes.value;
+        const storedInactivityMinutesObj = storedInactivityMinutes as any;
+        if (storedInactivityMinutesObj?.value) {
+          const minutes = typeof storedInactivityMinutesObj.value === 'string' 
+            ? parseInt(storedInactivityMinutesObj.value, 10) 
+            : storedInactivityMinutesObj.value as number;
           if (!isNaN(minutes)) {
             setInactivityMinutesState(minutes);
           }
@@ -156,21 +154,12 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setPartnerId(null);
     setPairingStatus('waiting');
     
-    console.log('🎭 [CREATOR INIT] Creator pairing initialized');
     return { userId: userId, passphrase: newPassphrase };
   };
 
   const completePairingWithMasterKey = async (masterKey: string, salt: string, remotePartnerId: string) => {
     if (!masterKey || !salt || !remotePartnerId) {
       throw new Error('Master key, salt, and remote partner ID are required');
-    }
-    
-    if (!userId) {
-      throw new Error('Joiner user ID must be generated before completing pairing');
-    }
-    
-    if (userId === remotePartnerId) {
-      throw new Error(`Self-pairing detected: Joiner ID (${userId}) matches Creator ID (${remotePartnerId}). Cannot proceed.`);
     }
     
     const db = await initDB();
@@ -193,14 +182,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       throw new Error('Master key, salt, and remote partner ID are required');
     }
     
-    if (!userId) {
-      throw new Error('Creator user ID must be generated before completing pairing');
-    }
-    
-    if (userId === remotePartnerId) {
-      throw new Error(`Self-pairing detected: Creator ID (${userId}) matches Joiner ID (${remotePartnerId}). Cannot proceed.`);
-    }
-    
     const db = await initDB();
     await db.put('settings', { key: 'passphrase', value: masterKey });
     await db.put('settings', { key: 'salt', value: salt });
@@ -217,17 +198,9 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   };
 
   const setPartnerIdForCreator = async (newPartnerId: string) => {
-    if (!newPartnerId) {
-      throw new Error('Partner ID is required');
-    }
-    
-    if (newPartnerId === userId) {
-      throw new Error('Cannot pair with yourself');
-    }
-    
+    if (!newPartnerId) throw new Error('Partner ID is required');
     const db = await initDB();
     await db.put('settings', { key: 'partnerId', value: newPartnerId });
-    
     setPartnerId(newPartnerId);
   };
 
@@ -235,31 +208,16 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     if (pairingStatus === 'waiting' || pairingStatus === 'unpaired') {
       setPairingStatus('connected');
       await saveSetting('pairingStatus', 'connected');
-      
-      if (!pinEnabled) {
-        setShowPinSetup(true);
-      }
+      if (!pinEnabled) setShowPinSetup(true);
     }
   }, [pairingStatus, pinEnabled]);
 
   const setPINHandler = async (pin: string) => {
-    if (pin.length < 4 || pin.length > 6) {
-      throw new Error('PIN must be 4-6 digits');
-    }
-    
-    if (!passphrase) {
-      throw new Error('Passphrase not available to encrypt');
-    }
-    
+    if (!passphrase) throw new Error('Passphrase not available');
     const { savePIN } = await import('@/lib/storage-encrypted');
     await savePIN(pin, passphrase);
-    
     await saveSetting('pinEnabled', 'true');
     setPinEnabled(true);
-    setShowPinSetup(false);
-  };
-
-  const skipPINSetupHandler = () => {
     setShowPinSetup(false);
   };
 
@@ -267,7 +225,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     try {
       const { verifyPINAndGetPassphrase } = await import('@/lib/storage-encrypted');
       const decryptedPassphrase = await verifyPINAndGetPassphrase(pin);
-      
       if (decryptedPassphrase) {
         setPassphrase(decryptedPassphrase);
         setIsLocked(false);
@@ -275,22 +232,16 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       }
       return false;
     } catch (error) {
-      console.error('PIN verification error:', error);
       return false;
     }
   };
 
   const unlockWithPassphraseHandler = async (pass: string): Promise<boolean> => {
-    try {
-      if (pass === passphrase) {
-        setIsLocked(false);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Passphrase verification error:', error);
-      return false;
+    if (pass === passphrase) {
+      setIsLocked(false);
+      return true;
     }
+    return false;
   };
 
   const lockAppHandler = () => {
@@ -306,33 +257,23 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   useInactivityTimer({
     onInactivity: lockAppHandler,
     timeoutMinutes: inactivityMinutes,
-    enabled: pinEnabled && pairingStatus === 'connected',
+    enabled: pinEnabled && pairingStatus === 'connected' && !isLocked,
   });
 
   const initializeProfile = async (name: string) => {
     const newUserId = nanoid();
     await saveSetting('userId', newUserId);
     await saveSetting('displayName', name);
-    
     setUserId(newUserId);
     setDisplayName(name);
-    
     return newUserId;
   };
 
   const logout = async () => {
     clearEncryptionCache();
     setPassphrase(null);
-    
     const db = await initDB();
-    await db.clear('settings');
-    await db.clear('messages');
-    await db.clear('memories');
-    await db.clear('calendarEvents');
-    await db.clear('dailyRituals');
-    await db.clear('loveLetters');
-    await db.clear('reactions');
-    
+    await Promise.all(['settings', 'messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'reactions'].map(s => db.clear(s)));
     setUserId(null);
     setDisplayName(null);
     setPartnerId(null);
@@ -340,14 +281,11 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   };
 
   const [allowWakeUp, setAllowWakeUpState] = useState(false);
-
   useEffect(() => {
     const loadAllowWakeUp = async () => {
       const db = await initDB();
       const stored = await db.get('settings', 'allowWakeUp');
-      if (stored) {
-        setAllowWakeUpState(stored.value === 'true' || stored.value === true);
-      }
+      if (stored) setAllowWakeUpState(stored.value === 'true' || stored.value === true);
     };
     loadAllowWakeUp();
   }, []);
@@ -360,33 +298,13 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   return (
     <DodiContext.Provider
       value={{
-        userId,
-        displayName,
-        partnerId,
-        passphrase,
-        pairingStatus,
-        isPaired,
-        isOnline,
-        isLocked,
-        pinEnabled,
-        showPinSetup,
-        inactivityMinutes,
-        allowWakeUp,
-        setAllowWakeUp,
-        initializeProfile,
-        initializePairing,
-        completePairingWithMasterKey,
-        completePairingAsCreator,
-        setPartnerIdForCreator,
-        onPeerConnected,
-        setPIN: setPINHandler,
-        skipPINSetup: skipPINSetupHandler,
-        unlockWithPIN: unlockWithPINHandler,
-        unlockWithPassphrase: unlockWithPassphraseHandler,
-        lockApp: lockAppHandler,
-        setInactivityMinutes: setInactivityMinutesHandler,
-        logout,
-        isLoading,
+        userId, displayName, partnerId, passphrase, pairingStatus, isPaired, isOnline,
+        isLocked, pinEnabled, showPinSetup, inactivityMinutes, allowWakeUp,
+        setAllowWakeUp, initializeProfile, initializePairing, completePairingWithMasterKey,
+        completePairingAsCreator, setPartnerIdForCreator, onPeerConnected,
+        setPIN: setPINHandler, skipPINSetup: () => setShowPinSetup(false),
+        unlockWithPIN: unlockWithPINHandler, unlockWithPassphrase: unlockWithPassphraseHandler,
+        lockApp: lockAppHandler, setInactivityMinutes: setInactivityMinutesHandler, logout, isLoading,
       }}
     >
       {children}
@@ -396,8 +314,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
 
 export function useDodi() {
   const context = useContext(DodiContext);
-  if (!context) {
-    throw new Error('useDodi must be used within a DodiProvider');
-  }
+  if (!context) throw new Error('useDodi must be used within a DodiProvider');
   return context;
 }

@@ -21,12 +21,14 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
         const seen = await getSetting('hasSeenTutorial');
         const step = await getSetting('tutorialStep');
         
-        if (seen?.value === 'true' || seen?.value === true) {
+        const seenObj = seen as any;
+        if (seenObj && typeof seenObj === 'object' && 'value' in seenObj && (seenObj.value === 'true' || seenObj.value === true)) {
           setHasSeenTutorial(true);
         }
         
-        if (step?.value) {
-          setCurrentStep(parseInt(step.value as string) || 0);
+        const stepObj = step as any;
+        if (stepObj && typeof stepObj === 'object' && 'value' in stepObj && stepObj.value) {
+          setCurrentStep(parseInt(stepObj.value as string) || 0);
         }
       } catch (err) {
         console.error('Failed to load tutorial state:', err);

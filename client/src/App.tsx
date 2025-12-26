@@ -3,6 +3,7 @@ import { Route, Switch, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { DodiProvider, useDodi } from "@/contexts/DodiContext";
 import { OnboardingProvider, useOnboarding } from "@/contexts/OnboardingContext";
 import { usePeerConnection } from "@/hooks/use-peer-connection";
@@ -43,13 +44,19 @@ function NavItem({ href, icon: Icon, label, active }: { href: string; icon: any;
 }
 
 function MainApp() {
-  const { userId, pairingStatus, isLocked, showPinSetup, isLoading } = useDodi();
-  const { hasSeenTutorial } = useOnboarding();
+  const dodi = useDodi();
+  const onboarding = useOnboarding();
+  
+  const userId = dodi.userId;
+  const pairingStatus = dodi.pairingStatus;
+  const isLocked = dodi.isLocked;
+  const showPinSetup = dodi.showPinSetup;
+  const isLoading = dodi.isLoading;
+  const hasSeenTutorial = onboarding.hasSeenTutorial ?? true;
+  
   const [location] = useLocation();
   
   usePeerConnection();
-
-  console.log('App Rendering:', { isLoading, userId, pairingStatus, location });
 
   if (isLoading) {
     return (
@@ -125,17 +132,17 @@ function MainApp() {
   );
 }
 
-function App() {
+export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <DodiProvider>
         <OnboardingProvider>
-          <MainApp />
-          <Toaster />
+          <TooltipProvider>
+            <MainApp />
+            <Toaster />
+          </TooltipProvider>
         </OnboardingProvider>
       </DodiProvider>
     </QueryClientProvider>
   );
 }
-
-export default App;
