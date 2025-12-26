@@ -34,6 +34,7 @@ let reconnectAttempt = 0;
 let reconnectTimeout: NodeJS.Timeout | null = null;
 let healthCheckInterval: NodeJS.Timeout | null = null;
 let lastPongReceived = Date.now();
+let firstMessageSentAfterReconnect: number | null = null;
 const MAX_BACKOFF = 30000;
 const PING_INTERVAL = 15000;
 const PONG_TIMEOUT = 30000;
