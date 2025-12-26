@@ -336,6 +336,15 @@ function setupConnection(conn: DataConnection) {
       return;
     }
 
+    if (data.type === 'restore-key') {
+      console.log('♾️ [RESTORE] Master key received via restoration tunnel');
+      const { masterKey, salt, creatorId } = data;
+      const { completePairingWithMasterKey } = useDodi(); 
+      // This is a global function, we need to dispatch an event or use a callback
+      window.dispatchEvent(new CustomEvent('dodi-restore-payload', { detail: data }));
+      return;
+    }
+
     window.dispatchEvent(new CustomEvent('p2p-message', { detail: data }));
   });
 

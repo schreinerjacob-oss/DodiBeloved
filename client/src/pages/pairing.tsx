@@ -51,6 +51,17 @@ export default function PairingPage() {
     }
   }, [pairingStatus]);
 
+  useEffect(() => {
+    const handleRestorePayload = async (e: any) => {
+      const payload = e.detail;
+      console.log('♾️ [RESTORE] Processing restoration payload:', payload);
+      await handleMasterKeyReceived(payload, false);
+    };
+
+    window.addEventListener('dodi-restore-payload', handleRestorePayload);
+    return () => window.removeEventListener('dodi-restore-payload', handleRestorePayload);
+  }, []);
+
   const handleMasterKeyReceived = async (payload: any, isCreatorRole: boolean) => {
     try {
       console.log('📋 [ID AUDIT] Master key payload received:', {
@@ -290,7 +301,24 @@ export default function PairingPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (showSuccess) {
+    if (loading && (mode === 'pairing' || mode === 'restore-mode')) {
+      return (
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center space-y-6">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+          >
+            <RefreshCw className="w-12 h-12 text-sage" />
+          </motion.div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-light text-sage">Restoring Your Garden...</h2>
+            <p className="text-muted-foreground italic text-sm">One moment while we regrow the vines of your connection ♾️</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (showSuccess) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-cream via-sage/10 to-blush/20 dark:from-background dark:via-card dark:to-secondary flex items-center justify-center p-6">
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6 }} className="text-center space-y-8 max-w-md">
@@ -374,6 +402,15 @@ export default function PairingPage() {
                   >
                     Join with Code
                   </Button>
+
+                  <Button 
+                    onClick={() => { setInputCode(''); setMode('pairing'); setIsCreator(false); }} 
+                    variant="ghost" 
+                    className="w-full h-12 text-sage hover:bg-sage/5 border border-dashed border-sage/20"
+                    data-testid="button-restore-from-partner"
+                  >
+                    Restore from Partner
+                  </Button>
                 </div>
               </Card>
             </motion.div>
@@ -453,8 +490,8 @@ export default function PairingPage() {
                 ) : (
                   <>
                     <div className="text-center space-y-2">
-                      <h2 className="text-xl font-light">Enter Code</h2>
-                      <p className="text-sm text-muted-foreground">Your partner will share an 8-character code</p>
+                      <h2 className="text-xl font-light">Enter Restore Code</h2>
+                      <p className="text-sm text-muted-foreground italic">Regrow your connection from your partner's device</p>
                     </div>
 
                     <Input 
