@@ -213,17 +213,22 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
           
           if (isRestore) {
             console.log('♾️ [RESTORE] Sending restoration payload to joiner');
+            const { getEssentials } = await import('./storage-encrypted');
+            const essentials = await getEssentials();
+            
             payload = {
               masterKey,
               salt,
               creatorId: creatorId,
-              joinerId: data.joinerId
-            };
-            if (sharedKey) {
+              joinerId: data.joinerId,
+              essentials // Adding essentials to payload
+            } as any;
+            
+            if (sharedKey && payload) {
               const keyMsg = await createTunnelKeyMessage(payload, sharedKey);
               conn.send({ ...keyMsg, type: 'restore-key' });
-              console.log('Sent master key and ID to restoring device');
-            } else {
+              console.log('Sent master key, ID, and essentials to restoring device');
+            } else if (payload) {
               // Fallback for unencrypted if sharedKey failed (shouldn't happen in normal flow)
               conn.send({ type: 'restore-key', ...payload });
             }
