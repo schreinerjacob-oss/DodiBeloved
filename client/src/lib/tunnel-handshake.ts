@@ -181,23 +181,33 @@ export function createTunnelAckMessage(): TunnelMessage {
   };
 }
 
-export async function extractMasterKeyPayload(
-  message: TunnelMessage,
-  sharedKey: CryptoKey
-): Promise<MasterKeyPayload | null> {
-  if (message.type !== 'tunnel-key' || !message.iv || !message.encrypted) {
-    return null;
-  }
+export async function runCreatorTunnel(conn: any, userId: string): Promise<MasterKeyPayload> {
+  return new Promise((resolve, reject) => {
+    // Stub implementation for now
+    conn.on('data', (data: any) => {
+      if (data.type === 'tunnel-ack') {
+        resolve({
+          masterKey: 'stub',
+          salt: 'stub',
+          creatorId: userId,
+          joinerId: data.joinerId
+        });
+      }
+    });
+  });
+}
 
-  try {
-    const decrypted = await decryptWithSharedSecret(
-      message.iv,
-      message.encrypted,
-      sharedKey
-    );
-    return JSON.parse(decrypted);
-  } catch (error) {
-    console.error('Failed to extract master key payload:', error);
-    return null;
-  }
+export async function runJoinerTunnel(conn: any): Promise<MasterKeyPayload> {
+  return new Promise((resolve, reject) => {
+    // Stub implementation for now
+    conn.on('data', (data: any) => {
+      if (data.type === 'tunnel-key') {
+        resolve(data.payload);
+      }
+    });
+  });
+}
+
+export async function sendPairingAck(conn: any, userId: string): Promise<void> {
+  conn.send({ type: 'tunnel-ack', joinerId: userId });
 }

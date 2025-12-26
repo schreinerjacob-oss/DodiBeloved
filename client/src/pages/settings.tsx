@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug } from 'lucide-react';
+import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug, RefreshCw } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,7 @@ import { savePIN, verifyPINAndGetPassphrase } from '@/lib/storage-encrypted';
 export default function SettingsPage() {
   const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp, isPaired } = useDodi();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const { reconnect } = usePeerConnection();
   const [isSyncing, setIsSyncing] = useState(false);
   const [copiedUserId, setCopiedUserId] = useState(false);
@@ -529,36 +530,63 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="destructive"
-                className="w-full"
-                data-testid="button-logout"
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Unpair from this device
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Unpair from this device?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will clear your pairing data from this device. Your data will remain on your
-                  partner's device. You can pair again using your original credentials.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel data-testid="button-cancel-logout">Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleLogout}
-                  data-testid="button-confirm-logout"
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <RefreshCw className="w-5 h-5 text-sage" />
+              <div>
+                <h3 className="font-medium">Relink Device</h3>
+                <p className="text-xs text-muted-foreground">Reconnect with your partner if one device was reset</p>
+              </div>
+            </div>
+            <Button 
+              variant="outline" 
+              className="w-full border-sage/30 text-sage hover:bg-sage/10"
+              onClick={() => setLocation('/pairing?mode=restore')}
+              data-testid="button-restore-partner"
+            >
+              Reconnect & Restore Partner Device
+            </Button>
+          </Card>
+
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <LogOut className="w-5 h-5 text-destructive" />
+              <div>
+                <h3 className="font-medium">Disconnect</h3>
+                <p className="text-xs text-muted-foreground">Clear all data and end connection</p>
+              </div>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  data-testid="button-logout"
                 >
-                  Unpair
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Unpair from this device
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Unpair from this device?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will clear your pairing data from this device. Your data will remain on your
+                    partner's device. You can pair again using your original credentials.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel data-testid="button-cancel-logout">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleLogout}
+                    data-testid="button-confirm-logout"
+                  >
+                    Unpair
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </Card>
         </div>
       </ScrollArea>
     </div>

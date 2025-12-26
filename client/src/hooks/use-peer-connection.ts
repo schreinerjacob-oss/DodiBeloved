@@ -348,6 +348,61 @@ function setupConnection(conn: DataConnection) {
   });
 }
 
+export interface RoomConnection {
+  peer: Peer;
+  conn: DataConnection;
+  isCreator: boolean;
+  peerId: string;
+}
+
+export async function initializePeer(id: string): Promise<Peer> {
+  return new Promise((resolve, reject) => {
+    const peer = new Peer(id, {
+      host: '0.peerjs.com',
+      port: 443,
+      secure: true,
+      debug: 1
+    });
+    peer.on('open', () => resolve(peer));
+    peer.on('error', reject);
+  });
+}
+
+export function createRoomPeerId(code: string, isCreator: boolean): string {
+  return `dodi-room-${code}-${isCreator ? 'creator' : 'joiner'}`;
+}
+
+export function getRemotePeerId(code: string, isCreator: boolean): string {
+  return createRoomPeerId(code, !isCreator);
+}
+
+export async function waitForConnection(peer: Peer, timeout: number): Promise<DataConnection> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('Connection timed out')), timeout);
+    peer.on('connection', (conn) => {
+      clearTimeout(t);
+      resolve(conn);
+    });
+  });
+}
+
+export async function connectToRoom(peer: Peer, remoteId: string, timeout: number): Promise<DataConnection> {
+  return new Promise((resolve, reject) => {
+    const conn = peer.connect(remoteId);
+    const t = setTimeout(() => reject(new Error('Connection timed out')), timeout);
+    conn.on('open', () => {
+      clearTimeout(t);
+      resolve(conn);
+    });
+    conn.on('error', reject);
+  });
+}
+
+export function closeRoom(room: RoomConnection) {
+  room.conn.close();
+  room.peer.destroy();
+}
+
 export function usePeerConnection(): UsePeerConnectionReturn {
   const { userId, partnerId, pairingStatus, allowWakeUp } = useDodi();
   const [state, setState] = useState<PeerConnectionState>(globalState);

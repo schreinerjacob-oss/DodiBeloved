@@ -26,3 +26,18 @@ export function getPendingTunnelSession(): PendingTunnelSession | null {
 export function clearPendingTunnelSession(): void {
   localStorage.removeItem(PENDING_SESSION_KEY);
 }
+
+export function generateRoomCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const getPart = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return `${getPart()}-${getPart()}`;
+}
+
+export function normalizeRoomCode(code: string): string {
+  return code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+export function isValidRoomCode(code: string): boolean {
+  const normalized = normalizeRoomCode(code);
+  return normalized.length === 8;
+}

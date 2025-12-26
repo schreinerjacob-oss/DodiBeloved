@@ -3,25 +3,35 @@ import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Heart, Loader2, Copy, Check, Leaf } from 'lucide-react';
+import { Heart, Loader2, Copy, Check, Leaf, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { generateRoomCode, normalizeRoomCode, isValidRoomCode } from '@/lib/room-codes';
-import { initializePeer, createRoomPeerId, getRemotePeerId, waitForConnection, connectToRoom, closeRoom, type RoomConnection } from '@/lib/peerjs-room';
-import { runCreatorTunnel, runJoinerTunnel, sendPairingAck } from '@/lib/room-tunnel-protocol';
+import { useLocation } from 'wouter';
+import { normalizeRoomCode, isValidRoomCode, generateRoomCode } from '@/lib/pairing-codes';
+import { initializePeer, createRoomPeerId, getRemotePeerId, waitForConnection, connectToRoom, closeRoom, type RoomConnection } from '@/hooks/use-peer-connection';
+import { runCreatorTunnel, runJoinerTunnel, sendPairingAck } from '@/lib/tunnel-handshake';
 import { requestNotificationPermission } from '@/lib/notifications';
 import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
 
-type Mode = 'choose' | 'pairing' | 'success-animation';
+type Mode = 'choose' | 'pairing' | 'success-animation' | 'restore-mode';
 
 export default function PairingPage() {
   const { completePairingWithMasterKey, completePairingAsCreator, onPeerConnected, pairingStatus, userId } = useDodi();
   const { toast } = useToast();
+  const [location] = useLocation();
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialMode = searchParams.get('mode') === 'restore' ? 'restore-mode' : 'choose';
   
-  const [mode, setMode] = useState<Mode>('choose');
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [roomCode, setRoomCode] = useState<string>('');
+
+  useEffect(() => {
+    if (mode === 'restore-mode' && !roomCode) {
+      handleCreateRoom();
+    }
+  }, [mode]);
   const [inputCode, setInputCode] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -100,6 +110,13 @@ export default function PairingPage() {
   };
 
   const handleCreateRoom = async () => {
+    // Generate code if it doesn't exist (e.g. restore mode)
+    let code = roomCode;
+    if (!code) {
+      code = generateRoomCode();
+      setRoomCode(code);
+    }
+
     // VALIDATION: Ensure userId exists
     if (!userId) {
       console.error('❌ [ID AUDIT] FAILED: Creator has no userId - cannot start pairing');
@@ -114,16 +131,19 @@ export default function PairingPage() {
     console.log('✅ [ID AUDIT] Creator userId exists:', userId);
     setLoading(true);
     setIsCreator(true);
+    if (mode === 'restore-mode' || initialMode === 'restore-mode') {
+      console.log('📋 Restore mode activated – waiting for partner to join');
+    }
     try {
-      const code = generateRoomCode();
-      setRoomCode(code);
       const myPeerId = createRoomPeerId(code, true);
       
       console.log('🌿 Creating room as creator:', code);
       console.log('📋 [ID AUDIT] Creator will send userId to tunnel:', userId);
       const peer = await initializePeer(myPeerId);
       
-      setMode('pairing');
+      if (mode !== 'restore-mode') {
+        setMode('pairing');
+      }
       
       const connPromise = waitForConnection(peer, 120000).then(async (conn) => {
         roomRef.current = { peer, conn, isCreator: true, peerId: myPeerId };
@@ -488,6 +508,53 @@ export default function PairingPage() {
                     </Button>
                   </>
                 )}
+              </Card>
+            </motion.div>
+          )}
+
+          {mode === 'restore-mode' && (
+            <motion.div 
+              key="restore" 
+              initial={{ opacity: 0, y: 20 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="p-8 space-y-6 border-gold/30 shadow-lg bg-cream/50 dark:bg-card">
+                <div className="space-y-3 text-center">
+                  <RefreshCw className="w-8 h-8 mx-auto text-sage animate-spin-slow" />
+                  <h2 className="text-2xl font-light text-foreground">Restore Partner Device</h2>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Have your partner open Dodi on their device and choose <span className="text-sage font-medium">‘Restore from Partner’</span>
+                  </p>
+                </div>
+
+                <div className="text-center p-6 bg-sage/10 rounded-lg space-y-4">
+                  <p className="text-4xl font-light tracking-widest text-sage font-mono">
+                    {roomCode || 'RESTORE'}
+                  </p>
+                  <div className="flex justify-center">
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <QRCodeSVG 
+                        value={roomCode || 'RESTORE'} 
+                        size={120} 
+                        level="H" 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-center text-muted-foreground italic">
+                  Restore mode activated – waiting for partner to join
+                </p>
+
+                <Button 
+                  onClick={() => setMode('choose')} 
+                  variant="ghost" 
+                  className="w-full h-12" 
+                >
+                  Back
+                </Button>
               </Card>
             </motion.div>
           )}
