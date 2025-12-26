@@ -318,10 +318,71 @@ export default function PairingPage() {
       );
     }
 
-    if (showSuccess) {
+    const isRestoreFlow = searchParams.get('mode') === 'restore' || mode === 'restore-mode';
+
+  if (showSuccess) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-cream via-sage/10 to-blush/20 dark:from-background dark:via-card dark:to-secondary flex items-center justify-center p-6">
-        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6 }} className="text-center space-y-8 max-w-md">
+      <div className="min-h-screen bg-gradient-to-br from-cream via-sage/10 to-blush/20 dark:from-background dark:via-card dark:to-secondary flex items-center justify-center p-6 overflow-hidden">
+        {/* Vines Animation Elements */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1 }}
+            className="w-full h-full relative"
+          >
+            {/* Beautiful growing vines */}
+            <svg viewBox="0 0 100 100" className="absolute top-0 left-0 w-full h-full fill-none stroke-sage/50 dark:stroke-sage/40 stroke-[0.3]">
+              <motion.path 
+                d="M-10,110 C20,80 10,40 50,50 S80,10 110,-10" 
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 4, ease: "easeInOut" }}
+              />
+              <motion.path 
+                d="M110,110 C80,80 90,40 50,50 S20,10 -10,-10" 
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 4, delay: 0.5, ease: "easeInOut" }}
+              />
+              <motion.path 
+                d="M50,110 Q50,50 50,-10" 
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 3, delay: 1, ease: "easeInOut" }}
+              />
+            </svg>
+            
+            {/* Floating leaves */}
+            {[...Array(12)].map((_, i) => (
+              <motion.div
+                key={i}
+                initial={{ 
+                  x: Math.random() * 100 + "%", 
+                  y: "110%", 
+                  rotate: Math.random() * 360,
+                  opacity: 0 
+                }}
+                animate={{ 
+                  y: "-10%", 
+                  rotate: Math.random() * 720,
+                  opacity: [0, 0.4, 0] 
+                }}
+                transition={{ 
+                  duration: 5 + Math.random() * 5, 
+                  repeat: Infinity, 
+                  delay: Math.random() * 5,
+                  ease: "linear" 
+                }}
+                className="absolute"
+              >
+                <Leaf className="w-4 h-4 text-sage fill-sage/20" />
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+
+        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6 }} className="text-center space-y-8 max-w-md relative z-10">
           <motion.div 
             animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }} 
             transition={{ duration: 2, repeat: Infinity, repeatType: 'reverse' }} 
@@ -329,7 +390,7 @@ export default function PairingPage() {
           >
             <div className="absolute inset-0 bg-gold/30 rounded-full blur-3xl animate-pulse" />
             <div className="relative bg-gradient-to-br from-sage to-blush p-8 rounded-full">
-              <Heart className="w-20 h-20 text-white" />
+              {isRestoreFlow ? <RefreshCw className="w-20 h-20 text-white" /> : <Heart className="w-20 h-20 text-white" />}
             </div>
           </motion.div>
           
@@ -339,8 +400,12 @@ export default function PairingPage() {
             transition={{ delay: 0.3, duration: 0.5 }} 
             className="space-y-3"
           >
-            <h1 className="text-3xl font-light text-foreground">Your Gardens Are Now</h1>
-            <p className="text-4xl font-serif text-sage dark:text-sage">Eternally Connected</p>
+            <h1 className="text-3xl font-light text-foreground">
+              {isRestoreFlow ? "The Garden is" : "Your Gardens Are Now"}
+            </h1>
+            <p className="text-4xl font-serif text-sage dark:text-sage">
+              {isRestoreFlow ? "Restored ♾️" : "Eternally Connected"}
+            </p>
           </motion.div>
           
           <motion.p 
@@ -349,8 +414,22 @@ export default function PairingPage() {
             transition={{ delay: 0.8, duration: 0.8 }} 
             className="text-sm text-muted-foreground leading-relaxed"
           >
-            All your messages are encrypted end-to-end and synced securely across your devices.
+            {isRestoreFlow 
+              ? "Your connection has been regrown. All shared data is being synchronized now."
+              : "All your messages are encrypted end-to-end and synced securely across your devices."}
           </motion.p>
+
+          {isRestoreFlow && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.5 }}
+              className="flex items-center justify-center gap-2 text-sage text-xs font-medium"
+            >
+              <Loader2 className="w-3 h-3 animate-spin" />
+              <span>Full synchronization in progress...</span>
+            </motion.div>
+          )}
         </motion.div>
       </div>
     );

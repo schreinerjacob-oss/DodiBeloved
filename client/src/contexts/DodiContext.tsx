@@ -52,8 +52,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [inactivityMinutes, setInactivityMinutesState] = useState(10);
 
-  const [isLoading, setIsLoading] = useState(true);
-
   // Convenience getter
   const isPaired = pairingStatus === 'connected';
 
@@ -83,14 +81,10 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           setDisplayName(storedDisplayName?.value || null);
         }
 
-        // SECURITY: If PIN is enabled, don't auto-unlock
-        // Passphrase is locked behind PIN UI until unlocked
         if (storedPassphrase?.value) {
           if (storedPinEnabled?.value === 'true' || storedPinEnabled?.value === true) {
-            // PIN is enabled - require unlock to access passphrase
             setPassphrase(null);
           } else {
-            // PIN not enabled - can load passphrase normally (legacy or newly paired)
             setPassphrase(storedPassphrase.value);
           }
         }
@@ -99,29 +93,23 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           setPartnerId(storedPartnerId.value);
         }
 
-        // Restore pairing status from storage
         if (storedPairingStatus?.value) {
           const status = storedPairingStatus.value as PairingStatus;
           setPairingStatus(status);
           console.log('Restored pairing status:', status);
         } else if (storedUserId?.value && storedPassphrase?.value) {
-          // Legacy: if we have userId + passphrase but no status, treat as waiting
-          // This handles upgrades from old storage format
           if (storedPartnerId?.value) {
-            // Has partner, so was connected (joiner flow)
             setPairingStatus('connected');
             await db.put('settings', { key: 'pairingStatus', value: 'connected' });
           } else {
-            // No partner, creator waiting
             setPairingStatus('waiting');
             await db.put('settings', { key: 'pairingStatus', value: 'waiting' });
           }
         }
 
-        // Restore PIN settings
         if (storedPinEnabled?.value === 'true' || storedPinEnabled?.value === true) {
           setPinEnabled(true);
-          setIsLocked(true); // Lock on app load if PIN is enabled
+          setIsLocked(true);
         }
 
         if (storedInactivityMinutes?.value) {
@@ -150,8 +138,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Called by creator when generating pairing credentials
-  // IMPORTANT: Uses the EXISTING userId from initializeProfile - does NOT generate a new one
   const initializePairing = async () => {
     if (!userId) {
       throw new Error('User profile must be initialized before starting pairing');
@@ -163,40 +149,31 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     await Promise.all([
       saveSetting('passphrase', newPassphrase),
       saveSetting('salt', saltBase64),
-      saveSetting('pairingStatus', 'waiting'), // Creator is WAITING, not connected
+      saveSetting('pairingStatus', 'waiting'),
     ]);
     
-    // CRITICAL: Do NOT modify userId - it was already set by initializeProfile()
     setPassphrase(newPassphrase);
     setPartnerId(null);
-    setPairingStatus('waiting'); // Stay on pairing page, show QR code
+    setPairingStatus('waiting');
     
     console.log('🎭 [CREATOR INIT] Creator pairing initialized');
-    console.log('   MY DEVICE ID:', userId);
-    console.log('   Master key salt:', saltBase64.substring(0, 8) + '...');
     return { userId: userId, passphrase: newPassphrase };
   };
 
-  // Called by joiner when receiving master key via tunnel
   const completePairingWithMasterKey = async (masterKey: string, salt: string, remotePartnerId: string) => {
     if (!masterKey || !salt || !remotePartnerId) {
       throw new Error('Master key, salt, and remote partner ID are required');
     }
     
-    // VALIDATION: Joiner must have their own userId already generated
     if (!userId) {
       throw new Error('Joiner user ID must be generated before completing pairing');
     }
     
-    // CRITICAL SAFETY CHECK: Prevent self-pairing - userId should NEVER match remotePartnerId
     if (userId === remotePartnerId) {
       throw new Error(`Self-pairing detected: Joiner ID (${userId}) matches Creator ID (${remotePartnerId}). Cannot proceed.`);
     }
     
     const db = await initDB();
-    
-    // NEVER modify userId - it was already generated and should remain unchanged
-    // Only store the remote partner's ID and encryption credentials
     await db.put('settings', { key: 'passphrase', value: masterKey });
     await db.put('settings', { key: 'salt', value: salt });
     await db.put('settings', { key: 'partnerId', value: remotePartnerId });
@@ -206,39 +183,25 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setPartnerId(remotePartnerId);
     setPairingStatus('connected');
     
-    // Show PIN setup on successful pairing
     if (!pinEnabled) {
       setShowPinSetup(true);
     }
-    
-    console.log('✅ [JOINER COMPLETE] Pairing successful!');
-    console.log('   MY DEVICE ID:', userId);
-    console.log('   PARTNER DEVICE ID:', remotePartnerId);
-    console.log('   Master key:', masterKey.substring(0, 8) + '...');
-    console.log('═══ CROSSOVER VERIFICATION ═══');
-    console.log('   Device B stores Device A:', remotePartnerId);
   };
 
-  // Called by creator after receiving joiner's ID via tunnel ACK
   const completePairingAsCreator = async (masterKey: string, salt: string, remotePartnerId: string) => {
     if (!masterKey || !salt || !remotePartnerId) {
       throw new Error('Master key, salt, and remote partner ID are required');
     }
     
-    // VALIDATION: Creator must have their own userId already generated (from initializePairing)
     if (!userId) {
       throw new Error('Creator user ID must be generated before completing pairing');
     }
     
-    // CRITICAL SAFETY CHECK: Prevent self-pairing - userId should NEVER match remotePartnerId
     if (userId === remotePartnerId) {
       throw new Error(`Self-pairing detected: Creator ID (${userId}) matches Joiner ID (${remotePartnerId}). Cannot proceed.`);
     }
     
     const db = await initDB();
-    
-    // NEVER modify userId - it was already generated and should remain unchanged
-    // Only store the remote partner's ID and encryption credentials
     await db.put('settings', { key: 'passphrase', value: masterKey });
     await db.put('settings', { key: 'salt', value: salt });
     await db.put('settings', { key: 'partnerId', value: remotePartnerId });
@@ -248,20 +211,11 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setPartnerId(remotePartnerId);
     setPairingStatus('connected');
     
-    // Show PIN setup on successful pairing
     if (!pinEnabled) {
       setShowPinSetup(true);
     }
-    
-    console.log('✅ [CREATOR COMPLETE] Pairing successful!');
-    console.log('   MY DEVICE ID:', userId);
-    console.log('   PARTNER DEVICE ID:', remotePartnerId);
-    console.log('   Master key:', masterKey.substring(0, 8) + '...');
-    console.log('═══ CROSSOVER VERIFICATION ═══');
-    console.log('   Device A stores Device B:', remotePartnerId);
   };
 
-  // Called by creator to set partner ID after joiner has joined
   const setPartnerIdForCreator = async (newPartnerId: string) => {
     if (!newPartnerId) {
       throw new Error('Partner ID is required');
@@ -275,30 +229,24 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     await db.put('settings', { key: 'partnerId', value: newPartnerId });
     
     setPartnerId(newPartnerId);
-    console.log('Creator set partner ID:', newPartnerId);
   };
 
-  // Called when P2P connection is established (for both creator and joiner)
   const onPeerConnected = useCallback(async () => {
     if (pairingStatus === 'waiting' || pairingStatus === 'unpaired') {
-      console.log('P2P connection established - updating status to connected');
       setPairingStatus('connected');
       await saveSetting('pairingStatus', 'connected');
       
-      // Show PIN setup on successful pairing
       if (!pinEnabled) {
         setShowPinSetup(true);
       }
     }
   }, [pairingStatus, pinEnabled]);
 
-  // PIN Management Methods - KEY WRAPPING
   const setPINHandler = async (pin: string) => {
     if (pin.length < 4 || pin.length > 6) {
       throw new Error('PIN must be 4-6 digits');
     }
     
-    // KEY WRAPPING: Encrypt passphrase with PIN, delete plaintext
     if (!passphrase) {
       throw new Error('Passphrase not available to encrypt');
     }
@@ -309,25 +257,20 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     await saveSetting('pinEnabled', 'true');
     setPinEnabled(true);
     setShowPinSetup(false);
-    
-    console.log('✅ [PIN] PIN set, passphrase encrypted and stored in RAM only');
   };
 
   const skipPINSetupHandler = () => {
     setShowPinSetup(false);
-    console.log('⏭️ [PIN] PIN setup skipped');
   };
 
   const unlockWithPINHandler = async (pin: string): Promise<boolean> => {
     try {
-      // KEY WRAPPING: Decrypt passphrase with PIN
       const { verifyPINAndGetPassphrase } = await import('@/lib/storage-encrypted');
       const decryptedPassphrase = await verifyPINAndGetPassphrase(pin);
       
       if (decryptedPassphrase) {
-        setPassphrase(decryptedPassphrase); // Load to RAM
+        setPassphrase(decryptedPassphrase);
         setIsLocked(false);
-        console.log('✅ [PIN] Unlocked, passphrase decrypted to RAM');
         return true;
       }
       return false;
@@ -352,10 +295,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
 
   const lockAppHandler = () => {
     setIsLocked(true);
-    // SECURITY: Clear passphrase from RAM when locking
-    // On page reload, passphrase is null until user enters PIN again
     setPassphrase(null);
-    console.log('🔒 [LOCK] Passphrase cleared from RAM');
   };
 
   const setInactivityMinutesHandler = async (minutes: number) => {
@@ -363,7 +303,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     await saveSetting('inactivityMinutes', String(minutes));
   };
 
-  // Inactivity timer hook
   useInactivityTimer({
     onInactivity: lockAppHandler,
     timeoutMinutes: inactivityMinutes,
@@ -378,13 +317,12 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setUserId(newUserId);
     setDisplayName(name);
     
-    console.log('✅ [DEVICE INIT] Device userId created:', newUserId);
     return newUserId;
   };
 
   const logout = async () => {
     clearEncryptionCache();
-    setPassphrase(null); // SECURITY: Clear passphrase from RAM
+    setPassphrase(null);
     
     const db = await initDB();
     await db.clear('settings');
@@ -417,7 +355,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const setAllowWakeUp = async (enabled: boolean) => {
     setAllowWakeUpState(enabled);
     await saveSetting('allowWakeUp', enabled ? 'true' : 'false');
-    console.log(`📡 Wake-up pings ${enabled ? 'enabled' : 'disabled'}`);
   };
 
   return (

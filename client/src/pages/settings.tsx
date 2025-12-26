@@ -530,17 +530,17 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          <Card className="p-6 space-y-4">
+          <Card className="p-6 space-y-4 border-sage/20 bg-sage/5">
             <div className="flex items-center gap-3">
               <RefreshCw className="w-5 h-5 text-sage" />
               <div>
-                <h3 className="font-medium">Relink Device</h3>
+                <h3 className="font-medium text-sage">Relink Device</h3>
                 <p className="text-xs text-muted-foreground">Reconnect with your partner if one device was reset</p>
               </div>
             </div>
             <Button 
               variant="outline" 
-              className="w-full border-sage/30 text-sage hover:bg-sage/10"
+              className="w-full border-sage/30 text-sage hover:bg-sage/10 hover-elevate"
               onClick={() => setLocation('/pairing?mode=restore')}
               data-testid="button-restore-partner"
             >

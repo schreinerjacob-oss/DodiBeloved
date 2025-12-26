@@ -9,7 +9,6 @@ export interface EphemeralKeyPair {
   fingerprint: string;
 }
 
-
 export interface MasterKeyPayload {
   masterKey: string;
   salt: string;
@@ -132,7 +131,6 @@ export function generateMasterSalt(): string {
   return arrayBufferToBase64(saltBytes);
 }
 
-
 export interface TunnelMessage {
   type: 'tunnel-init' | 'tunnel-key' | 'tunnel-ack';
   publicKey?: string;
@@ -142,9 +140,6 @@ export interface TunnelMessage {
   fingerprint?: string;
 }
 
-/**
- * Message wrapper for PeerJS room protocol
- */
 export interface RoomProtocolMessage {
   type: 'tunnel-init' | 'tunnel-key' | 'tunnel-ack';
   publicKey?: string;
@@ -181,30 +176,92 @@ export function createTunnelAckMessage(): TunnelMessage {
   };
 }
 
-export async function runCreatorTunnel(conn: any, userId: string): Promise<MasterKeyPayload> {
+export async function runCreatorTunnel(conn: any, creatorId: string): Promise<MasterKeyPayload> {
+  const isRestore = window.location.search.includes('mode=restore');
+  
   return new Promise((resolve, reject) => {
-    // Stub implementation for now
-    conn.on('data', (data: any) => {
-      if (data.type === 'tunnel-ack') {
-        resolve({
-          masterKey: 'stub',
-          salt: 'stub',
-          creatorId: userId,
-          joinerId: data.joinerId
-        });
+    let ephemeralKeys: EphemeralKeyPair | null = null;
+    let sharedKey: CryptoKey | null = null;
+
+    const handleMessage = async (data: any) => {
+      console.log('📬 [TUNNEL] Creator received:', data.type);
+      
+      try {
+        if (data.type === 'tunnel-init') {
+          if (!ephemeralKeys) {
+            ephemeralKeys = await generateEphemeralKeyPair();
+          }
+          sharedKey = await deriveSharedSecret(ephemeralKeys.privateKey, data.publicKey);
+          const initMsg = createTunnelInitMessage(ephemeralKeys.publicKey);
+          conn.send({ ...initMsg, fingerprint: ephemeralKeys.fingerprint });
+        }
+        
+        if (data.type === 'tunnel-ack') {
+          const { getSetting } = await import('./storage-encrypted');
+          const masterKeySetting = await getSetting('passphrase');
+          const saltSetting = await getSetting('salt');
+          
+          const payload: MasterKeyPayload = {
+            masterKey: masterKeySetting?.value || 'error-missing-key',
+            salt: saltSetting?.value || 'error-missing-salt',
+            creatorId: creatorId,
+            joinerId: data.joinerId
+          };
+          
+          if (isRestore) {
+            console.log('♾️ [RESTORE] Sending restoration payload to joiner');
+            conn.send({ type: 'restore-key', ...payload });
+            // Small delay to ensure message delivery before closing tunnel
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } else if (sharedKey) {
+            const keyMsg = await createTunnelKeyMessage(payload, sharedKey);
+            conn.send(keyMsg);
+          }
+          
+          conn.off('data', handleMessage);
+          resolve(payload);
+        }
+      } catch (err) {
+        console.error('Tunnel error:', err);
+        reject(err);
       }
-    });
+    };
+
+    conn.on('data', handleMessage);
   });
 }
 
 export async function runJoinerTunnel(conn: any): Promise<MasterKeyPayload> {
-  return new Promise((resolve, reject) => {
-    // Stub implementation for now
-    conn.on('data', (data: any) => {
-      if (data.type === 'tunnel-key') {
-        resolve(data.payload);
-      }
-    });
+  return new Promise(async (resolve, reject) => {
+    try {
+      const ephemeralKeys = await generateEphemeralKeyPair();
+      let sharedKey: CryptoKey | null = null;
+
+      const handleMessage = async (data: any) => {
+        console.log('📬 [TUNNEL] Joiner received:', data.type);
+        
+        try {
+          if (data.type === 'tunnel-init') {
+            sharedKey = await deriveSharedSecret(ephemeralKeys.privateKey, data.publicKey);
+          }
+          
+          if (data.type === 'tunnel-key' && sharedKey) {
+            const decrypted = await decryptWithSharedSecret(data.iv, data.encrypted, sharedKey);
+            const payload = JSON.parse(decrypted);
+            conn.off('data', handleMessage);
+            resolve(payload);
+          }
+        } catch (err) {
+          console.error('Joiner tunnel error:', err);
+          reject(err);
+        }
+      };
+
+      conn.on('data', handleMessage);
+      conn.send(createTunnelInitMessage(ephemeralKeys.publicKey));
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
