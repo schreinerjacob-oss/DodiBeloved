@@ -27,6 +27,10 @@ export default function PairingPage() {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [roomCode, setRoomCode] = useState<string>('');
   const [showScanner, setShowScanner] = useState(false);
+  const [restoreProgress, setRestoreProgress] = useState(0);
+  const [isRestoringEssentials, setIsRestoringEssentials] = useState(false);
+  const [isSyncingOlder, setIsSyncingOlder] = useState(false);
+  const [syncBatchCount, setSyncBatchCount] = useState(0);
 
   useEffect(() => {
     if (mode === 'restore-mode' && !roomCode) {
@@ -60,7 +64,28 @@ export default function PairingPage() {
     };
 
     window.addEventListener('dodi-restore-payload', handleRestorePayload);
-    return () => window.removeEventListener('dodi-restore-payload', handleRestorePayload);
+    
+    const handleSyncComplete = () => {
+      setIsSyncingOlder(false);
+      toast({
+        title: "All restored ♾️",
+        description: "Your entire garden history is now synchronized.",
+      });
+    };
+    
+    const handleSyncProgress = (e: any) => {
+      setIsSyncingOlder(true);
+      setSyncBatchCount(prev => prev + 1);
+    };
+
+    window.addEventListener('dodi-sync-complete', handleSyncComplete);
+    window.addEventListener('dodi-sync-batch', handleSyncProgress);
+    
+    return () => {
+      window.removeEventListener('dodi-restore-payload', handleRestorePayload);
+      window.removeEventListener('dodi-sync-complete', handleSyncComplete);
+      window.removeEventListener('dodi-sync-batch', handleSyncProgress);
+    };
   }, []);
 
   const handleMasterKeyReceived = async (payload: any, isCreatorRole: boolean) => {
@@ -420,7 +445,23 @@ export default function PairingPage() {
               : "All your messages are encrypted end-to-end and synced securely across your devices."}
           </motion.p>
 
-          {isRestoreFlow && (
+          {isSyncingOlder && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-sage/10 border border-sage/20 rounded-lg p-4 space-y-2"
+            >
+              <div className="flex items-center justify-center gap-2 text-sage font-medium">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Syncing older history...</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest text-center">
+                Batch {syncBatchCount} processed
+              </p>
+            </motion.div>
+          )}
+
+          {isRestoreFlow && !isSyncingOlder && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}

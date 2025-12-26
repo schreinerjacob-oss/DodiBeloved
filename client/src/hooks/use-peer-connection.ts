@@ -289,7 +289,7 @@ function setupConnection(conn: DataConnection) {
     
     // START RECONCILIATION
     try {
-      const { getLastSynced } = await import('@/lib/storage-encrypted');
+      const { getLastSynced, getBatchForRestore } = await import('@/lib/storage-encrypted');
       const stores = ['messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions'] as const;
       const lastSyncedTimestamps: Record<string, number> = {};
       for (const store of stores) {
@@ -297,6 +297,17 @@ function setupConnection(conn: DataConnection) {
       }
       console.log('📡 Initiating reconciliation with timestamps:', lastSyncedTimestamps);
       conn.send({ type: 'reconcile-init', timestamps: lastSyncedTimestamps });
+
+      // PHASE 2: Check for older data to sync in background
+      const batch = await getBatchForRestore(stores, lastSyncedTimestamps, 50);
+      if (batch.length > 0) {
+        console.log('🔄 [RESTORE] Queueing background batch sync for older data...');
+        setTimeout(() => {
+          if (conn.open) {
+            conn.send({ type: 'restore-batch-init', timestamps: lastSyncedTimestamps });
+          }
+        }, 1000);
+      }
     } catch (e) {
       console.error('Failed to initiate reconciliation:', e);
     }
@@ -349,6 +360,55 @@ function setupConnection(conn: DataConnection) {
       }
       
       window.dispatchEvent(new CustomEvent('dodi-restore-payload', { detail: payload }));
+      return;
+    }
+
+    if (data.type === 'restore-batch-init') {
+      const { getBatchForRestore } = await import('@/lib/storage-encrypted');
+      const stores = ['messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions'] as const;
+      
+      const processNextBatch = async () => {
+        const batch = await getBatchForRestore(stores, data.timestamps, 50);
+        if (batch.length > 0) {
+          console.log('📤 Sending older data batch:', batch.length);
+          conn.send({ type: 'restore-batch-data', batch, timestamps: data.timestamps });
+        } else {
+          console.log('✅ Background restoration complete');
+          conn.send({ type: 'restore-batch-complete' });
+        }
+      };
+      
+      await processNextBatch();
+      return;
+    }
+
+    if (data.type === 'restore-batch-data') {
+      console.log('📥 Processing older data batch:', data.batch.length);
+      const { saveIncomingItems } = await import('@/lib/storage-encrypted');
+      
+      const itemsByStore: Record<string, any[]> = {};
+      for (const item of data.batch) {
+        if (!itemsByStore[item.store]) itemsByStore[item.store] = [];
+        itemsByStore[item.store].push(item.data);
+      }
+
+      for (const [storeName, items] of Object.entries(itemsByStore)) {
+        await saveIncomingItems(storeName as any, items);
+      }
+      
+      window.dispatchEvent(new CustomEvent('dodi-sync-batch', { detail: { count: data.batch.length } }));
+      
+      // Request next batch after 500ms delay
+      setTimeout(() => {
+        if (conn.open) {
+          conn.send({ type: 'restore-batch-init', timestamps: data.timestamps });
+        }
+      }, 500);
+      return;
+    }
+
+    if (data.type === 'restore-batch-complete') {
+      window.dispatchEvent(new CustomEvent('dodi-sync-complete'));
       return;
     }
 
