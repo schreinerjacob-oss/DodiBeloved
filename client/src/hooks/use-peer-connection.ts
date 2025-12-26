@@ -29,6 +29,35 @@ let globalState: PeerConnectionState = {
   isReconnecting: false,
 };
 
+// Reconnection backoff state
+let reconnectAttempt = 0;
+let reconnectTimeout: NodeJS.Timeout | null = null;
+const MAX_BACKOFF = 30000;
+
+function clearReconnectTimeout() {
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
+}
+
+function startReconnecting() {
+  if (!globalPartnerId || (globalConn && globalConn.open)) {
+    reconnectAttempt = 0;
+    clearReconnectTimeout();
+    return;
+  }
+
+  const backoff = Math.min(Math.pow(2, reconnectAttempt) * 1000, MAX_BACKOFF);
+  console.log(`📡 Reconnecting in ${backoff / 1000} seconds (Attempt ${reconnectAttempt + 1})`);
+  
+  clearReconnectTimeout();
+  reconnectTimeout = setTimeout(() => {
+    reconnectAttempt++;
+    connectToPartner(globalPartnerId!);
+  }, backoff);
+}
+
 // Offline queue for P2P messages when disconnected
 let offlineQueue: SyncMessage[] = [];
 let queueFlushInProgress = false;
@@ -197,6 +226,8 @@ function setupConnection(conn: DataConnection) {
 
   conn.on('open', async () => {
     console.log('✨ Persistent P2P connection established with:', conn.peer);
+    reconnectAttempt = 0;
+    clearReconnectTimeout();
     notifyListeners();
     conn.send({ type: 'ping', timestamp: Date.now() });
     
@@ -241,10 +272,8 @@ function setupConnection(conn: DataConnection) {
     console.log('XY Connection lost');
     if (globalConn === conn) globalConn = null;
     notifyListeners();
-    // Reconnect attempt via cached ID, no hooks inside
-    if (globalPartnerId) {
-      setTimeout(() => connectToPartner(globalPartnerId!), 3000);
-    }
+    // Reconnect attempt with exponential backoff
+    startReconnecting();
   });
 
   conn.on('error', (err) => {
