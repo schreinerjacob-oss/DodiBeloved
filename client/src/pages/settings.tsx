@@ -32,7 +32,7 @@ import {
 import { savePIN, verifyPINAndGetPassphrase } from '@/lib/storage-encrypted';
 
 export default function SettingsPage() {
-  const { userId, partnerId, passphrase, logout, isOnline } = useDodi();
+  const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp } = useDodi();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [copiedUserId, setCopiedUserId] = useState(false);
@@ -45,7 +45,6 @@ export default function SettingsPage() {
   const [confirmPin, setConfirmPin] = useState('');
   const [pinSaving, setPinSaving] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [allowWakeUp, setAllowWakeUp] = useState(true);
 
   const handleCopyUserId = () => {
     if (userId) {
@@ -305,6 +304,7 @@ export default function SettingsPage() {
               <Switch 
                 checked={allowWakeUp} 
                 onCheckedChange={setAllowWakeUp}
+                className="data-[state=checked]:bg-sage data-[state=unchecked]:bg-muted"
                 data-testid="switch-wake-up-ping"
               />
             </div>

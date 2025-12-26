@@ -336,7 +336,7 @@ function setupConnection(conn: DataConnection) {
 }
 
 export function usePeerConnection(): UsePeerConnectionReturn {
-  const { userId, partnerId, pairingStatus } = useDodi();
+  const { userId, partnerId, pairingStatus, allowWakeUp } = useDodi();
   const [state, setState] = useState<PeerConnectionState>(globalState);
 
   // Subscribe to global state changes
@@ -438,10 +438,12 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       queueListeners.forEach(listener => listener(offlineQueue.length));
       if (partnerId) {
         connectToPartner(partnerId);
-        sendWakeUpPing(partnerId);
+        if (allowWakeUp) {
+          sendWakeUpPing(partnerId);
+        }
       }
     }
-  }, [partnerId]);
+  }, [partnerId, allowWakeUp]);
 
   const reconnect = useCallback(() => {
     if (globalPeer && globalPeer.disconnected) {
@@ -454,14 +456,18 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
   // Periodic health check - ensure connection is active
   useEffect(() => {
+    const checkInterval = allowWakeUp ? 5000 : 30 * 60 * 1000;
     const interval = setInterval(() => {
       notifyListeners();
       if (!globalConn || !globalConn.open) {
-        if (partnerId) connectToPartner(partnerId);
+        if (partnerId) {
+          console.log(`📡 [${allowWakeUp ? 'ACTIVE' : 'POLLING'}] Attempting P2P connection...`);
+          connectToPartner(partnerId);
+        }
       }
-    }, 5000);
+    }, checkInterval);
     return () => clearInterval(interval);
-  }, [partnerId]);
+  }, [partnerId, allowWakeUp]);
 
   // Initialize background sync for reconnection when app is backgrounded
   useEffect(() => {

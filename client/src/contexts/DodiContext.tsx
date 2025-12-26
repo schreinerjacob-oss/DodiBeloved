@@ -18,6 +18,8 @@ interface DodiContextType {
   pinEnabled: boolean;
   showPinSetup: boolean;
   inactivityMinutes: number;
+  allowWakeUp: boolean;
+  setAllowWakeUp: (enabled: boolean) => Promise<void>;
   initializeProfile: (displayName: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
   completePairingWithMasterKey: (masterKey: string, salt: string, creatorId: string) => Promise<void>;
@@ -385,6 +387,25 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setPairingStatus('unpaired');
   };
 
+  const [allowWakeUp, setAllowWakeUpState] = useState(false);
+
+  useEffect(() => {
+    const loadAllowWakeUp = async () => {
+      const db = await initDB();
+      const stored = await db.get('settings', 'allowWakeUp');
+      if (stored) {
+        setAllowWakeUpState(stored.value === 'true' || stored.value === true);
+      }
+    };
+    loadAllowWakeUp();
+  }, []);
+
+  const setAllowWakeUp = async (enabled: boolean) => {
+    setAllowWakeUpState(enabled);
+    await saveSetting('allowWakeUp', enabled ? 'true' : 'false');
+    console.log(`📡 Wake-up pings ${enabled ? 'enabled' : 'disabled'}`);
+  };
+
   return (
     <DodiContext.Provider
       value={{
@@ -399,6 +420,8 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         pinEnabled,
         showPinSetup,
         inactivityMinutes,
+        allowWakeUp,
+        setAllowWakeUp,
         initializeProfile,
         initializePairing,
         completePairingWithMasterKey,
