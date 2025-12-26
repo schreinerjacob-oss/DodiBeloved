@@ -22,7 +22,7 @@ import {
   Loader2,
   Clock
 } from 'lucide-react';
-import { initDB, getMessages, saveMessage, getMemories, saveMemory, verifyPIN } from '@/lib/storage-encrypted';
+import { initDB, getMessages, saveMessage, getMemories, saveMemory } from '@/lib/storage-encrypted';
 import { nanoid } from 'nanoid';
 
 interface TestResult {
