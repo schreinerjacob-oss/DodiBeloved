@@ -15,7 +15,7 @@ import { runCreatorTunnel, runJoinerTunnel, sendPairingAck } from '@/lib/tunnel-
 import { requestNotificationPermission } from '@/lib/notifications';
 import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
 
-type Mode = 'choose' | 'pairing' | 'success-animation' | 'restore-mode';
+type Mode = 'choose' | 'pairing' | 'success-animation' | 'restore-mode' | 'restore-entry';
 
 export default function PairingPage() {
   const { completePairingWithMasterKey, completePairingAsCreator, onPeerConnected, pairingStatus, userId } = useDodi();
@@ -26,6 +26,7 @@ export default function PairingPage() {
   
   const [mode, setMode] = useState<Mode>(initialMode);
   const [roomCode, setRoomCode] = useState<string>('');
+  const [showScanner, setShowScanner] = useState(false);
 
   useEffect(() => {
     if (mode === 'restore-mode' && !roomCode) {
@@ -483,12 +484,73 @@ export default function PairingPage() {
                   </Button>
 
                   <Button 
-                    onClick={() => { setInputCode(''); setMode('pairing'); setIsCreator(false); }} 
+                    onClick={() => { setInputCode(''); setMode('restore-entry'); setIsCreator(false); }} 
                     variant="ghost" 
                     className="w-full h-12 text-sage hover:bg-sage/5 border border-dashed border-sage/20"
                     data-testid="button-restore-from-partner"
                   >
                     Restore from Partner
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
+          )}
+
+          {mode === 'restore-entry' && (
+            <motion.div 
+              key="restore-entry" 
+              initial={{ opacity: 0, y: 20 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="p-8 space-y-6 border-sage/30 shadow-lg">
+                <div className="space-y-3 text-center">
+                  <RefreshCw className="w-8 h-8 mx-auto text-sage" />
+                  <h2 className="text-2xl font-light">Restore Garden</h2>
+                  <p className="text-sm text-muted-foreground">Enter the code from your partner's device to reconnect</p>
+                </div>
+
+                <div className="space-y-4">
+                  <Input 
+                    placeholder="Enter 8-character code" 
+                    value={inputCode} 
+                    onChange={(e) => setInputCode(e.target.value.toUpperCase())}
+                    className="h-12 text-center text-lg tracking-widest font-mono uppercase"
+                    maxLength={9}
+                    data-testid="input-restore-code"
+                  />
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button 
+                      onClick={() => {
+                        console.log('Restore mode joined – waiting for partner to send key');
+                        handleJoinRoom();
+                      }}
+                      disabled={loading || !inputCode}
+                      className="h-12 hover-elevate"
+                      data-testid="button-restore-submit"
+                    >
+                      {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                      Restore
+                    </Button>
+                    <Button 
+                      onClick={() => setShowScanner(true)}
+                      variant="outline"
+                      className="h-12 hover-elevate"
+                      data-testid="button-restore-scan"
+                    >
+                      Scan QR
+                    </Button>
+                  </div>
+
+                  <Button 
+                    onClick={() => setMode('choose')} 
+                    variant="ghost" 
+                    className="w-full h-12"
+                    data-testid="button-restore-back"
+                  >
+                    Back
                   </Button>
                 </div>
               </Card>
