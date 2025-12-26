@@ -69,8 +69,8 @@ export function GlobalSyncHandler() {
           const letter = message.data as LoveLetter;
           console.log('💌 [SYNC] Received love letter:', letter.id);
           await saveLoveLetter(letter);
-          if (letter.timestamp) {
-            await setLastSynced('letters', Number(letter.timestamp));
+          if ((letter as any).timestamp) {
+            await setLastSynced('letters', Number((letter as any).timestamp));
           }
           notifyNewLoveLetter();
           window.dispatchEvent(new CustomEvent('letter-synced', { detail: letter }));

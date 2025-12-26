@@ -68,10 +68,10 @@ export default function PrayersPage() {
       }
     };
 
-    window.addEventListener('p2p-message', handleP2pMessage as EventListener);
+    window.addEventListener('p2p-message', handleP2pMessage as unknown as EventListener);
     
     return () => {
-      window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
+      window.removeEventListener('p2p-message', handleP2pMessage as unknown as EventListener);
     };
   }, [peerState.connected, partnerId, userId]);
 
