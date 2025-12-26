@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { generateRoomCode, normalizeRoomCode, isValidRoomCode } from '@/lib/room-codes';
 import { initializePeer, createRoomPeerId, getRemotePeerId, waitForConnection, connectToRoom, closeRoom, type RoomConnection } from '@/lib/peerjs-room';
 import { runCreatorTunnel, runJoinerTunnel, sendPairingAck } from '@/lib/room-tunnel-protocol';
+import { requestNotificationPermission } from '@/lib/notifications';
 import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
 
 type Mode = 'choose' | 'pairing' | 'success-animation';
@@ -33,6 +34,10 @@ export default function PairingPage() {
   useEffect(() => {
     if (pairingStatus === 'connected') {
       setShowSuccess(true);
+      // Request notification permission after successful pairing
+      requestNotificationPermission().then(granted => {
+        console.log('📬 Notification permission:', granted ? 'granted' : 'denied');
+      });
     }
   }, [pairingStatus]);
 

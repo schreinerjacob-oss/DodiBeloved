@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { saveMemory, saveCalendarEvent, saveDailyRitual, saveLoveLetter, savePrayer, saveReaction } from '@/lib/storage-encrypted';
+import { notifyNewMemory, notifyCalendarEvent, notifyDailyRitual, notifyNewLoveLetter } from '@/lib/notifications';
 import type { SyncMessage, Memory, CalendarEvent, DailyRitual, LoveLetter, Prayer, Reaction } from '@/types';
 
 export function GlobalSyncHandler() {
@@ -35,6 +36,9 @@ export function GlobalSyncHandler() {
             await saveMemory(incomingMemory);
             console.log('✅ [SYNC] Memory saved:', incomingMemory.id);
             
+            // Notify if app in background
+            notifyNewMemory();
+            
             // Dispatch event for UI updates
             window.dispatchEvent(new CustomEvent('memory-synced', { detail: incomingMemory }));
           }
@@ -45,6 +49,7 @@ export function GlobalSyncHandler() {
           const event = message.data as CalendarEvent;
           console.log('📅 [SYNC] Received calendar event:', event.id);
           await saveCalendarEvent(event);
+          notifyCalendarEvent();
           window.dispatchEvent(new CustomEvent('calendar-synced', { detail: event }));
         }
         
@@ -53,6 +58,7 @@ export function GlobalSyncHandler() {
           const ritual = message.data as DailyRitual;
           console.log('✨ [SYNC] Received daily ritual:', ritual.id);
           await saveDailyRitual(ritual);
+          notifyDailyRitual();
           window.dispatchEvent(new CustomEvent('ritual-synced', { detail: ritual }));
         }
         
@@ -61,6 +67,7 @@ export function GlobalSyncHandler() {
           const letter = message.data as LoveLetter;
           console.log('💌 [SYNC] Received love letter:', letter.id);
           await saveLoveLetter(letter);
+          notifyNewLoveLetter();
           window.dispatchEvent(new CustomEvent('letter-synced', { detail: letter }));
         }
         
