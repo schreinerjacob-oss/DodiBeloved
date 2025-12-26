@@ -4,10 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key } from 'lucide-react';
+import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { DeveloperDiagnostics } from '@/components/developer-diagnostics';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,10 +29,10 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog";
-import { savePIN, verifyPIN } from '@/lib/storage-encrypted';
+import { savePIN, verifyPINAndGetPassphrase } from '@/lib/storage-encrypted';
 
 export default function SettingsPage() {
-  const { userId, partnerId, passphrase, logout, isOnline, isTrialActive, trialDaysRemaining } = useDodi();
+  const { userId, partnerId, passphrase, logout, isOnline } = useDodi();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [copiedUserId, setCopiedUserId] = useState(false);
@@ -42,6 +44,7 @@ export default function SettingsPage() {
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinSaving, setPinSaving] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const handleCopyUserId = () => {
     if (userId) {
@@ -131,9 +134,9 @@ export default function SettingsPage() {
 
     setPinSaving(true);
     try {
-      // Verify current PIN is correct
-      const isValid = await verifyPIN(currentPin);
-      if (!isValid) {
+      // Verify current PIN and get passphrase
+      const currentPassphrase = await verifyPINAndGetPassphrase(currentPin);
+      if (!currentPassphrase) {
         toast({
           title: "Incorrect PIN",
           description: "The current PIN you entered is incorrect.",
@@ -143,8 +146,8 @@ export default function SettingsPage() {
         return;
       }
 
-      // Save new PIN
-      await savePIN(newPin);
+      // Save new PIN with the recovered passphrase
+      await savePIN(newPin, currentPassphrase);
       toast({
         title: "PIN changed",
         description: "Your PIN has been updated successfully.",
@@ -177,28 +180,6 @@ export default function SettingsPage() {
 
       <ScrollArea className="flex-1 p-6">
         <div className="max-w-2xl mx-auto space-y-6">
-          {isTrialActive && trialDaysRemaining <= 7 && (
-            <Card className="p-4 bg-accent/10 border-accent/30">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
-                <div className="flex-1">
-                  <h3 className="font-medium text-sm">Trial Ending Soon</h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    You have {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''} left of your free trial.
-                  </p>
-                  <Button
-                    size="sm"
-                    onClick={() => setLocation('/subscription')}
-                    className="mt-2"
-                    variant="default"
-                    data-testid="button-view-plans"
-                  >
-                    View Plans
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          )}
           <Card className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -315,11 +296,32 @@ export default function SettingsPage() {
               <div>
                 <h3 className="font-medium">Connection Status</h3>
                 <p className="text-xs text-muted-foreground">
-                  {isOnline ? 'Connected to sync server' : 'Offline - changes saved locally'}
+                  {isOnline ? 'P2P ready - waiting for partner' : 'Offline - changes saved locally'}
                 </p>
               </div>
             </div>
           </Card>
+
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Bug className="w-5 h-5 text-blue-400" />
+                <div>
+                  <h3 className="font-medium">Developer Mode</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Show diagnostics panel for testing
+                  </p>
+                </div>
+              </div>
+              <Switch 
+                checked={showDiagnostics} 
+                onCheckedChange={setShowDiagnostics}
+                data-testid="switch-developer-mode"
+              />
+            </div>
+          </Card>
+
+          {showDiagnostics && <DeveloperDiagnostics />}
 
           <Card className="p-6 space-y-4">
             <div className="flex items-center gap-3">

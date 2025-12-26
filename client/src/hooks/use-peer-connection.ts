@@ -43,6 +43,12 @@ function notifyListeners() {
     isReconnecting: globalPeer ? globalPeer.disconnected : false,
   };
   
+  // Expose state globally for diagnostics panel
+  (window as any).__DODI_PEER_STATE__ = {
+    ...newState,
+    queueSize: offlineQueue.length,
+  };
+  
   // Only notify if state actually changed
   if (
     newState.connected !== globalState.connected ||
@@ -260,7 +266,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       }
     };
     queueListeners.add(queueStateHandler);
-    return () => queueListeners.delete(queueStateHandler);
+    return () => { queueListeners.delete(queueStateHandler); };
   }, []);
 
   return { state, send, reconnect };
