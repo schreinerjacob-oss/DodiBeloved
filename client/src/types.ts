@@ -15,6 +15,7 @@ export interface Message {
   mediaUrl?: string | null;
   isDisappearing?: boolean | null;
   status?: 'sending' | 'sent' | 'delivered' | 'read';
+  reactions?: { [userId: string]: string };
 }
 
 export interface Memory {
@@ -62,16 +63,6 @@ export interface LoveLetter {
   isRead?: boolean;
 }
 
-export interface FutureLetter {
-  id: string;
-  authorId: string;
-  recipientId: string;
-  title: string;
-  content: string;
-  unlockDate: Date;
-  createdAt: Date;
-  isUnlocked?: boolean;
-}
 
 export interface Prayer {
   id: string;
@@ -108,14 +99,3 @@ export interface SyncMessage {
   // data can contain ArrayBuffer for binary media (no Base64 overhead)
 }
 
-export interface Subscription {
-  id: string;
-  pairingId: string;
-  stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
-  plan: 'trial' | 'monthly' | 'yearly' | 'lifetime';
-  status: 'trial' | 'active' | 'expired' | 'cancelled';
-  trialEndsAt: Date | null;
-  renewsAt: Date | null;
-  createdAt: Date;
-}

@@ -1,18 +1,24 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
-import { Heart, Send, Image, Mic, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2 } from 'lucide-react';
+import { Heart, Send, Image, Mic, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star } from 'lucide-react';
 import { getMessages, saveMessage } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { MessageMediaImage } from '@/components/message-media-image';
 import type { Message, SyncMessage } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
-import { compressImage } from '@/lib/utils';
+import { compressImage, cn } from '@/lib/utils';
+
+const QUICK_REACTIONS = [
+  { id: 'heart', icon: Heart, color: 'text-accent' },
+  { id: 'like', icon: ThumbsUp, color: 'text-blue-400' },
+  { id: 'star', icon: Star, color: 'text-yellow-400' },
+];
 
 export default function ChatPage() {
   const { userId, partnerId, isOnline } = useDodi();
@@ -27,10 +33,12 @@ export default function ChatPage() {
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+  const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const typingThrottleRef = useRef<NodeJS.Timeout | null>(null);
+  const doubleTapRef = useRef<{ messageId: string; time: number } | null>(null);
 
   useEffect(() => {
     loadMessages();
@@ -69,6 +77,25 @@ export default function ChatPage() {
           setMessages(prev => prev.map(m => 
             m.id === messageId ? { ...m, status: 'delivered' } : m
           ));
+          return;
+        }
+
+        // Handle incoming reaction
+        if (message.type === 'reaction') {
+          const { messageId, reaction, userId: reactUserId } = message.data as { messageId: string; reaction: string | null; userId: string };
+          console.log('💝 [P2P] Received reaction:', reaction, 'for message:', messageId);
+          setMessages(prev => prev.map(m => {
+            if (m.id === messageId) {
+              const newReactions = { ...m.reactions };
+              if (reaction) {
+                newReactions[reactUserId] = reaction;
+              } else {
+                delete newReactions[reactUserId];
+              }
+              return { ...m, reactions: Object.keys(newReactions).length > 0 ? newReactions : undefined };
+            }
+            return m;
+          }));
           return;
         }
         
@@ -150,6 +177,45 @@ export default function ChatPage() {
     setHasMoreMessages(msgs.length === MESSAGES_PER_PAGE);
     setLoadingMore(false);
   };
+
+  const handleReaction = useCallback((messageId: string, reaction: string) => {
+    if (!userId) return;
+    
+    setMessages(prev => prev.map(m => {
+      if (m.id === messageId) {
+        const currentReaction = m.reactions?.[userId];
+        const newReactions = { ...m.reactions };
+        
+        if (currentReaction === reaction) {
+          delete newReactions[userId];
+        } else {
+          newReactions[userId] = reaction;
+        }
+        
+        const finalReaction = currentReaction === reaction ? null : reaction;
+        
+        sendP2P({
+          type: 'reaction',
+          data: { messageId, reaction: finalReaction, userId },
+          timestamp: Date.now(),
+        });
+        
+        return { ...m, reactions: Object.keys(newReactions).length > 0 ? newReactions : undefined };
+      }
+      return m;
+    }));
+    setShowReactionPicker(null);
+  }, [userId, sendP2P]);
+
+  const handleMessageTap = useCallback((messageId: string) => {
+    const now = Date.now();
+    if (doubleTapRef.current?.messageId === messageId && now - doubleTapRef.current.time < 300) {
+      handleReaction(messageId, 'heart');
+      doubleTapRef.current = null;
+    } else {
+      doubleTapRef.current = { messageId, time: now };
+    }
+  }, [handleReaction]);
 
   const handleSend = async () => {
     if (!newMessage.trim()) {
@@ -420,55 +486,116 @@ export default function ChatPage() {
           {messages.map((message) => {
             const isSent = message.senderId === userId;
             const isImage = message.type === 'image';
+            const hasReactions = message.reactions && Object.keys(message.reactions).length > 0;
+            const myReaction = userId ? message.reactions?.[userId] : null;
+            const partnerReaction = partnerId ? message.reactions?.[partnerId] : null;
+            
             return (
               <div
                 key={message.id}
-                className={`flex ${isSent ? 'justify-end' : 'justify-start'} animate-fade-in`}
+                className={`flex ${isSent ? 'justify-end' : 'justify-start'} animate-fade-in relative`}
                 data-testid={`message-${message.id}`}
               >
-                <Card
-                  className={`max-w-[70%] ${isImage ? 'p-0 overflow-hidden' : 'p-4'} ${
-                    isSent
-                      ? 'bg-sage/30 border-sage/40'
-                      : 'bg-card border-card-border'
-                  }`}
-                >
-                  {isImage ? (
-                    <div className="space-y-2">
-                      <MessageMediaImage messageId={message.id} fileName={message.content} />
-                      <div className="flex items-center justify-between px-3 pb-2">
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                        {isSent && (
-                          <div className="ml-2">
-                            {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
-                            {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
-                            {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
-                            {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
-                          </div>
-                        )}
+                <div className="relative">
+                  <Card
+                    onClick={() => handleMessageTap(message.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setShowReactionPicker(showReactionPicker === message.id ? null : message.id);
+                    }}
+                    className={cn(
+                      'max-w-[70%] cursor-pointer transition-transform active:scale-[0.98]',
+                      isImage ? 'p-0 overflow-hidden' : 'p-4',
+                      isSent ? 'bg-sage/30 border-sage/40' : 'bg-card border-card-border'
+                    )}
+                  >
+                    {isImage ? (
+                      <div className="space-y-2">
+                        <MessageMediaImage messageId={message.id} fileName={message.content} />
+                        <div className="flex items-center justify-between px-3 pb-2">
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          {isSent && (
+                            <div className="ml-2">
+                              {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+                              {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
+                              {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
+                              {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
+                            </div>
+                          )}
+                        </div>
                       </div>
+                    ) : (
+                      <>
+                        <p className="text-sm leading-relaxed">{message.content}</p>
+                        <div className="flex items-center justify-between mt-2 gap-2">
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          {isSent && (
+                            <div className="ml-2">
+                              {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+                              {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
+                              {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
+                              {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </Card>
+
+                  {hasReactions && (
+                    <div className={cn(
+                      'absolute -bottom-2 flex gap-0.5',
+                      isSent ? 'right-2' : 'left-2'
+                    )}>
+                      {(myReaction || partnerReaction) && (
+                        <span className="text-sm bg-card border rounded-full px-1.5 py-0.5 shadow-sm flex items-center gap-0.5">
+                          {myReaction === 'heart' && <Heart className="w-3 h-3 text-accent fill-current" />}
+                          {myReaction === 'like' && <ThumbsUp className="w-3 h-3 text-blue-400" />}
+                          {myReaction === 'star' && <Star className="w-3 h-3 text-yellow-400 fill-current" />}
+                          {partnerReaction && partnerReaction !== myReaction && (
+                            <>
+                              {partnerReaction === 'heart' && <Heart className="w-3 h-3 text-accent fill-current" />}
+                              {partnerReaction === 'like' && <ThumbsUp className="w-3 h-3 text-blue-400" />}
+                              {partnerReaction === 'star' && <Star className="w-3 h-3 text-yellow-400 fill-current" />}
+                            </>
+                          )}
+                        </span>
+                      )}
                     </div>
-                  ) : (
-                    <>
-                      <p className="text-sm leading-relaxed">{message.content}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                        {isSent && (
-                          <div className="ml-2">
-                            {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
-                            {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
-                            {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
-                            {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
-                          </div>
-                        )}
-                      </div>
-                    </>
                   )}
-                </Card>
+
+                  {showReactionPicker === message.id && (
+                    <div className={cn(
+                      'absolute -top-10 flex gap-1 bg-card border rounded-full px-2 py-1 shadow-lg z-10',
+                      isSent ? 'right-0' : 'left-0'
+                    )}>
+                      {QUICK_REACTIONS.map((r) => {
+                        const Icon = r.icon;
+                        const isActive = myReaction === r.id;
+                        return (
+                          <button
+                            key={r.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReaction(message.id, r.id);
+                            }}
+                            className={cn(
+                              'p-1.5 rounded-full transition-transform hover:scale-110',
+                              isActive && 'bg-accent/20'
+                            )}
+                            data-testid={`reaction-${r.id}-${message.id}`}
+                          >
+                            <Icon className={cn('w-4 h-4', r.color, isActive && 'fill-current')} />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}

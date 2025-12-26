@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <script>
+      // Polyfill for Node.js 'global' - must run before any modules
+      window.global = window;
+      globalThis.global = globalThis;
+      window.process = window.process || { env: {} };
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="description" content="dodi - An ultra-private encrypted space for two hearts to connect, share, and grow together" />
@@ -51,9 +57,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      window.global = window;
-    </script>
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
