@@ -157,8 +157,10 @@ function setupConnection(conn: DataConnection) {
     console.log('XY Connection lost');
     if (globalConn === conn) globalConn = null;
     notifyListeners();
-    // Attempt reconnect after delay using cached partnerId
-    if (globalPartnerId) setTimeout(() => connectToPartner(globalPartnerId!), 3000);
+    // Reconnect attempt via cached ID, no hooks inside
+    if (globalPartnerId) {
+      setTimeout(() => connectToPartner(globalPartnerId!), 3000);
+    }
   });
 
   conn.on('error', (err) => {
@@ -245,10 +247,10 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
   // 2. CONNECT TO PARTNER whenever partnerId changes
   useEffect(() => {
+    if (partnerId) {
+      globalPartnerId = partnerId;
+    }
     if (!partnerId || !globalPeer || globalPeer.destroyed) return;
-    
-    // Cache partnerId globally for reconnection handlers
-    globalPartnerId = partnerId;
     
     console.log('🔗 partnerId changed, connecting to:', partnerId);
     connectToPartner(partnerId);
