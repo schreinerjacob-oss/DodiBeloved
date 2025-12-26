@@ -305,6 +305,22 @@ export async function getItemsSince(storeName: StoreName, timestamp: number): Pr
   });
 }
 
+export async function saveMessage(message: Message): Promise<void> {
+  try {
+    const db = await initDB();
+    const encrypted = await encryptMessage(message);
+    const record = {
+      id: message.id,
+      ...encrypted,
+      timestamp: message.timestamp, // Keep for indexing
+    };
+    await db.put('messages', record);
+  } catch (error) {
+    console.error('Failed to save message:', error);
+    throw error;
+  }
+}
+
 export async function saveIncomingItems(storeName: StoreName, items: any[]): Promise<void> {
   const db = await initDBRaw();
   const tx = db.transaction(storeName, 'readwrite');
