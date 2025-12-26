@@ -566,6 +566,25 @@ export default function PairingPage() {
               transition={{ duration: 0.3 }}
             >
               <Card className="p-8 space-y-6 border-sage/30 shadow-lg">
+                {isRestoringEssentials && (
+                  <div className="space-y-4">
+                    <div className="text-center space-y-2">
+                      <h2 className="text-xl font-light">Restoring Essentials...</h2>
+                      <p className="text-sm text-muted-foreground italic">Rebuilding your private sanctuary</p>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                      <motion.div 
+                        className="bg-sage h-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${restoreProgress}%` }}
+                        transition={{ duration: 0.5 }}
+                      />
+                    </div>
+                    <p className="text-center text-[10px] text-muted-foreground uppercase tracking-widest font-medium">
+                      {restoreProgress < 100 ? 'Synchronizing core data...' : 'Essentials restored ♾️'}
+                    </p>
+                  </div>
+                )}
                 {isCreator ? (
                   <>
                     <div className="text-center space-y-2">
