@@ -31,6 +31,8 @@ export default function PairingPage() {
   const [isRestoringEssentials, setIsRestoringEssentials] = useState(false);
   const [isSyncingOlder, setIsSyncingOlder] = useState(false);
   const [syncBatchCount, setSyncBatchCount] = useState(0);
+  const [totalBatches, setTotalBatches] = useState(0);
+  const [, setLocation] = useLocation();
 
   useEffect(() => {
     if (mode === 'restore-mode' && !roomCode) {
@@ -76,6 +78,9 @@ export default function PairingPage() {
     const handleSyncProgress = (e: any) => {
       setIsSyncingOlder(true);
       setSyncBatchCount(prev => prev + 1);
+      if (e.detail?.totalBatches) {
+        setTotalBatches(e.detail.totalBatches);
+      }
     };
 
     window.addEventListener('dodi-sync-complete', handleSyncComplete);
@@ -369,6 +374,21 @@ export default function PairingPage() {
     const isRestoreFlow = searchParams.get('mode') === 'restore' || mode === 'restore-mode';
 
   if (showSuccess) {
+    const progressValue = isRestoringEssentials 
+      ? restoreProgress 
+      : isSyncingOlder 
+        ? Math.min(95, Math.floor((syncBatchCount / (totalBatches || 10)) * 100))
+        : 100;
+
+    const handleCancelSync = () => {
+      window.dispatchEvent(new CustomEvent('dodi-cancel-sync'));
+      setIsSyncingOlder(false);
+      toast({
+        title: "Sync paused",
+        description: "You can resume later when you're both online.",
+      });
+    };
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-cream via-sage/10 to-blush/20 dark:from-background dark:via-card dark:to-secondary flex items-center justify-center p-6 overflow-hidden">
         {/* Vines Animation Elements */}
@@ -430,7 +450,7 @@ export default function PairingPage() {
           </motion.div>
         </div>
 
-        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6 }} className="text-center space-y-8 max-w-md relative z-10">
+        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6 }} className="text-center space-y-8 max-w-md relative z-10 bg-white/80 dark:bg-card/80 backdrop-blur-sm p-8 rounded-3xl shadow-xl border border-sage/20">
           <motion.div 
             animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }} 
             transition={{ duration: 2, repeat: Infinity, repeatType: 'reverse' }} 
@@ -438,7 +458,7 @@ export default function PairingPage() {
           >
             <div className="absolute inset-0 bg-gold/30 rounded-full blur-3xl animate-pulse" />
             <div className="relative bg-gradient-to-br from-sage to-blush p-8 rounded-full">
-              {isRestoreFlow ? <RefreshCw className="w-20 h-20 text-white" /> : <Heart className="w-20 h-20 text-white" />}
+              {isRestoreFlow ? <RefreshCw className="w-16 h-16 text-white" /> : <Heart className="w-16 h-16 text-white" />}
             </div>
           </motion.div>
           
@@ -448,52 +468,69 @@ export default function PairingPage() {
             transition={{ delay: 0.3, duration: 0.5 }} 
             className="space-y-3"
           >
-            <h1 className="text-3xl font-light text-foreground">
+            <h1 className="text-3xl font-light text-foreground tracking-tight leading-tight">
               {isRestoreFlow ? "The Garden is" : "Your Gardens Are Now"}
+              <br />
+              <span className="font-serif text-sage dark:text-sage text-4xl block mt-2">
+                {isRestoreFlow ? "Restored ♾️" : "Eternally Connected"}
+              </span>
             </h1>
-            <p className="text-4xl font-serif text-sage dark:text-sage">
-              {isRestoreFlow ? "Restored ♾️" : "Eternally Connected"}
-            </p>
           </motion.div>
           
           <motion.p 
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 
             transition={{ delay: 0.8, duration: 0.8 }} 
-            className="text-sm text-muted-foreground leading-relaxed"
+            className="text-sm text-muted-foreground italic leading-relaxed"
           >
             {isRestoreFlow 
-              ? "Your connection has been regrown. All shared data is being synchronized now."
+              ? "Your connection has been regrown. Your shared space is blooming once again ♾️"
               : "All your messages are encrypted end-to-end and synced securely across your devices."}
           </motion.p>
 
-          {isSyncingOlder && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-sage/10 border border-sage/20 rounded-lg p-4 space-y-2"
-            >
-              <div className="flex items-center justify-center gap-2 text-sage font-medium">
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Syncing older history...</span>
+          {(isRestoringEssentials || isSyncingOlder) && (
+            <div className="space-y-4 py-4 w-full">
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-sage font-medium px-1">
+                  <span>{isRestoringEssentials ? "Restoring core..." : "Syncing history..."}</span>
+                  <span>{progressValue}%</span>
+                </div>
+                <div className="h-2 w-full bg-sage/10 rounded-full overflow-hidden">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progressValue}%` }}
+                    className="h-full bg-sage"
+                  />
+                </div>
               </div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest text-center">
-                Batch {syncBatchCount} processed
-              </p>
-            </motion.div>
+              
+              {isSyncingOlder && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleCancelSync}
+                  className="text-muted-foreground hover:text-destructive text-xs h-8 hover:bg-transparent"
+                >
+                  Cancel sync
+                </Button>
+              )}
+            </div>
           )}
 
-          {isRestoreFlow && !isSyncingOlder && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.5 }}
-              className="flex items-center justify-center gap-2 text-sage text-xs font-medium"
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.5 }}
+            className="pt-4"
+          >
+            <Button 
+              className="w-full bg-sage hover:bg-sage/90 text-white rounded-xl h-12 text-lg font-light shadow-lg shadow-sage/20"
+              onClick={() => setLocation('/chat')}
+              disabled={isRestoringEssentials}
             >
-              <Loader2 className="w-3 h-3 animate-spin" />
-              <span>Full synchronization in progress...</span>
-            </motion.div>
-          )}
+              Enter Your Garden
+            </Button>
+          </motion.div>
         </motion.div>
       </div>
     );
