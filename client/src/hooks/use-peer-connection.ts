@@ -32,13 +32,45 @@ let globalState: PeerConnectionState = {
 // Reconnection backoff state
 let reconnectAttempt = 0;
 let reconnectTimeout: NodeJS.Timeout | null = null;
+let healthCheckInterval: NodeJS.Timeout | null = null;
+let lastPongReceived = Date.now();
 const MAX_BACKOFF = 30000;
+const PING_INTERVAL = 15000;
+const PONG_TIMEOUT = 30000;
 
 function clearReconnectTimeout() {
   if (reconnectTimeout) {
     clearTimeout(reconnectTimeout);
     reconnectTimeout = null;
   }
+}
+
+function clearHealthCheck() {
+  if (healthCheckInterval) {
+    clearInterval(healthCheckInterval);
+    healthCheckInterval = null;
+  }
+}
+
+function startHealthCheck(conn: DataConnection) {
+  clearHealthCheck();
+  lastPongReceived = Date.now();
+  
+  healthCheckInterval = setInterval(() => {
+    if (conn.open) {
+      console.log('📡 Sending health check ping...');
+      conn.send({ type: 'ping', timestamp: Date.now() });
+      
+      const timeSinceLastPong = Date.now() - lastPongReceived;
+      if (timeSinceLastPong > PONG_TIMEOUT) {
+        console.warn('⚠️ No pong received in 30s - triggering reconnect');
+        conn.close();
+        startReconnecting();
+      }
+    } else {
+      clearHealthCheck();
+    }
+  }, PING_INTERVAL);
 }
 
 function startReconnecting() {
@@ -228,6 +260,7 @@ function setupConnection(conn: DataConnection) {
     console.log('✨ Persistent P2P connection established with:', conn.peer);
     reconnectAttempt = 0;
     clearReconnectTimeout();
+    startHealthCheck(conn);
     notifyListeners();
     conn.send({ type: 'ping', timestamp: Date.now() });
     
@@ -253,7 +286,15 @@ function setupConnection(conn: DataConnection) {
 
   conn.on('data', async (data: any) => {
     console.log('📩 INCOMING:', data.type || 'unknown');
-    if (data.type === 'ping') return;
+    if (data.type === 'ping') {
+      conn.send({ type: 'pong', timestamp: Date.now() });
+      return;
+    }
+    if (data.type === 'pong') {
+      console.log('✅ Pong received - connection healthy');
+      lastPongReceived = Date.now();
+      return;
+    }
 
     // Handle Reconciliation Protocol
     if (data.type === 'reconcile-init') {
@@ -271,6 +312,7 @@ function setupConnection(conn: DataConnection) {
   conn.on('close', () => {
     console.log('XY Connection lost');
     if (globalConn === conn) globalConn = null;
+    clearHealthCheck();
     notifyListeners();
     // Reconnect attempt with exponential backoff
     startReconnecting();
