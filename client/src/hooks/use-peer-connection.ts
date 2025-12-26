@@ -23,6 +23,7 @@ let globalPeer: Peer | null = null;
 let globalConn: DataConnection | null = null;
 let globalPartnerId: string | null = null;
 let globalSyncInProgress = false;
+let globalSyncCancelled = false;
 let globalState: PeerConnectionState = {
   connected: false,
   error: null,
@@ -282,6 +283,7 @@ function setupConnection(conn: DataConnection) {
   conn.on('open', async () => {
     console.log('✨ Persistent P2P connection established with:', conn.peer);
     reconnectAttempt = 0;
+    globalSyncCancelled = false; // Reset cancellation on new connection
     clearReconnectTimeout();
     startHealthCheck(conn);
     notifyListeners();
@@ -383,6 +385,10 @@ function setupConnection(conn: DataConnection) {
     }
 
     if (data.type === 'restore-batch-data') {
+      if (globalSyncCancelled) {
+        console.log('🛑 [SYNC] Restore batch ignored due to cancellation');
+        return;
+      }
       console.log('📥 Processing older data batch:', data.batch.length);
       const { saveIncomingItems } = await import('@/lib/storage-encrypted');
       
@@ -398,10 +404,12 @@ function setupConnection(conn: DataConnection) {
       
       window.dispatchEvent(new CustomEvent('dodi-sync-batch', { detail: { count: data.batch.length } }));
       
-      // Request next batch after 500ms delay
+      // Request next batch after 500ms delay, unless cancelled
       setTimeout(() => {
-        if (conn.open) {
+        if (conn.open && !globalSyncCancelled) {
           conn.send({ type: 'restore-batch-init', timestamps: data.timestamps });
+        } else if (globalSyncCancelled) {
+          console.log('🛑 [SYNC] Batch request skipped due to cancellation');
         }
       }, 500);
       return;
@@ -605,6 +613,17 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     }
     notifyListeners();
   }, [partnerId]);
+
+  // Handle sync cancellation
+  useEffect(() => {
+    const handleCancel = () => {
+      console.log('🛑 [SYNC] Global sync cancellation requested');
+      globalSyncCancelled = true;
+      globalSyncInProgress = false;
+    };
+    window.addEventListener('dodi-cancel-sync', handleCancel);
+    return () => window.removeEventListener('dodi-cancel-sync', handleCancel);
+  }, []);
 
   // Periodic health check - ensure connection is active
   useEffect(() => {

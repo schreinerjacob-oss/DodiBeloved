@@ -377,12 +377,15 @@ export default function PairingPage() {
     const progressValue = isRestoringEssentials 
       ? restoreProgress 
       : isSyncingOlder 
-        ? Math.min(95, Math.floor((syncBatchCount / (totalBatches || 10)) * 100))
+        ? Math.min(95, Math.floor((syncBatchCount / Math.max(1, totalBatches || 10)) * 100))
         : 100;
 
     const handleCancelSync = () => {
       window.dispatchEvent(new CustomEvent('dodi-cancel-sync'));
       setIsSyncingOlder(false);
+      // Ensure sync batch tracking resets
+      setSyncBatchCount(0);
+      setTotalBatches(0);
       toast({
         title: "Sync paused",
         description: "You can resume later when you're both online.",
