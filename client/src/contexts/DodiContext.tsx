@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { generatePassphrase, generateSalt, arrayBufferToBase64, base64ToArrayBuffer } from '@/lib/crypto';
 import { saveSetting, getSetting, initDB, clearEncryptionCache, savePIN, verifyPIN } from '@/lib/storage-encrypted';
-import { getTrialStatus } from '@/lib/storage-subscription';
 import { useInactivityTimer } from '@/hooks/use-inactivity-timer';
 import { nanoid } from 'nanoid';
 
@@ -15,8 +14,6 @@ interface DodiContextType {
   pairingStatus: PairingStatus;
   isPaired: boolean;
   isOnline: boolean;
-  isTrialActive: boolean;
-  trialDaysRemaining: number;
   isLocked: boolean;
   pinEnabled: boolean;
   showPinSetup: boolean;
@@ -45,8 +42,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const [passphrase, setPassphrase] = useState<string | null>(null);
   const [pairingStatus, setPairingStatus] = useState<PairingStatus>('unpaired');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isTrialActive, setIsTrialActive] = useState(true);
-  const [trialDaysRemaining, setTrialDaysRemaining] = useState(30);
   const [isLocked, setIsLocked] = useState(false);
   const [pinEnabled, setPinEnabled] = useState(false);
   const [showPinSetup, setShowPinSetup] = useState(false);
@@ -123,42 +118,17 @@ export function DodiProvider({ children }: { children: ReactNode }) {
             setInactivityMinutesState(minutes);
           }
         }
-
-        const trialStatus = await getTrialStatus();
-        setIsTrialActive(trialStatus.isActive);
-        setTrialDaysRemaining(trialStatus.daysRemaining);
       } catch (error) {
         console.error('Failed to load pairing data:', error);
       }
     };
 
-    const updateTrialStatus = async () => {
-      try {
-        const trialStatus = await getTrialStatus();
-        setIsTrialActive(trialStatus.isActive);
-        setTrialDaysRemaining(trialStatus.daysRemaining);
-      } catch (error) {
-        console.error('Failed to update trial status:', error);
-      }
-    };
-
     loadPairingData();
-
-    const trialCheckInterval = setInterval(updateTrialStatus, 60000);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        updateTrialStatus();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     window.addEventListener('online', () => setIsOnline(true));
     window.addEventListener('offline', () => setIsOnline(false));
 
     return () => {
-      clearInterval(trialCheckInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('online', () => setIsOnline(true));
       window.removeEventListener('offline', () => setIsOnline(false));
     };
@@ -425,8 +395,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         pairingStatus,
         isPaired,
         isOnline,
-        isTrialActive,
-        trialDaysRemaining,
         isLocked,
         pinEnabled,
         showPinSetup,

@@ -300,6 +300,11 @@ export async function getAllCalendarEvents(): Promise<CalendarEvent[]> {
   return Promise.all(encryptedEvents.map(enc => decryptCalendarEvent(enc)));
 }
 
+export async function deleteCalendarEvent(id: string): Promise<void> {
+  const db = await initDB();
+  await db.delete('calendarEvents', id);
+}
+
 export async function saveDailyRitual(ritual: DailyRitual): Promise<void> {
   try {
     const db = await initDB();
