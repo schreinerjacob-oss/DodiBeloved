@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import type { SyncMessage } from '@/types';
 import Peer, { type DataConnection } from 'peerjs';
+import { initializeBackgroundSync } from '@/lib/background-sync';
+import { notifyConnectionRestored } from '@/lib/notifications';
 
 interface PeerConnectionState {
   connected: boolean;
@@ -19,6 +21,7 @@ interface UsePeerConnectionReturn {
 // Global singleton variables to persist across renders
 let globalPeer: Peer | null = null;
 let globalConn: DataConnection | null = null;
+let globalPartnerId: string | null = null;
 let globalState: PeerConnectionState = {
   connected: false,
   error: null,
@@ -79,7 +82,8 @@ async function flushOfflineQueue(conn: DataConnection) {
   if (queueFlushInProgress || offlineQueue.length === 0) return;
   
   queueFlushInProgress = true;
-  console.log('🔄 Flushing offline queue:', offlineQueue.length, 'messages');
+  const queueSize = offlineQueue.length;
+  console.log('🔄 Flushing offline queue:', queueSize, 'messages');
   
   const toSend = [...offlineQueue];
   offlineQueue = [];
@@ -98,6 +102,11 @@ async function flushOfflineQueue(conn: DataConnection) {
   
   queueFlushInProgress = false;
   console.log('✅ Offline queue flushed');
+  
+  // Notify user that queued messages were delivered
+  if (queueSize > 0) {
+    notifyConnectionRestored();
+  }
 }
 
 // Setup data connection - called globally
@@ -130,9 +139,8 @@ function setupConnection(conn: DataConnection) {
     console.log('XY Connection lost');
     if (globalConn === conn) globalConn = null;
     notifyListeners();
-    // Attempt reconnect after delay
-    const { partnerId } = useDodi();
-    if (partnerId) setTimeout(() => connectToPartner(partnerId), 3000);
+    // Attempt reconnect after delay using cached partnerId
+    if (globalPartnerId) setTimeout(() => connectToPartner(globalPartnerId!), 3000);
   });
 
   conn.on('error', (err) => {
@@ -221,6 +229,9 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   useEffect(() => {
     if (!partnerId || !globalPeer || globalPeer.destroyed) return;
     
+    // Cache partnerId globally for reconnection handlers
+    globalPartnerId = partnerId;
+    
     console.log('🔗 partnerId changed, connecting to:', partnerId);
     connectToPartner(partnerId);
   }, [partnerId]);
@@ -257,6 +268,18 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     }, 5000);
     return () => clearInterval(interval);
   }, [partnerId]);
+
+  // Initialize background sync for reconnection when app is backgrounded
+  useEffect(() => {
+    if (pairingStatus !== 'connected' || !partnerId) return;
+    
+    initializeBackgroundSync(() => {
+      console.log('⏰ Background sync: attempting P2P reconnect');
+      if (!globalConn || !globalConn.open) {
+        connectToPartner(partnerId);
+      }
+    });
+  }, [pairingStatus, partnerId]);
 
   // Subscribe to queue changes
   useEffect(() => {

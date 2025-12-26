@@ -48,6 +48,20 @@ self.addEventListener('notificationclick', event => {
   );
 });
 
+self.addEventListener('periodicsync', event => {
+  if (event.tag === 'dodi-reconnect') {
+    console.log('⏰ [SW] Periodic sync: dodi-reconnect triggered');
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then(windowClients => {
+          for (const client of windowClients) {
+            client.postMessage({ type: 'background-reconnect' });
+          }
+        })
+    );
+  }
+});
+
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') {
     return;

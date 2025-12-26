@@ -151,3 +151,17 @@ export async function notifyCalendarEvent(): Promise<boolean> {
     'A new moment was added to your calendar'
   );
 }
+
+export async function notifyMessageQueued(): Promise<boolean> {
+  return showLocalNotification(
+    '📤 dodi',
+    'Message queued for your partner'
+  );
+}
+
+export async function notifyConnectionRestored(): Promise<boolean> {
+  return showLocalNotification(
+    '💚 dodi',
+    'Connection restored - messages delivered'
+  );
+}

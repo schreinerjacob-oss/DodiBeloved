@@ -9,7 +9,7 @@ import { Heart, Send, Image, Mic, Lock, Eye, EyeOff, ChevronUp, Check, CheckChec
 import { getMessages, saveMessage } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { MessageMediaImage } from '@/components/message-media-image';
-import { notifyNewMessage } from '@/lib/notifications';
+import { notifyNewMessage, notifyMessageQueued } from '@/lib/notifications';
 import type { Message, SyncMessage } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
@@ -296,6 +296,9 @@ export default function ChatPage() {
           m.id === messageId ? { ...m, status: 'sent' } : m
         ));
       } else {
+        // Notify sender that message is queued
+        notifyMessageQueued();
+        
         // Show toast for offline queue confirmation
         toast({
           title: "Message queued",
