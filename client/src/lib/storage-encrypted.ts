@@ -142,14 +142,14 @@ export async function savePIN(pin: string, passphrase: string): Promise<void> {
     const db = await initDB();
     const storedSalt = await getSettingRaw('salt');
     
-    if (!storedSalt || !storedSalt.value) {
+    if (!storedSalt) {
       throw new Error('Salt not available');
     }
 
     // Safely decode salt with validation
     let salt: Uint8Array;
     try {
-      salt = base64ToArrayBuffer(storedSalt.value as string);
+      salt = base64ToArrayBuffer(storedSalt);
     } catch (e) {
       console.error('Failed to decode salt:', e);
       throw new Error('Invalid salt format');
@@ -192,14 +192,14 @@ export async function verifyPINAndGetPassphrase(pin: string): Promise<string | n
     const storedSalt = await getSettingRaw('salt');
     const storedEncryptedPassphrase = await db.get('settings', 'encryptedPassphrase');
     
-    if (!storedSalt || !storedSalt.value || !storedEncryptedPassphrase) {
+    if (!storedSalt || !storedEncryptedPassphrase) {
       return null;
     }
 
     // Safely decode salt with validation
     let salt: Uint8Array;
     try {
-      salt = base64ToArrayBuffer(storedSalt.value as string);
+      salt = base64ToArrayBuffer(storedSalt);
     } catch (e) {
       console.error('Failed to decode salt:', e);
       return null;

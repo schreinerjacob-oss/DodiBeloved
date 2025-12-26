@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
-import { Heart, Send, Image, Mic, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star } from 'lucide-react';
+import { Heart, Send, Image, Mic, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock } from 'lucide-react';
 import { getMessages, saveMessage } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { MessageMediaImage } from '@/components/message-media-image';
@@ -19,6 +19,8 @@ const QUICK_REACTIONS = [
   { id: 'like', icon: ThumbsUp, color: 'text-blue-400' },
   { id: 'star', icon: Star, color: 'text-yellow-400' },
 ];
+
+const MESSAGES_PER_PAGE = 50;
 
 export default function ChatPage() {
   const { userId, partnerId, isOnline } = useDodi();
@@ -107,7 +109,7 @@ export default function ChatPage() {
             console.log('💾 [P2P] Saving partner message:', incomingMessage.id);
             
             // If mediaUrl is ArrayBuffer (binary image data), convert to Blob and save
-            if (incomingMessage.mediaUrl && typeof incomingMessage.mediaUrl === 'object' && incomingMessage.mediaUrl instanceof ArrayBuffer) {
+            if (incomingMessage.mediaUrl && typeof incomingMessage.mediaUrl === 'object' && (incomingMessage.mediaUrl as unknown) instanceof ArrayBuffer) {
               const { saveMediaBlob } = await import('@/lib/storage');
               const blob = new Blob([incomingMessage.mediaUrl], { type: 'image/jpeg' });
               await saveMediaBlob(incomingMessage.id, blob, 'message');
@@ -146,12 +148,12 @@ export default function ChatPage() {
       }
     };
 
-    window.addEventListener('p2p-message', handleP2pMessage as EventListener);
+    window.addEventListener('p2p-message', handleP2pMessage as unknown as EventListener);
     console.log('✅ [P2P] Chat: P2P message listener attached');
     
     return () => {
       console.log('🧹 [P2P] Chat: Cleaning up P2P message listener');
-      window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
+      window.removeEventListener('p2p-message', handleP2pMessage as unknown as EventListener);
     };
   }, [peerState.connected, partnerId, lastSyncedTimestamp]);
 
@@ -160,6 +162,22 @@ export default function ChatPage() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Update queued messages to 'sent' when connection is restored
+  useEffect(() => {
+    if (peerState.connected) {
+      setMessages(prev => {
+        const hasQueued = prev.some(m => m.status === 'queued');
+        if (hasQueued) {
+          console.log('🔄 [P2P] Connection restored - updating queued messages to sent');
+          return prev.map(m => 
+            m.status === 'queued' ? { ...m, status: 'sent' as const } : m
+          );
+        }
+        return prev;
+      });
+    }
+  }, [peerState.connected]);
 
   const loadMessages = async () => {
     const msgs = await getMessages(MESSAGES_PER_PAGE, 0);
@@ -231,20 +249,15 @@ export default function ChatPage() {
       return;
     }
 
-    if (!peerState.connected) {
-      toast({
-        title: "Connection lost",
-        description: "Waiting for P2P connection to your beloved...",
-        variant: "destructive",
-      });
-      return;
-    }
+    // OFFLINE QUEUING: Don't block when offline - let P2P layer queue it
+    const isOffline = !peerState.connected;
 
     setSending(true);
     try {
       const messageId = nanoid();
       const now = new Date();
       
+      // Use 'queued' status when offline, 'sending' when online
       const message: Message = {
         id: messageId,
         senderId: userId,
@@ -254,28 +267,36 @@ export default function ChatPage() {
         mediaUrl: null,
         isDisappearing,
         timestamp: now,
-        status: 'sending',
+        status: isOffline ? 'queued' : 'sending',
       };
 
-      // Save to IndexedDB first
+      // Save to IndexedDB first (encrypted) - works offline
       await saveMessage(message);
 
       // Add to local state immediately
       setMessages(prev => [...prev, message]);
       setNewMessage('');
 
-      // Send via P2P data channel
-      console.log('📤 [P2P] Sending message via P2P:', messageId);
+      // Send via P2P data channel - if offline, P2P layer queues it automatically
+      console.log(`📤 [P2P] ${isOffline ? 'Queueing' : 'Sending'} message:`, messageId);
       sendP2P({
         type: 'message',
         data: message,
         timestamp: Date.now(),
       });
 
-      // Update to sent status immediately (before ACK)
-      setMessages(prev => prev.map(m => 
-        m.id === messageId ? { ...m, status: 'sent' } : m
-      ));
+      // Update status based on connection state
+      if (!isOffline) {
+        setMessages(prev => prev.map(m => 
+          m.id === messageId ? { ...m, status: 'sent' } : m
+        ));
+      } else {
+        // Show toast for offline queue confirmation
+        toast({
+          title: "Message queued",
+          description: "Will be sent when connection is restored",
+        });
+      }
       
       if (isDisappearing) {
         setTimeout(() => {
@@ -518,6 +539,7 @@ export default function ChatPage() {
                           </p>
                           {isSent && (
                             <div className="ml-2">
+                              {message.status === 'queued' && <Clock className="w-3 h-3 text-amber-500" />}
                               {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
                               {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
                               {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
@@ -535,6 +557,7 @@ export default function ChatPage() {
                           </p>
                           {isSent && (
                             <div className="ml-2">
+                              {message.status === 'queued' && <Clock className="w-3 h-3 text-amber-500" />}
                               {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
                               {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
                               {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}

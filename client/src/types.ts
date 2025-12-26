@@ -14,7 +14,7 @@ export interface Message {
   type?: 'text' | 'image' | 'voice';
   mediaUrl?: string | null;
   isDisappearing?: boolean | null;
-  status?: 'sending' | 'sent' | 'delivered' | 'read';
+  status?: 'sending' | 'sent' | 'delivered' | 'read' | 'queued';
   reactions?: { [userId: string]: string };
 }
 
@@ -61,6 +61,17 @@ export interface LoveLetter {
   content: string;
   createdAt: Date;
   isRead?: boolean;
+}
+
+export interface FutureLetter {
+  id: string;
+  authorId: string;
+  recipientId: string;
+  title: string;
+  content: string;
+  createdAt: Date;
+  unlockDate: Date;
+  isUnlocked?: boolean;
 }
 
 

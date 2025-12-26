@@ -25,7 +25,7 @@ export function GlobalSyncHandler() {
             console.log('📸 [SYNC] Received memory:', incomingMemory.id);
             
             // If mediaUrl is ArrayBuffer (binary image data), convert to Blob and save
-            if (incomingMemory.mediaUrl && typeof incomingMemory.mediaUrl === 'object' && incomingMemory.mediaUrl instanceof ArrayBuffer) {
+            if (incomingMemory.mediaUrl && typeof incomingMemory.mediaUrl === 'object' && (incomingMemory.mediaUrl as unknown) instanceof ArrayBuffer) {
               const { saveMediaBlob } = await import('@/lib/storage');
               const blob = new Blob([incomingMemory.mediaUrl], { type: 'image/jpeg' });
               await saveMediaBlob(incomingMemory.id, blob, 'memory');
@@ -85,11 +85,11 @@ export function GlobalSyncHandler() {
       }
     };
 
-    window.addEventListener('p2p-message', handleP2pMessage as EventListener);
+    window.addEventListener('p2p-message', handleP2pMessage as unknown as EventListener);
     console.log('🔄 [SYNC] Global sync handler activated');
     
     return () => {
-      window.removeEventListener('p2p-message', handleP2pMessage as EventListener);
+      window.removeEventListener('p2p-message', handleP2pMessage as unknown as EventListener);
     };
   }, [peerState.connected, partnerId, userId]);
 
