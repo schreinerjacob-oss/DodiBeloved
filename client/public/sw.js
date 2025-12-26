@@ -62,6 +62,22 @@ self.addEventListener('periodicsync', event => {
   }
 });
 
+self.addEventListener('push', event => {
+  console.log('📩 [SW] Push signal received:', event.data?.text());
+  
+  // Try to wake up app and trigger reconnect
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then(windowClients => {
+        if (windowClients.length > 0) {
+          for (const client of windowClients) {
+            client.postMessage({ type: 'background-reconnect' });
+          }
+        }
+      })
+  );
+});
+
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') {
     return;

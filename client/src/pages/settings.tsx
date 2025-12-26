@@ -45,6 +45,7 @@ export default function SettingsPage() {
   const [confirmPin, setConfirmPin] = useState('');
   const [pinSaving, setPinSaving] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [allowWakeUp, setAllowWakeUp] = useState(true);
 
   const handleCopyUserId = () => {
     if (userId) {
@@ -288,6 +289,25 @@ export default function SettingsPage() {
                 </div>
               </DialogContent>
             </Dialog>
+          </Card>
+
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Sparkles className="w-5 h-5 text-gold" />
+                <div>
+                  <h3 className="font-medium">Wake-up Pings</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Allow partner to wake app via signaling relay
+                  </p>
+                </div>
+              </div>
+              <Switch 
+                checked={allowWakeUp} 
+                onCheckedChange={setAllowWakeUp}
+                data-testid="switch-wake-up-ping"
+              />
+            </div>
           </Card>
 
           <Card className="p-6 space-y-4">
