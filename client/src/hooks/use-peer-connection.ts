@@ -199,75 +199,85 @@ function setupConnection(conn: DataConnection) {
 
   globalConn = conn;
 
+  const syncInProgress = useEffect(() => { return { current: false }; }, []).current;
+
+  const sync = useCallback(async (conn: DataConnection) => {
+    if (syncInProgress.current) return;
+    syncInProgress.current = true;
+    
+    try {
+      console.log('🔄 [SYNC] Starting reconciliation handshake...');
+      const { getLastSynced } = await import('@/lib/storage-encrypted');
+      const stores = ['messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions'];
+      const lastSyncedTimestamps: Record<string, number> = {};
+      
+      for (const store of stores) {
+        lastSyncedTimestamps[store] = await getLastSynced(store);
+      }
+      
+      conn.send({
+        type: 'reconcile-init',
+        timestamps: lastSyncedTimestamps
+      });
+    } catch (err) {
+      console.error('❌ [SYNC] Reconciliation initiation failed:', err);
+      syncInProgress.current = false;
+    }
+  }, []);
+
   async function handleReconcileInit(conn: DataConnection, partnerTimestamps: any) {
     try {
-      const { getMessages, getMemories, getAllPrayers, getAllLoveLetters } = await import('@/lib/storage-encrypted');
-      const batch: SyncMessage[] = [];
+      const { getItemsSince } = await import('@/lib/storage-encrypted');
+      const stores = ['messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions'] as const;
+      const batch: any[] = [];
 
-      // Fetch missing chat
-      const messages = await getMessages(1000, 0);
-      messages.filter((m: any) => m.timestamp && Number(m.timestamp) > (Number(partnerTimestamps.chat) || 0))
-              .forEach((m: any) => batch.push({ type: 'chat', data: m, timestamp: Number(m.timestamp) }));
-
-      // Fetch missing memories
-      const memories = await getMemories(1000, 0);
-      memories.filter((m: any) => m.timestamp && Number(m.timestamp) > (partnerTimestamps.memories || 0))
-              .forEach((m: any) => batch.push({ type: 'memory', data: m, timestamp: Number(m.timestamp) }));
-
-      // Fetch missing prayers
-      const prayers = await getAllPrayers();
-      prayers.filter((p: any) => p.timestamp && Number(p.timestamp) > (partnerTimestamps.prayers || 0))
-              .forEach((p: any) => batch.push({ type: 'prayer', data: p, timestamp: Number(p.timestamp) }));
-
-      // Fetch missing letters
-      const letters = await getAllLoveLetters();
-      letters.filter((l: any) => l.timestamp && Number(l.timestamp) > (partnerTimestamps.letters || 0))
-             .forEach((l: any) => batch.push({ type: 'love_letter', data: l, timestamp: Number(l.timestamp) }));
+      for (const storeName of stores) {
+        const remoteLastSynced = partnerTimestamps[storeName] || 0;
+        const localNewItems = await getItemsSince(storeName, remoteLastSynced);
+        localNewItems.forEach(item => {
+          batch.push({ store: storeName, data: item, timestamp: item.updatedAt || item.timestamp || Date.now() });
+        });
+      }
 
       if (batch.length > 0) {
         console.log('📤 Sending reconciliation batch:', batch.length);
         conn.send({ type: 'reconcile-data', batch });
+      } else {
+        console.log('✨ [SYNC] No new items to sync to partner.');
       }
     } catch (e) {
       console.error('Reconciliation push failed:', e);
     }
   }
 
-  async function handleReconcileData(batch: SyncMessage[]) {
+  async function handleReconcileData(batch: any[]) {
     console.log('📥 Processing reconciliation batch:', batch.length);
-    const { setLastSynced, saveMessage, saveMemory, savePrayer, saveLoveLetter } = await import('@/lib/storage-encrypted');
+    const { setLastSynced, saveIncomingItems } = await import('@/lib/storage-encrypted');
     
-    for (const msg of batch) {
-      // Save data locally before dispatching
+    const itemsByStore: Record<string, any[]> = {};
+    for (const item of batch) {
+      if (!itemsByStore[item.store]) itemsByStore[item.store] = [];
+      itemsByStore[item.store].push(item.data);
+    }
+
+    let totalApplied = 0;
+    for (const [storeName, items] of Object.entries(itemsByStore)) {
       try {
-        if (msg.type === 'chat') await saveMessage(msg.data as any);
-        else if (msg.type === 'memory') await saveMemory(msg.data as any);
-        else if (msg.type === 'prayer') await savePrayer(msg.data as any);
-        else if (msg.type === 'love_letter') await saveLoveLetter(msg.data as any);
-      } catch (e) {
-        console.error('Failed to save reconciled item:', e);
-      }
-      
-      window.dispatchEvent(new CustomEvent('p2p-message', { detail: msg }));
-    }
-    
-    // Update lastSynced for each category based on batch
-    const categories = ['chat', 'memory', 'prayer', 'love_letter'];
-    for (const cat of categories) {
-      const catMsgs = batch.filter(m => m.type === cat);
-      if (catMsgs.length > 0) {
-        const newest = Math.max(...catMsgs.map(m => m.timestamp ? Number(m.timestamp) : 0));
+        await saveIncomingItems(storeName as any, items);
+        totalApplied += items.length;
+        const newest = Math.max(...batch.filter(b => b.store === storeName).map(b => Number(b.timestamp)));
         if (newest > 0) {
-          const storeKey = cat === 'memory' ? 'memories' : cat === 'love_letter' ? 'letters' : cat === 'prayer' ? 'prayers' : 'chat';
-          await setLastSynced(storeKey, newest);
+          await setLastSynced(storeName, newest);
         }
+      } catch (e) {
+        console.error(`Failed to save reconciled items for ${storeName}:`, e);
       }
     }
     
-    if (batch.length > 0) {
-      console.log(`✅ Reconciled ${batch.length} messages/memories from partner since last sync`);
-      window.dispatchEvent(new CustomEvent('reconciliation-complete', { detail: { count: batch.length } }));
-    }
+    console.log(`✅ Reconciled ${totalApplied} items from partner since last sync`);
+    syncInProgress.current = false;
+    window.dispatchEvent(new CustomEvent('reconciliation-complete', { detail: { count: totalApplied } }));
+    import('@/lib/queryClient').then(({ queryClient }) => queryClient.invalidateQueries());
   }
 
   conn.on('open', async () => {
@@ -281,12 +291,11 @@ function setupConnection(conn: DataConnection) {
     // START RECONCILIATION
     try {
       const { getLastSynced } = await import('@/lib/storage-encrypted');
-      const lastSyncedTimestamps = {
-        chat: await getLastSynced('chat'),
-        memories: await getLastSynced('memories'),
-        prayers: await getLastSynced('prayers'),
-        letters: await getLastSynced('letters'),
-      };
+      const stores = ['messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions'] as const;
+      const lastSyncedTimestamps: Record<string, number> = {};
+      for (const store of stores) {
+        lastSyncedTimestamps[store] = await getLastSynced(store);
+      }
       console.log('📡 Initiating reconciliation with timestamps:', lastSyncedTimestamps);
       conn.send({ type: 'reconcile-init', timestamps: lastSyncedTimestamps });
     } catch (e) {

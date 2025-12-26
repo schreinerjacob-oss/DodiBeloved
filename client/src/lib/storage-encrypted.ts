@@ -290,20 +290,39 @@ export async function verifyPIN(pin: string): Promise<boolean> {
   }
 }
 
-export async function saveMessage(message: Message): Promise<void> {
-  try {
-    const db = await initDB();
-    const encrypted = await encryptMessage(message);
-    // Preserve the ID as the primary key while storing encrypted blob
-    const record = {
-      id: message.id,
-      ...encrypted,
-    };
-    await db.put('messages', record);
-  } catch (error) {
-    console.error('Failed to save message:', error);
-    throw error;
+// Helper types for storage operations
+type StoreName = 'messages' | 'memories' | 'calendarEvents' | 'dailyRituals' | 'loveLetters' | 'futureLetters' | 'prayers' | 'reactions' | 'settings';
+
+export async function getItemsSince(storeName: StoreName, timestamp: number): Promise<any[]> {
+  const db = await initDBRaw();
+  const tx = db.transaction(storeName, 'readonly');
+  const store = tx.objectStore(storeName);
+  const items = await store.getAll();
+  // Filter by updatedAt if it exists, otherwise use timestamp, then filter by the provided timestamp
+  return items.filter(item => {
+    const itemTime = Number(item.updatedAt || item.timestamp || 0);
+    return itemTime > timestamp;
+  });
+}
+
+export async function saveIncomingItems(storeName: StoreName, items: any[]): Promise<void> {
+  const db = await initDBRaw();
+  const tx = db.transaction(storeName, 'readwrite');
+  const store = tx.objectStore(storeName);
+  for (const item of items) {
+    await store.put(item);
   }
+  await tx.done;
+}
+
+export async function clearAllData(): Promise<void> {
+  const db = await initDBRaw();
+  const stores: StoreName[] = ['messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions', 'settings'];
+  const tx = db.transaction(stores, 'readwrite');
+  for (const store of stores) {
+    await tx.objectStore(store).clear();
+  }
+  await tx.done;
 }
 
 // REMOVED DUPLICATE getAllMessages
