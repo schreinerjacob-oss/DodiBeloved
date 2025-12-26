@@ -309,6 +309,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     if (globalPeer) globalPeer.destroy();
 
     console.log('🌐 Starting P2P Network Service for:', userId);
+    console.log('📡 ICE gathering started');
     
     const peer = new Peer(userId, {
       host: '0.peerjs.com',
@@ -318,8 +319,11 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun.stunprotocol.org:3478' },
           { urls: 'stun:global.stun.twilio.com:3478' }
-        ]
+        ],
+        iceTransportPolicy: 'all',
+        iceCandidatePoolSize: 10
       }
     });
 
