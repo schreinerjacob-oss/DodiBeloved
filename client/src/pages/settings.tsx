@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
+import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -32,9 +33,10 @@ import {
 import { savePIN, verifyPINAndGetPassphrase } from '@/lib/storage-encrypted';
 
 export default function SettingsPage() {
-  const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp } = useDodi();
+  const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp, isPaired } = useDodi();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const { reconnect } = usePeerConnection();
+  const [isSyncing, setIsSyncing] = useState(false);
   const [copiedUserId, setCopiedUserId] = useState(false);
   const [copiedPassphrase, setCopiedPassphrase] = useState(false);
   const [copiedPartnerId, setCopiedPartnerId] = useState(false);
@@ -45,6 +47,30 @@ export default function SettingsPage() {
   const [confirmPin, setConfirmPin] = useState('');
   const [pinSaving, setPinSaving] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+
+  const handleSyncNow = async () => {
+    if (!isPaired) {
+      toast({
+        title: "Not paired",
+        description: "Pair with your partner to sync data.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsSyncing(true);
+    toast({
+      title: "Syncing...",
+      description: "Reconciling data with your partner."
+    });
+    
+    reconnect();
+    
+    // Manual sync trigger - wait for connection
+    setTimeout(() => {
+      setIsSyncing(false);
+    }, 5000);
+  };
 
   const handleCopyUserId = () => {
     if (userId) {
@@ -180,6 +206,30 @@ export default function SettingsPage() {
 
       <ScrollArea className="flex-1 p-6">
         <div className="max-w-2xl mx-auto space-y-6">
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Heart className="w-5 h-5 text-accent" />
+                <div>
+                  <h3 className="font-medium">Data Sync</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Ensure both devices are true mirrors
+                  </p>
+                </div>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleSyncNow}
+                disabled={isSyncing}
+                className="hover-elevate"
+              >
+                <Sparkles className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Syncing...' : 'Sync Now'}
+              </Button>
+            </div>
+          </Card>
+
           <Card className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">

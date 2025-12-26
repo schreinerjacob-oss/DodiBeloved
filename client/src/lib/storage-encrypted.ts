@@ -13,7 +13,8 @@ export const saveSetting = saveSettingRaw;
 export async function getMessages(limit: number = 50, offset: number = 0): Promise<Message[]> {
   const db = await initDBRaw();
   const allEncrypted = await db.getAllFromIndex('messages', 'timestamp');
-  const sliced = allEncrypted.slice(Math.max(0, allEncrypted.length - offset - limit), allEncrypted.length - offset);
+  const sorted = allEncrypted.sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
+  const sliced = sorted.slice(Math.max(0, sorted.length - offset - limit), sorted.length - offset);
   return Promise.all(sliced.map(enc => decryptMessage(enc)));
 }
 
@@ -21,20 +22,61 @@ export async function getMessages(limit: number = 50, offset: number = 0): Promi
 export async function getMemories(limit: number = 20, offset: number = 0): Promise<Memory[]> {
   const db = await initDBRaw();
   const allEncrypted = await db.getAllFromIndex('memories', 'timestamp');
-  const sliced = allEncrypted.slice(Math.max(0, allEncrypted.length - offset - limit), allEncrypted.length - offset);
+  const sorted = allEncrypted.sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
+  const sliced = sorted.slice(Math.max(0, sorted.length - offset - limit), sorted.length - offset);
   return Promise.all(sliced.map(enc => decryptMemory(enc)));
 }
 
 // Sync Tracking
 export async function getLastSynced(category: string): Promise<number> {
-  const db = await initDB();
-  const setting = await db.get('settings', `lastSynced_${category}`);
-  return setting ? Number(setting.value) : 0;
+  const db = await initDBRaw();
+  const setting = await getSettingRaw(`lastSynced_${category}`);
+  return setting ? Number(setting) : 0;
 }
 
 export async function setLastSynced(category: string, timestamp: number): Promise<void> {
+  await saveSettingRaw(`lastSynced_${category}`, String(timestamp));
+}
+
+// REMOVED DUPLICATE getAllMessages
+
+// REMOVED DUPLICATE getAllMemories
+
+export async function getAllPrayers(): Promise<Prayer[]> {
   const db = await initDB();
-  await db.put('settings', { key: `lastSynced_${category}`, value: String(timestamp) });
+  const allEncrypted = await db.getAll('loveLetters');
+  const decrypted = await Promise.all(
+    allEncrypted.map(async (enc) => {
+      try {
+        const dec = await decryptPrayer(enc);
+        // Only return true prayers, not future letters
+        if (dec && 'gratitude' in dec) {
+          return dec as Prayer;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    })
+  );
+  return decrypted.filter((item): item is Prayer => item !== null);
+}
+
+export async function getAllLoveLetters(): Promise<LoveLetter[]> {
+  const db = await initDB();
+  const allEncrypted = await db.getAll('loveLetters');
+  const decrypted = await Promise.all(
+    allEncrypted.map(async (enc) => {
+      try {
+        const dec = await decryptLoveLetter(enc);
+        // Only return true love letters, not prayers or future letters
+        return dec && !('gratitude' in dec) && !('unlockDate' in dec) ? dec : null;
+      } catch {
+        return null;
+      }
+    })
+  );
+  return decrypted.filter((item): item is LoveLetter => item !== null);
 }
 
 export async function getEncryptionKey(): Promise<CryptoKey> {
@@ -264,11 +306,7 @@ export async function saveMessage(message: Message): Promise<void> {
   }
 }
 
-export async function getAllMessages(): Promise<Message[]> {
-  const db = await initDB();
-  const encryptedMessages = await db.getAll('messages');
-  return Promise.all(encryptedMessages.map(enc => decryptMessage(enc)));
-}
+// REMOVED DUPLICATE getAllMessages
 
 export async function saveMemory(memory: Memory): Promise<void> {
   try {
@@ -285,11 +323,7 @@ export async function saveMemory(memory: Memory): Promise<void> {
   }
 }
 
-export async function getAllMemories(): Promise<Memory[]> {
-  const db = await initDB();
-  const encryptedMemories = await db.getAll('memories');
-  return Promise.all(encryptedMemories.map(enc => decryptMemory(enc)));
-}
+// REMOVED DUPLICATE getAllMemories
 
 export async function saveCalendarEvent(event: CalendarEvent): Promise<void> {
   try {
@@ -353,11 +387,7 @@ export async function saveLoveLetter(letter: LoveLetter): Promise<void> {
   }
 }
 
-export async function getAllLoveLetters(): Promise<LoveLetter[]> {
-  const db = await initDB();
-  const encryptedLetters = await db.getAll('loveLetters');
-  return Promise.all(encryptedLetters.map(enc => decryptLoveLetter(enc)));
-}
+// REMOVED DUPLICATE getAllLoveLetters
 
 export async function saveFutureLetter(letter: FutureLetter): Promise<void> {
   const db = await initDB();
@@ -390,22 +420,7 @@ export async function savePrayer(prayer: Prayer): Promise<void> {
   await db.put('loveLetters', withId);
 }
 
-export async function getAllPrayers(): Promise<Prayer[]> {
-  const db = await initDB();
-  const allEncrypted = await db.getAll('loveLetters');
-  const decrypted = await Promise.all(
-    allEncrypted.map(async (enc) => {
-      try {
-        return await decryptPrayer(enc);
-      } catch {
-        return null;
-      }
-    })
-  );
-  return decrypted.filter((item): item is Prayer => 
-    item !== null && 'gratitude' in item
-  );
-}
+// REMOVED DUPLICATE getAllPrayers
 
 export async function saveReaction(reaction: Reaction): Promise<void> {
   try {
