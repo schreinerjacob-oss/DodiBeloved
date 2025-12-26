@@ -530,6 +530,7 @@ export async function getBatchForRestore(stores: readonly StoreName[], partnerTi
   
   return batch;
 }
+
 export async function saveReaction(reaction: Reaction): Promise<void> {
   try {
     const db = await initDB();
@@ -538,14 +539,6 @@ export async function saveReaction(reaction: Reaction): Promise<void> {
       id: reaction.id,
       ...encrypted,
       timestamp: reaction.timestamp,
-    };
-    await db.put('reactions', record);
-  } catch (error) {
-    console.error('Failed to save reaction:', error);
-    throw error;
-  }
-}
-      ...encrypted,
     };
     await db.put('reactions', record);
   } catch (error) {
