@@ -84,6 +84,7 @@ function startReconnecting() {
   const backoff = Math.min(Math.pow(2, reconnectAttempt) * 1000, MAX_BACKOFF);
   console.log(`📡 Reconnecting in ${backoff / 1000} seconds (Attempt ${reconnectAttempt + 1})`);
   
+  firstMessageSentAfterReconnect = null;
   clearReconnectTimeout();
   reconnectTimeout = setTimeout(() => {
     reconnectAttempt++;
@@ -287,6 +288,13 @@ function setupConnection(conn: DataConnection) {
 
   conn.on('data', async (data: any) => {
     console.log('📩 INCOMING:', data.type || 'unknown');
+    
+    if (data.timestamp && firstMessageSentAfterReconnect) {
+      const latency = Date.now() - firstMessageSentAfterReconnect;
+      console.log(`⏱️ [LATENCY] First message after reconnect: ${latency}ms`);
+      firstMessageSentAfterReconnect = null;
+    }
+
     if (data.type === 'ping') {
       conn.send({ type: 'pong', timestamp: Date.now() });
       return;
@@ -418,6 +426,9 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
   const send = useCallback((message: SyncMessage) => {
     if (globalConn && globalConn.open) {
+      if (firstMessageSentAfterReconnect === null) {
+        firstMessageSentAfterReconnect = Date.now();
+      }
       globalConn.send(message);
       console.log('📤 Sent:', message.type);
     } else {
