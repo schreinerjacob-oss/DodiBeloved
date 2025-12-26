@@ -417,6 +417,12 @@ function setupConnection(conn: DataConnection) {
 
     if (data.type === 'restore-batch-complete') {
       window.dispatchEvent(new CustomEvent('dodi-sync-complete'));
+      import('@/hooks/use-toast').then(({ toast }) => {
+        toast({
+          title: "The garden is fully restored ♾️",
+          description: "Your entire shared history has been synchronized.",
+        });
+      });
       return;
     }
 
