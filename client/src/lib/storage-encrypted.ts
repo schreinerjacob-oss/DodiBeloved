@@ -509,19 +509,6 @@ export async function getBatchForRestore(stores: readonly StoreName[], partnerTi
     const partnerLastSynced = partnerTimestamps[storeName] || 0;
     const allItems = await db.getAll(storeName);
     
-    // Find items that partner doesn't have
-    const olderItems = allItems.filter(item => {
-      const itemTime = Number(item.updatedAt || item.timestamp || 0);
-      return itemTime <= partnerLastSynced; // Actually we want things THEY DON'T HAVE.
-      // Wait, reconciliation handles things AFTER their last sync.
-      // Phase 2 should handle things they missed because they were "essentials" only before.
-      // But they'll have everything AFTER essentials sync.
-      // Actually, essentials sync only sends RECENT items.
-      // We need to send items that are NOT in the partner's DB yet.
-    });
-
-    // In a real P2P sync, we'd compare IDs. For now, we'll just send everything in batches
-    // and let .put() handle deduplication.
     const itemsToSend = allItems.slice(0, batchSize - batch.length);
     itemsToSend.forEach(item => {
       batch.push({ store: storeName, data: item });

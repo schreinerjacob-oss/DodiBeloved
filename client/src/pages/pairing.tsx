@@ -90,6 +90,28 @@ export default function PairingPage() {
 
   const handleMasterKeyReceived = async (payload: any, isCreatorRole: boolean) => {
     try {
+      if (payload.essentials) {
+        setIsRestoringEssentials(true);
+        setRestoreProgress(10);
+        console.log('♾️ [RESTORE] Applying essential data...');
+        const { saveIncomingItems } = await import('@/lib/storage-encrypted');
+        const stores = Object.keys(payload.essentials);
+        for (let i = 0; i < stores.length; i++) {
+          const store = stores[i];
+          const items = payload.essentials[store];
+          if (items && items.length > 0) {
+            await saveIncomingItems(store as any, items);
+          }
+          setRestoreProgress(10 + Math.floor(((i + 1) / stores.length) * 90));
+        }
+        setIsRestoringEssentials(false);
+        console.log('✅ [RESTORE] Essentials applied');
+        toast({
+          title: "Core restored ♾️",
+          description: "Older items will sync in the background.",
+        });
+      }
+      
       console.log('📋 [ID AUDIT] Master key payload received:', {
         creatorId: payload.creatorId,
         joinerId: payload.joinerId,
