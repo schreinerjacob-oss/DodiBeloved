@@ -196,7 +196,7 @@ function setupConnection(conn: DataConnection) {
   }
 
   conn.on('open', async () => {
-    console.log('✨ SECURE PIPE ESTABLISHED with:', conn.peer);
+    console.log('✨ Persistent P2P connection established with:', conn.peer);
     notifyListeners();
     conn.send({ type: 'ping', timestamp: Date.now() });
     
