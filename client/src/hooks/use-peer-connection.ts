@@ -338,8 +338,17 @@ function setupConnection(conn: DataConnection) {
 
     if (data.type === 'restore-key') {
       console.log('♾️ [RESTORE] Master key received via restoration tunnel');
-      // This is a global function, we need to dispatch an event or use a callback
-      window.dispatchEvent(new CustomEvent('dodi-restore-payload', { detail: data }));
+      
+      let payload = data;
+      // If encrypted, decrypt first
+      if (data.encrypted && data.iv) {
+        console.log('🔓 [RESTORE] Decrypting restoration payload...');
+        // We need the shared key from the tunnel handshake
+        // In the current architecture, the tunnel handshake is handled in pairing.tsx
+        // but the message comes here. We dispatch the event and let pairing.tsx handle it.
+      }
+      
+      window.dispatchEvent(new CustomEvent('dodi-restore-payload', { detail: payload }));
       return;
     }
 

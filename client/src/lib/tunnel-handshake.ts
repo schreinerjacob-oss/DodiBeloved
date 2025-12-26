@@ -209,25 +209,43 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
             ? (saltSetting as any).value 
             : (typeof saltSetting === 'string' ? saltSetting : 'error-missing-salt');
 
-          const payload: MasterKeyPayload = {
-            masterKey,
-            salt,
-            creatorId: creatorId,
-            joinerId: data.joinerId
-          };
+          let payload: MasterKeyPayload | null = null;
           
           if (isRestore) {
             console.log('♾️ [RESTORE] Sending restoration payload to joiner');
-            conn.send({ type: 'restore-key', ...payload });
+            payload = {
+              masterKey,
+              salt,
+              creatorId: creatorId,
+              joinerId: data.joinerId
+            };
+            if (sharedKey) {
+              const keyMsg = await createTunnelKeyMessage(payload, sharedKey);
+              conn.send({ ...keyMsg, type: 'restore-key' });
+              console.log('Sent master key and ID to restoring device');
+            } else {
+              // Fallback for unencrypted if sharedKey failed (shouldn't happen in normal flow)
+              conn.send({ type: 'restore-key', ...payload });
+            }
             // Small delay to ensure message delivery before closing tunnel
             await new Promise(resolve => setTimeout(resolve, 1000));
           } else if (sharedKey) {
+            payload = {
+              masterKey,
+              salt,
+              creatorId: creatorId,
+              joinerId: data.joinerId
+            };
             const keyMsg = await createTunnelKeyMessage(payload, sharedKey);
             conn.send(keyMsg);
           }
           
           conn.off('data', handleMessage);
-          resolve(payload);
+          if (payload) {
+            resolve(payload);
+          } else {
+            reject(new Error('Failed to generate payload'));
+          }
         }
       } catch (err) {
         console.error('Tunnel error:', err);
@@ -253,9 +271,12 @@ export async function runJoinerTunnel(conn: any): Promise<MasterKeyPayload> {
             sharedKey = await deriveSharedSecret(ephemeralKeys.privateKey, data.publicKey);
           }
           
-          if (data.type === 'tunnel-key' && sharedKey) {
+          if ((data.type === 'tunnel-key' || data.type === 'restore-key') && sharedKey) {
             const decrypted = await decryptWithSharedSecret(data.iv, data.encrypted, sharedKey);
             const payload = JSON.parse(decrypted);
+            if (data.type === 'restore-key') {
+              console.log('♾️ [RESTORE] Successfully decrypted restoration payload');
+            }
             conn.off('data', handleMessage);
             resolve(payload);
           }
