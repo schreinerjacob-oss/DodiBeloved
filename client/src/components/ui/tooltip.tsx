@@ -5,7 +5,18 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 
 import { cn } from "@/lib/utils"
 
-const TooltipProvider = TooltipPrimitive.Provider
+const TooltipProvider = (props: React.ComponentProps<typeof TooltipPrimitive.Provider>) => {
+  const isMounted = React.useRef(false)
+  React.useEffect(() => {
+    isMounted.current = true
+  }, [])
+
+  return (
+    <TooltipPrimitive.Provider {...props}>
+      {props.children}
+    </TooltipPrimitive.Provider>
+  )
+}
 
 const Tooltip = TooltipPrimitive.Root
 

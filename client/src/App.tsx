@@ -123,9 +123,9 @@ function App() {
         <DodiProvider>
           <OnboardingProvider>
             <MainApp />
+            <Toaster />
           </OnboardingProvider>
         </DodiProvider>
-        <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
   );
