@@ -79,8 +79,8 @@ export default function SettingsPage() {
     
     setIsSyncing(true);
     toast({
-      title: "Syncing...",
-      description: "Reconciling data with your partner."
+      title: "Sync Initiated",
+      description: "Your device is now reconciling data with your partner.",
     });
     
     reconnect();
