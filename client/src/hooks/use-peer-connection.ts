@@ -148,16 +148,17 @@ function sendWakeUpPing(partnerId: string) {
   console.log('📡 Sending wake-up ping to partner via relay:', partnerId);
   
   // PeerJS relay (wss://0.peerjs.com) handles signal forwarding
-  // We send a tiny data message that the peer server will try to deliver
-  // if the partner's signaling connection is still alive but P2P is closed
+  // We send a connection request with metadata that acts as a ping
   const conn = globalPeer.connect(partnerId, {
     reliable: false,
     label: 'wake-up-ping',
     metadata: { type: 'wake-up', senderId: globalPeer.id }
   });
   
-  // Close after 5 seconds to avoid hanging connections
-  setTimeout(() => conn.close(), 5000);
+  // Close after 2 seconds to avoid hanging connections
+  setTimeout(() => {
+    if (conn.open) conn.close();
+  }, 2000);
 }
 
 // Flush queued messages when connection restored
@@ -566,6 +567,17 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
     peer.on('connection', (conn) => {
       console.log('📞 Incoming connection from:', conn.peer);
+      
+      // Handle wake-up ping
+      if (conn.metadata?.type === 'wake-up') {
+        console.log('⚡ Received wake-up ping from partner. Reconnecting...');
+        if (!globalConn || !globalConn.open) {
+          connectToPartner(conn.peer);
+        }
+        conn.close();
+        return;
+      }
+
       if (conn.peer === partnerId) {
         setupConnection(conn);
       } else {

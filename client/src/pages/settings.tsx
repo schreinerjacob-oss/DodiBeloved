@@ -396,7 +396,7 @@ export default function SettingsPage() {
                 <div>
                   <h3 className="font-medium">Wake-up Pings</h3>
                   <p className="text-xs text-muted-foreground">
-                    Allow partner to wake app via signaling relay
+                    Allow partner to wake app via signaling relay (faster notifications)
                   </p>
                 </div>
               </div>
@@ -407,6 +407,11 @@ export default function SettingsPage() {
                 data-testid="switch-wake-up-ping"
               />
             </div>
+            {!allowWakeUp && (
+              <p className="text-[10px] text-muted-foreground italic px-8">
+                Fallback: local polling every 30 minutes
+              </p>
+            )}
           </Card>
 
           <Card className="p-6 space-y-4">
