@@ -103,7 +103,7 @@ export function ConnectionStatus() {
       <TooltipContent side="bottom" align="center" className="max-w-xs">
         <div className="space-y-1">
           <p className="font-medium">{config.label}</p>
-          <p className="text-xs opacity-90">{config.description}</p>
+          <p className="text-xs opacity-90">{config.description === 'P2P secure connection active' ? 'Direct P2P – no server involved' : config.description}</p>
           {state.peerId && (
             <p className="text-xs opacity-75 font-mono">
               ID: {state.peerId.substring(0, 8)}...

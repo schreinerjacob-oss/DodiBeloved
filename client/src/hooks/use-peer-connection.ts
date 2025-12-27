@@ -281,7 +281,7 @@ function setupConnection(conn: DataConnection) {
   }
 
   conn.on('open', async () => {
-    console.log('✨ Persistent P2P connection established with:', conn.peer);
+    console.log('✨ Persistent Direct P2P connection established with:', conn.peer);
     reconnectAttempt = 0;
     globalSyncCancelled = false; // Reset cancellation on new connection
     clearReconnectTimeout();
@@ -525,8 +525,8 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
     if (globalPeer) globalPeer.destroy();
 
-    console.log('🌐 Starting P2P Network Service for:', userId);
-    console.log('📡 ICE gathering started');
+    console.log('🌐 Starting Private P2P Network Service (No Servers) for:', userId);
+    console.log('📡 Direct device-to-device handshake started');
     
     const peer = new Peer(userId, {
       host: '0.peerjs.com',

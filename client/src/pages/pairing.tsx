@@ -547,7 +547,7 @@ export default function PairingPage() {
         <div className="text-center space-y-3">
           <img src={dodiTypographyLogo} alt="dodi" className="h-20 mx-auto" data-testid="img-logo" />
           <h1 className="text-4xl font-light tracking-wide text-foreground">dodi</h1>
-          <p className="text-muted-foreground font-light">my beloved</p>
+          <p className="text-muted-foreground font-light text-sm italic">Your private garden. Nothing ever leaves your two devices.</p>
         </div>
 
         <AnimatePresence mode="wait">
@@ -563,7 +563,7 @@ export default function PairingPage() {
                 <div className="space-y-3 text-center">
                   <Heart className="w-8 h-8 mx-auto text-blush" />
                   <h2 className="text-2xl font-light">Hold Close and Connect</h2>
-                  <p className="text-sm text-muted-foreground">A completely private sanctuary for you and your beloved</p>
+                  <p className="text-sm text-muted-foreground">A private sanctuary for two. After pairing, data stays on your devices forever—no servers, no leaks.</p>
                 </div>
 
                 <div className="space-y-3">

@@ -1,5 +1,8 @@
 # Dodi Design Guidelines
 
+## The Total Privacy Promise
+Dodi is built on one unbreakable promise: total privacy. Every design choice must reinforce that nothing ever leaves the two devices after pairing. No servers, no data collection, no leaks possible.
+
 ## Brand Identity
 
 **Name**: "dodi" (lowercase in app UI, title-case "Dodi" on icon)  

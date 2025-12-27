@@ -7,15 +7,15 @@ import { cn } from '@/lib/utils';
 const screens = [
   {
     title: 'Welcome to Dodi',
-    subtitle: 'Your private space for two',
-    description: 'Everything stays between you and your beloved. No servers, no tracking—just pure connection.',
+    subtitle: 'Your private garden for two',
+    description: 'After pairing, all messages, photos, memories, prayers, and love notes stay only on your two phones — encrypted and private forever. No servers. No leaks.',
     icon: Heart,
     iconColor: 'text-accent',
   },
   {
     title: 'Completely Private',
-    subtitle: '100% peer-to-peer encrypted',
-    description: 'Messages, photos, and calls flow directly between your devices. Even we cannot see your data.',
+    subtitle: '100% Direct Peer-to-Peer',
+    description: 'Everything flows directly between your devices alone. Even we cannot see your data. No central server. No tracking.',
     icon: Lock,
     iconColor: 'text-primary',
   },

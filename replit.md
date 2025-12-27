@@ -1,5 +1,8 @@
 # dodi - An Ultra-Private Encrypted Space for Two
 
+## Total Privacy Promise
+Dodi is built on one unbreakable promise: total privacy. Nothing ever touches a server after pairing. Your shared space is end-to-end encrypted and synchronizes directly between your two devices via Peer-to-Peer (P2P) technology. No central server, no data collection, no leaks possible.
+
 ## Overview
 
 dodi (Hebrew for "my beloved") is an intimate, privacy-focused mobile web application designed exclusively for couples. It provides a secure, encrypted sanctuary for real-time messaging, shared memories, calendar events, daily emotional rituals, and love letters. The application emphasizes warmth, privacy, and meaningful connection with a "handwritten-love-note meets secret garden" aesthetic. Key capabilities include secure pairing, end-to-end encrypted communication, a private memory vault, a shared calendar, daily emotional check-ins, and a love letter exchange system. It also features disappearing messages and an offline-first architecture.
@@ -203,13 +206,14 @@ This spawns Vite which enables external host access for the Replit environment.
 9. **Both devices** now have identical master key for AES-GCM encryption
 10. **Beautiful animation:** "Your Gardens Are Now Eternally Connected ♾️"
 
-## Monetization
+## Support the Garden
+Dodi is funded entirely by its users. Support the garden — keep it private forever for couples everywhere.
 
 - **30-day free trial** with full features
 - **Monthly:** $2.99/month
 - **Yearly:** $29.99/year
 - **Lifetime:** $79 one-time
-- No ads, no data collection
+- No ads, no data collection, no server storage.
 
 ## External Dependencies
 
