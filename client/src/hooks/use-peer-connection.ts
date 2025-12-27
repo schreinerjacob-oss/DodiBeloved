@@ -155,9 +155,17 @@ function sendWakeUpPing(partnerId: string) {
     metadata: { type: 'wake-up', senderId: globalPeer.id }
   });
   
-  // Close after 2 seconds to avoid hanging connections
+  conn.on('open', () => {
+    console.log('✅ Wake-up ping sent via relay');
+    conn.close();
+  });
+
+  // Ensure relay connection closes even if open event doesn't fire
   setTimeout(() => {
-    if (conn.open) conn.close();
+    if (conn.open) {
+      console.log('✅ Wake-up ping sent (timed close)');
+      conn.close();
+    }
   }, 2000);
 }
 
@@ -572,6 +580,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       if (conn.metadata?.type === 'wake-up') {
         console.log('⚡ Received wake-up ping from partner. Reconnecting...');
         if (!globalConn || !globalConn.open) {
+          console.log('🌱 Reconnected direct after ping');
           connectToPartner(conn.peer);
         }
         conn.close();
