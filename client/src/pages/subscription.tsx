@@ -119,7 +119,7 @@ export default function SubscriptionPage() {
           </Card>
 
           <div className="text-center">
-            <Button variant="link" className="text-muted-foreground text-xs" onClick={() => setLocation('/settings')}>
+            <Button variant="ghost" className="text-muted-foreground text-xs" onClick={() => setLocation('/settings')}>
               Already supported? Restore purchase
             </Button>
           </div>

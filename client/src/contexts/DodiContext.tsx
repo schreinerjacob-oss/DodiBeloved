@@ -19,6 +19,8 @@ interface DodiContextType {
   showPinSetup: boolean;
   inactivityMinutes: number;
   allowWakeUp: boolean;
+  isPremium: boolean;
+  setPremiumStatus: (status: boolean) => Promise<void>;
   setAllowWakeUp: (enabled: boolean) => Promise<void>;
   initializeProfile: (displayName: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
@@ -49,6 +51,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const [pinEnabled, setPinEnabled] = useState(false);
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [inactivityMinutes, setInactivityMinutesState] = useState(10);
+  const [isPremium, setIsPremium] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const isPaired = pairingStatus === 'connected';
@@ -58,7 +61,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       try {
         const db = await initDB();
-        const [storedUserId, storedDisplayName, storedPartnerId, storedPassphrase, storedPairingStatus, storedPinEnabled, storedInactivityMinutes] = await Promise.all([
+        const [storedUserId, storedDisplayName, storedPartnerId, storedPassphrase, storedPairingStatus, storedPinEnabled, storedInactivityMinutes, storedIsPremium] = await Promise.all([
           db.get('settings', 'userId'),
           db.get('settings', 'displayName'),
           db.get('settings', 'partnerId'),
@@ -66,6 +69,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           db.get('settings', 'pairingStatus'),
           db.get('settings', 'pinEnabled'),
           db.get('settings', 'inactivityMinutes'),
+          db.get('settings', 'isPremium'),
         ]);
 
         const storedUserIdObj = storedUserId as any;
@@ -117,6 +121,11 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           if (!isNaN(minutes)) {
             setInactivityMinutesState(minutes);
           }
+        }
+
+        const storedIsPremiumObj = storedIsPremium as any;
+        if (storedIsPremiumObj?.value) {
+          setIsPremium(storedIsPremiumObj.value === 'true' || storedIsPremiumObj.value === true);
         }
       } catch (error) {
         console.error('Failed to load pairing data:', error);
@@ -295,12 +304,17 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     await saveSetting('allowWakeUp', enabled ? 'true' : 'false');
   };
 
+  const setPremiumStatus = async (status: boolean) => {
+    setIsPremium(status);
+    await saveSetting('isPremium', status ? 'true' : 'false');
+  };
+
   return (
     <DodiContext.Provider
       value={{
         userId, displayName, partnerId, passphrase, pairingStatus, isPaired, isOnline,
-        isLocked, pinEnabled, showPinSetup, inactivityMinutes, allowWakeUp,
-        setAllowWakeUp, initializeProfile, initializePairing, completePairingWithMasterKey,
+        isLocked, pinEnabled, showPinSetup, inactivityMinutes, allowWakeUp, isPremium,
+        setAllowWakeUp, setPremiumStatus, initializeProfile, initializePairing, completePairingWithMasterKey,
         completePairingAsCreator, setPartnerIdForCreator, onPeerConnected,
         setPIN: setPINHandler, skipPINSetup: () => setShowPinSetup(false),
         unlockWithPIN: unlockWithPINHandler, unlockWithPassphrase: unlockWithPassphraseHandler,

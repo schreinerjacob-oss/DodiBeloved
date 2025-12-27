@@ -33,7 +33,7 @@ import {
 import { savePIN, verifyPINAndGetPassphrase } from '@/lib/storage-encrypted';
 
 export default function SettingsPage() {
-  const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp, isPaired } = useDodi();
+  const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp, isPaired, isPremium } = useDodi();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const { reconnect } = usePeerConnection();
@@ -225,6 +225,28 @@ export default function SettingsPage() {
 
       <ScrollArea className="flex-1 p-6">
         <div className="max-w-2xl mx-auto space-y-6">
+          <Card className="p-6 space-y-4 border-accent/20 bg-accent/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Heart className={`w-5 h-5 ${isPremium ? 'text-accent' : 'text-muted-foreground'}`} />
+                <div>
+                  <h3 className="font-medium">Support the Garden</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {isPremium ? 'Thank you for your eternal support' : 'Keep dodi private forever'}
+                  </p>
+                </div>
+              </div>
+              <Button 
+                variant={isPremium ? "outline" : "default"}
+                size="sm" 
+                onClick={() => setLocation('/subscription')}
+                className="hover-elevate"
+              >
+                {isPremium ? 'Manage Support' : 'Support Now'}
+              </Button>
+            </div>
+          </Card>
+
           <Card className="p-6 space-y-4 border-gold/20 bg-gold/5">
             <div className="flex items-center gap-3">
               <Shield className="w-5 h-5 text-gold" />
