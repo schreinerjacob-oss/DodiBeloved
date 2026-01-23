@@ -4,6 +4,12 @@ import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLet
 const DB_NAME = 'dodi-encrypted-storage';
 const DB_VERSION = 1;
 
+interface QueuedMessage {
+  id: string;
+  message: string; // JSON stringified SyncMessage
+  createdAt: number;
+}
+
 interface DodiDB {
   messages: Message;
   memories: Memory;
@@ -16,6 +22,7 @@ interface DodiDB {
   settings: { key: string; value: string };
   messageMedia: { id: string; blob: Blob };
   memoryMedia: { id: string; blob: Blob };
+  offlineQueue: QueuedMessage;
 }
 
 let dbInstance: IDBPDatabase<DodiDB> | null = null;
@@ -75,6 +82,11 @@ export async function initDB(): Promise<IDBPDatabase<DodiDB>> {
 
       if (!db.objectStoreNames.contains('memoryMedia')) {
         db.createObjectStore('memoryMedia', { keyPath: 'id' });
+      }
+
+      if (!db.objectStoreNames.contains('offlineQueue')) {
+        const queueStore = db.createObjectStore('offlineQueue', { keyPath: 'id' });
+        queueStore.createIndex('createdAt', 'createdAt');
       }
     },
   });
@@ -226,4 +238,47 @@ export async function savePrayer(prayer: Prayer): Promise<void> {
 export async function getAllPrayers(): Promise<Prayer[]> {
   const db = await initDB();
   return db.getAllFromIndex('prayers', 'prayerDate');
+}
+
+// Offline Queue persistence
+export async function saveToOfflineQueue(id: string, message: unknown): Promise<void> {
+  const db = await initDB();
+  await db.put('offlineQueue', {
+    id,
+    message: JSON.stringify(message),
+    createdAt: Date.now(),
+  });
+}
+
+export async function getOfflineQueue(): Promise<Array<{ id: string; message: unknown }>> {
+  try {
+    const db = await initDB();
+    const items = await db.getAllFromIndex('offlineQueue', 'createdAt');
+    return items.map(item => ({
+      id: item.id,
+      message: JSON.parse(item.message),
+    }));
+  } catch (e) {
+    console.warn('Failed to get offline queue:', e);
+    return [];
+  }
+}
+
+export async function removeFromOfflineQueue(id: string): Promise<void> {
+  const db = await initDB();
+  await db.delete('offlineQueue', id);
+}
+
+export async function clearOfflineQueue(): Promise<void> {
+  const db = await initDB();
+  await db.clear('offlineQueue');
+}
+
+export async function getOfflineQueueSize(): Promise<number> {
+  try {
+    const db = await initDB();
+    return await db.count('offlineQueue');
+  } catch (e) {
+    return 0;
+  }
 }

@@ -5,9 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
-import { Heart, Send, Image, Mic, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Heart, Send, Image, Mic, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff } from 'lucide-react';
 import { getMessages, saveMessage } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
+import { useOfflineQueueSize } from '@/hooks/use-offline-queue';
 import { MessageMediaImage } from '@/components/message-media-image';
 import { notifyNewMessage, notifyMessageQueued } from '@/lib/notifications';
 import type { Message, SyncMessage } from '@/types';
@@ -27,6 +29,7 @@ export default function ChatPage() {
   const { userId, partnerId, isOnline } = useDodi();
   const { toast } = useToast();
   const { send: sendP2P, state: peerState } = usePeerConnection();
+  const pendingCount = useOfflineQueueSize();
 
   useEffect(() => {
     const handleReconciliation = (event: any) => {
@@ -478,15 +481,27 @@ export default function ChatPage() {
           </div>
         </div>
 
-        <Button
-          onClick={handleThinkingOfYou}
-          size="icon"
-          variant="ghost"
-          className="text-accent flex-shrink-0"
-          data-testid="button-thinking-of-you"
-        >
-          <Heart className="w-5 h-5 animate-gentle-pulse" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {pendingCount > 0 && (
+            <Badge 
+              variant="outline" 
+              className="bg-amber-500/10 text-amber-600 border-amber-500/30 gap-1 text-xs"
+              data-testid="badge-pending-messages"
+            >
+              <CloudOff className="w-3 h-3" />
+              {pendingCount} pending
+            </Badge>
+          )}
+          <Button
+            onClick={handleThinkingOfYou}
+            size="icon"
+            variant="ghost"
+            className="text-accent flex-shrink-0"
+            data-testid="button-thinking-of-you"
+          >
+            <Heart className="w-5 h-5 animate-gentle-pulse" />
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6" ref={scrollRef}>

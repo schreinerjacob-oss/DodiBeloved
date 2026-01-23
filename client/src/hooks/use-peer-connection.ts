@@ -4,6 +4,8 @@ import type { SyncMessage } from '@/types';
 import Peer, { type DataConnection } from 'peerjs';
 import { initializeBackgroundSync } from '@/lib/background-sync';
 import { notifyConnectionRestored } from '@/lib/notifications';
+import { saveToOfflineQueue, getOfflineQueue, clearOfflineQueue, getOfflineQueueSize } from '@/lib/storage';
+import { notifyQueueListeners } from '@/hooks/use-offline-queue';
 
 interface PeerConnectionState {
   connected: boolean;
@@ -97,10 +99,27 @@ function startReconnecting() {
 // Offline queue for P2P messages when disconnected
 let offlineQueue: SyncMessage[] = [];
 let queueFlushInProgress = false;
+let persistentQueueLoaded = false;
 
 // Subscription system - track all active hook listeners
 const listeners = new Set<(state: PeerConnectionState) => void>();
-const queueListeners = new Set<(queueSize: number) => void>();
+
+// Load persistent queue on startup
+async function loadPersistentQueue() {
+  if (persistentQueueLoaded) return;
+  persistentQueueLoaded = true;
+  
+  try {
+    const items = await getOfflineQueue();
+    if (items.length > 0) {
+      console.log('📥 Loaded', items.length, 'messages from persistent queue');
+      offlineQueue = items.map(item => item.message as SyncMessage);
+      notifyQueueListeners(offlineQueue.length);
+    }
+  } catch (e) {
+    console.warn('Failed to load persistent queue:', e);
+  }
+}
 
 // Notify all listeners of state changes
 function notifyListeners() {
@@ -179,7 +198,10 @@ async function flushOfflineQueue(conn: DataConnection) {
   
   const toSend = [...offlineQueue];
   offlineQueue = [];
-  queueListeners.forEach(listener => listener(0));
+  
+  // Clear persistent queue
+  await clearOfflineQueue();
+  notifyQueueListeners(0);
   
   // Send all queued messages in batch
   for (const msg of toSend) {
@@ -188,10 +210,14 @@ async function flushOfflineQueue(conn: DataConnection) {
       console.log('📤 Queued message sent:', msg.type);
     } catch (e) {
       console.error('Failed to send queued message:', e);
-      offlineQueue.push(msg); // Re-queue if failed
+      // Re-queue if failed (both memory and persistent)
+      offlineQueue.push(msg);
+      const msgId = (msg.data as any)?.id || `queue-${Date.now()}`;
+      await saveToOfflineQueue(msgId, msg);
     }
   }
   
+  notifyQueueListeners(offlineQueue.length);
   queueFlushInProgress = false;
   console.log('✅ Offline queue flushed');
   
@@ -522,6 +548,11 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     };
   }, []);
 
+  // Load persistent queue on mount
+  useEffect(() => {
+    loadPersistentQueue();
+  }, []);
+
   // 1. ESTABLISH PEER when userId and pairingStatus change
   useEffect(() => {
     if (pairingStatus !== 'connected' || !userId) return;
@@ -611,7 +642,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     connectToPartner(partnerId);
   }, [partnerId]);
 
-  const send = useCallback((message: SyncMessage) => {
+  const send = useCallback(async (message: SyncMessage) => {
     if (globalConn && globalConn.open) {
       if (firstMessageSentAfterReconnect === null) {
         firstMessageSentAfterReconnect = Date.now();
@@ -619,10 +650,15 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       globalConn.send(message);
       console.log('📤 Sent:', message.type);
     } else {
-      // Queue message for later when reconnected
+      // Queue message for later when reconnected (memory + persistent)
       console.log('📨 Queueing message (offline):', message.type);
       offlineQueue.push(message);
-      queueListeners.forEach(listener => listener(offlineQueue.length));
+      
+      // Save to persistent storage
+      const msgId = (message.data as any)?.id || `queue-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      await saveToOfflineQueue(msgId, message);
+      notifyQueueListeners(offlineQueue.length);
+      
       if (partnerId) {
         connectToPartner(partnerId);
         if (allowWakeUp) {
@@ -678,17 +714,6 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       }
     });
   }, [pairingStatus, partnerId]);
-
-  // Subscribe to queue changes
-  useEffect(() => {
-    const queueStateHandler = (size: number) => {
-      if (size > 0) {
-        console.log('📨 Offline messages queued:', size);
-      }
-    };
-    queueListeners.add(queueStateHandler);
-    return () => { queueListeners.delete(queueStateHandler); };
-  }, []);
 
   return { state, send, reconnect };
 }
