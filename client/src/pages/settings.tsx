@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { DeveloperDiagnostics } from '@/components/developer-diagnostics';
+import { PrivacyHealthCheck } from '@/components/privacy-health-check';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -247,35 +248,7 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          <Card className="p-6 space-y-4 border-gold/20 bg-gold/5">
-            <div className="flex items-center gap-3">
-              <Shield className="w-5 h-5 text-gold" />
-              <div>
-                <h3 className="font-medium text-gold">Proof of Privacy</h3>
-                <p className="text-xs text-muted-foreground">
-                  Your unbreakable promise
-                </p>
-              </div>
-            </div>
-            <div className="pt-3 space-y-3 text-sm text-muted-foreground border-t border-gold/10">
-              <div className="flex gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-gold/40 mt-1.5 shrink-0" />
-                <p><span className="text-foreground font-medium">End-to-end encrypted on your devices only</span> – Your keys never leave your phone.</p>
-              </div>
-              <div className="flex gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-gold/40 mt-1.5 shrink-0" />
-                <p><span className="text-foreground font-medium">No central server after pairing</span> – Direct device-to-device communication.</p>
-              </div>
-              <div className="flex gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-gold/40 mt-1.5 shrink-0" />
-                <p><span className="text-foreground font-medium">No data collection or tracking</span> – We don't want your data, and we can't see it.</p>
-              </div>
-              <div className="flex gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-gold/40 mt-1.5 shrink-0" />
-                <p><span className="text-foreground font-medium">P2P sync between your phones alone</span> – Your garden history stays in your hands.</p>
-              </div>
-            </div>
-          </Card>
+          <PrivacyHealthCheck />
 
           <Card className="p-6 space-y-4">
             <div className="flex items-center justify-between">
