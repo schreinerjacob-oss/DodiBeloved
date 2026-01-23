@@ -4,7 +4,7 @@ import type { SyncMessage } from '@/types';
 import Peer, { type DataConnection } from 'peerjs';
 import { initializeBackgroundSync } from '@/lib/background-sync';
 import { notifyConnectionRestored } from '@/lib/notifications';
-import { saveToOfflineQueue, getOfflineQueue, clearOfflineQueue, getOfflineQueueSize } from '@/lib/storage';
+import { saveToOfflineQueue, getOfflineQueue, removeFromOfflineQueue, getOfflineQueueSize } from '@/lib/storage';
 import { notifyQueueListeners } from '@/hooks/use-offline-queue';
 
 interface PeerConnectionState {
@@ -115,9 +115,20 @@ async function loadPersistentQueue() {
       console.log('📥 Loaded', items.length, 'messages from persistent queue');
       offlineQueue = items.map(item => item.message as SyncMessage);
       notifyQueueListeners(offlineQueue.length);
+    } else {
+      // Sync queue size from storage to ensure consistency
+      const size = await getOfflineQueueSize();
+      notifyQueueListeners(size);
     }
   } catch (e) {
     console.warn('Failed to load persistent queue:', e);
+    // Try to at least get the count for UI
+    try {
+      const size = await getOfflineQueueSize();
+      notifyQueueListeners(size);
+    } catch {
+      notifyQueueListeners(0);
+    }
   }
 }
 
@@ -197,32 +208,38 @@ async function flushOfflineQueue(conn: DataConnection) {
   console.log('🔄 Flushing offline queue:', queueSize, 'messages');
   
   const toSend = [...offlineQueue];
-  offlineQueue = [];
+  const sentIds: string[] = [];
+  let failedCount = 0;
   
-  // Clear persistent queue
-  await clearOfflineQueue();
-  notifyQueueListeners(0);
-  
-  // Send all queued messages in batch
+  // Send messages one by one and remove from persistent storage only after success
   for (const msg of toSend) {
+    const msgId = (msg.data as any)?.id;
+    if (!msgId) continue;
+    
     try {
       conn.send(msg);
-      console.log('📤 Queued message sent:', msg.type);
+      console.log('📤 Queued message sent:', msg.type, msgId);
+      sentIds.push(msgId);
+      
+      // Remove from persistent storage after successful send
+      await removeFromOfflineQueue(msgId);
+      
+      // Remove from memory queue
+      const idx = offlineQueue.findIndex(m => (m.data as any)?.id === msgId);
+      if (idx !== -1) offlineQueue.splice(idx, 1);
     } catch (e) {
       console.error('Failed to send queued message:', e);
-      // Re-queue if failed (both memory and persistent)
-      offlineQueue.push(msg);
-      const msgId = (msg.data as any)?.id || `queue-${Date.now()}`;
-      await saveToOfflineQueue(msgId, msg);
+      failedCount++;
+      // Keep in both memory and persistent queue for retry
     }
   }
   
   notifyQueueListeners(offlineQueue.length);
   queueFlushInProgress = false;
-  console.log('✅ Offline queue flushed');
+  console.log(`✅ Offline queue flushed: ${sentIds.length} sent, ${failedCount} failed`);
   
   // Notify user that queued messages were delivered
-  if (queueSize > 0) {
+  if (sentIds.length > 0) {
     notifyConnectionRestored();
   }
 }
@@ -651,11 +668,16 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       console.log('📤 Sent:', message.type);
     } else {
       // Queue message for later when reconnected (memory + persistent)
-      console.log('📨 Queueing message (offline):', message.type);
+      const msgId = (message.data as any)?.id;
+      if (!msgId) {
+        console.warn('Cannot queue message without id:', message.type);
+        return;
+      }
+      
+      console.log('📨 Queueing message (offline):', message.type, msgId);
       offlineQueue.push(message);
       
-      // Save to persistent storage
-      const msgId = (message.data as any)?.id || `queue-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      // Save to persistent storage using actual message ID
       await saveToOfflineQueue(msgId, message);
       notifyQueueListeners(offlineQueue.length);
       

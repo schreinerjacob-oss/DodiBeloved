@@ -2,7 +2,7 @@ import { openDB, type IDBPDatabase } from 'idb';
 import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction } from '@/types';
 
 const DB_NAME = 'dodi-encrypted-storage';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 interface QueuedMessage {
   id: string;
