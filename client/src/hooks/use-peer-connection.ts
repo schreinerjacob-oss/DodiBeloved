@@ -585,7 +585,16 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
   // 1. ESTABLISH PEER when userId and pairingStatus change
   useEffect(() => {
-    if (pairingStatus !== 'connected' || !userId) return;
+    if (pairingStatus !== 'connected' || !userId) {
+      if (globalPeer) {
+        console.log('🛑 [P2P] Destroying peer due to disconnection or logout');
+        globalPeer.destroy();
+        globalPeer = null;
+        globalConn = null;
+        notifyListeners();
+      }
+      return;
+    }
     
     if (globalPeer && !globalPeer.destroyed && globalPeer.id === userId) {
       if (globalPeer.disconnected) globalPeer.reconnect();

@@ -74,29 +74,29 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           db.get('settings', 'allowWakeUp'),
         ]);
 
-        const storedUserIdObj = storedUserId as any;
-        if (storedUserIdObj?.value) {
-          setUserId(storedUserIdObj.value);
-          const storedDisplayNameObj = storedDisplayName as any;
-          setDisplayName(storedDisplayNameObj?.value || null);
+        const storedUserIdObj = (storedUserId as any)?.value || storedUserId;
+        if (storedUserIdObj) {
+          setUserId(storedUserIdObj);
+          const storedDisplayNameObj = (storedDisplayName as any)?.value || storedDisplayName;
+          setDisplayName(storedDisplayNameObj || null);
         }
 
-        const storedPassphraseObj = storedPassphrase as any;
-        if (storedPassphraseObj?.value) {
-          setPassphrase(storedPassphraseObj.value);
+        const storedPassphraseObj = (storedPassphrase as any)?.value || storedPassphrase;
+        if (storedPassphraseObj) {
+          setPassphrase(storedPassphraseObj);
         }
 
-        const storedPartnerIdObj = storedPartnerId as any;
-        if (storedPartnerIdObj?.value) {
-          setPartnerId(storedPartnerIdObj.value);
+        const storedPartnerIdObj = (storedPartnerId as any)?.value || storedPartnerId;
+        if (storedPartnerIdObj) {
+          setPartnerId(storedPartnerIdObj);
         }
 
-        const storedPairingStatusObj = storedPairingStatus as any;
-        if (storedPairingStatusObj?.value) {
-          setPairingStatus(storedPairingStatusObj.value as PairingStatus);
+        const storedPairingStatusObj = (storedPairingStatus as any)?.value || storedPairingStatus;
+        if (storedPairingStatusObj) {
+          setPairingStatus(storedPairingStatusObj as PairingStatus);
         }
 
-        const storedPinEnabledObjFinal = storedPinEnabled as any;
+        const storedPinEnabledObjFinal = (storedPinEnabled as any)?.value || storedPinEnabled;
         if (storedPinEnabledObjFinal?.value === 'true' || storedPinEnabledObjFinal?.value === true) {
           setPinEnabled(true);
           // If PIN is enabled, we lock the app and clear the in-memory passphrase

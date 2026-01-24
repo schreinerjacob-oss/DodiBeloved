@@ -202,8 +202,8 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
             
             // Send our init so the joiner can derive the secret too
             const initMsg = createTunnelInitMessage(ephemeralKeys.publicKey);
-          console.log('📤 [TUNNEL] Sending creator-init response to joiner');
-          conn.send({ ...initMsg, fingerprint: ephemeralKeys.fingerprint });
+            console.log('📤 [TUNNEL] Sending creator-init response to joiner');
+            conn.send({ ...initMsg, type: 'tunnel-init', fingerprint: ephemeralKeys.fingerprint });
         }
         
         if (data.type === 'tunnel-ack') {
