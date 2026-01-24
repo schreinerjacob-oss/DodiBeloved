@@ -5,104 +5,96 @@ export interface AudioChunk {
 }
 
 export class AudioEncoder {
-  private audioContext: AudioContext | null = null;
-  private mediaStreamSource: MediaStreamAudioSourceNode | null = null;
+  private context: AudioContext | null = null;
   private processor: ScriptProcessorNode | null = null;
-  private onChunk: ((chunk: AudioChunk) => void) | null = null;
+  private source: MediaStreamAudioSourceNode | null = null;
+  private onChunk: (chunk: AudioChunk) => void = () => {};
 
-  async start(stream: MediaStream, onChunk: (chunk: AudioChunk) => void): Promise<void> {
+  async start(stream: MediaStream, onChunk: (chunk: AudioChunk) => void) {
     this.onChunk = onChunk;
-    this.audioContext = new AudioContext({ sampleRate: 16000 });
-    this.mediaStreamSource = this.audioContext.createMediaStreamSource(stream);
-    
-    this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
-    
+    this.context = new (window.AudioContext || (window as any).webkitAudioContext)({
+      sampleRate: 16000
+    });
+
+    this.source = this.context.createMediaStreamSource(stream);
+    this.processor = this.context.createScriptProcessor(4096, 1, 1);
+
     this.processor.onaudioprocess = (e) => {
       const inputData = e.inputBuffer.getChannelData(0);
-      const int16Data = new Int16Array(inputData.length);
-      
+      const pcmData = new Int16Array(inputData.length);
       for (let i = 0; i < inputData.length; i++) {
         const s = Math.max(-1, Math.min(1, inputData[i]));
-        int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
       }
-      
-      if (this.onChunk) {
-        this.onChunk({
-          data: int16Data.buffer,
-          timestamp: Date.now(),
-          sampleRate: this.audioContext?.sampleRate || 16000,
-        });
-      }
+
+      this.onChunk({
+        data: pcmData.buffer,
+        timestamp: Date.now(),
+        sampleRate: 16000
+      });
     };
 
-    this.mediaStreamSource.connect(this.processor);
-    this.processor.connect(this.audioContext.destination);
+    this.source.connect(this.processor);
+    this.processor.connect(this.context.destination);
   }
 
-  stop(): void {
-    if (this.processor) {
-      this.processor.disconnect();
-      this.processor = null;
+  stop() {
+    this.source?.disconnect();
+    this.processor?.disconnect();
+    if (this.context?.state !== 'closed') {
+      this.context?.close();
     }
-    if (this.mediaStreamSource) {
-      this.mediaStreamSource.disconnect();
-      this.mediaStreamSource = null;
-    }
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
-    this.onChunk = null;
   }
 }
 
 export class AudioDecoder {
-  private audioContext: AudioContext | null = null;
-  private nextPlayTime: number = 0;
+  private context: AudioContext | null = null;
+  private startTime: number = 0;
 
-  async start(): Promise<void> {
-    this.audioContext = new AudioContext({ sampleRate: 16000 });
-    this.nextPlayTime = this.audioContext.currentTime;
+  async start() {
+    this.context = new (window.AudioContext || (window as any).webkitAudioContext)({
+      sampleRate: 16000
+    });
+    this.startTime = this.context.currentTime;
   }
 
-  playChunk(chunk: AudioChunk): void {
-    if (!this.audioContext) return;
+  playChunk(chunk: AudioChunk) {
+    if (!this.context) return;
 
-    const int16Data = new Int16Array(chunk.data);
-    const floatData = new Float32Array(int16Data.length);
+    const pcmData = new Int16Array(chunk.data);
+    const floatData = new Float32Array(pcmData.length);
     
-    for (let i = 0; i < int16Data.length; i++) {
-      floatData[i] = int16Data[i] / 0x7FFF;
+    for (let i = 0; i < pcmData.length; i++) {
+      floatData[i] = pcmData[i] / (pcmData[i] < 0 ? 0x8000 : 0x7FFF);
     }
 
-    const audioBuffer = this.audioContext.createBuffer(1, floatData.length, chunk.sampleRate);
+    const audioBuffer = this.context.createBuffer(1, floatData.length, 16000);
     audioBuffer.getChannelData(0).set(floatData);
 
-    const source = this.audioContext.createBufferSource();
+    const source = this.context.createBufferSource();
     source.buffer = audioBuffer;
-    source.connect(this.audioContext.destination);
+    source.connect(this.context.destination);
 
-    const now = this.audioContext.currentTime;
-    if (this.nextPlayTime < now) {
-      this.nextPlayTime = now;
+    const currentTime = this.context.currentTime;
+    if (this.startTime < currentTime) {
+      this.startTime = currentTime + 0.1;
     }
     
-    source.start(this.nextPlayTime);
-    this.nextPlayTime += audioBuffer.duration;
+    source.start(this.startTime);
+    this.startTime += audioBuffer.duration;
   }
 
-  stop(): void {
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
+  stop() {
+    if (this.context?.state !== 'closed') {
+      this.context?.close();
     }
-    this.nextPlayTime = 0;
+    this.context = null;
   }
 }
 
 export function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
   let binary = '';
+  const bytes = new Uint8Array(buffer);
   for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
@@ -110,10 +102,10 @@ export function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 export function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
   }
   return bytes.buffer;
 }
