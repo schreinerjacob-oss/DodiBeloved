@@ -94,6 +94,7 @@ function MainApp() {
     { href: "/heart-space", icon: Heart, label: "Heart" },
     { href: "/memories", icon: Camera, label: "Memories" },
     { href: "/moments", icon: CalendarHeart, label: "Moments" },
+    { href: "/settings", icon: Settings, label: "Settings" },
   ];
 
   return (
