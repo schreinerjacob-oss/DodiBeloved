@@ -213,7 +213,26 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
           const salt = await getSetting('salt');
           
           if (!masterKey || !salt) {
-            console.error('❌ [TUNNEL] Creator missing masterKey or salt in storage');
+            console.warn('⚠️ [TUNNEL] Creator missing credentials in primary storage, checking localStorage...');
+            const localMaster = localStorage.getItem('dodi-passphrase');
+            const localSalt = localStorage.getItem('dodi-salt');
+            if (localMaster && localSalt && sharedKey) {
+              console.log('✅ [TUNNEL] Found fallback credentials in localStorage');
+              const payload: MasterKeyPayload = {
+                masterKey: localMaster,
+                salt: localSalt,
+                creatorId: creatorId,
+                joinerId: data.joinerId
+              };
+              const keyMsg = await createTunnelKeyMessage(payload, sharedKey);
+              conn.send(keyMsg);
+              conn.off('data', handleMessage);
+              resolve(payload);
+              return;
+            } else if (localMaster && localSalt && !sharedKey) {
+               console.error('❌ [TUNNEL] Fallback credentials found but sharedKey is missing');
+            }
+            console.error('❌ [TUNNEL] Creator missing masterKey or salt in all storage locations');
             throw new Error('Missing encryption credentials');
           }
 

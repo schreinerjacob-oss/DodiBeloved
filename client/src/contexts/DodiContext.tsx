@@ -289,6 +289,9 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     const newUserId = nanoid();
     await saveSetting('userId', newUserId);
     await saveSetting('displayName', name);
+    // Explicitly set in localStorage for immediate recovery
+    localStorage.setItem('dodi-userId', newUserId);
+    localStorage.setItem('dodi-displayName', name);
     setUserId(newUserId);
     setDisplayName(name);
     return newUserId;

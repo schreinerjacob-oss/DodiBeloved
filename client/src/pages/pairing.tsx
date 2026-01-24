@@ -281,6 +281,21 @@ export default function PairingPage() {
       // VALIDATION: Ensure userId exists for joiner
       if (!userId) {
         console.error('❌ [ID AUDIT] FAILED: Joiner has no userId - cannot join');
+        // Try to recover userId from localStorage
+        const localUserId = localStorage.getItem('dodi-userId');
+        if (localUserId) {
+          console.log('✅ [ID AUDIT] Recovered userId from localStorage:', localUserId);
+          // We can't set it in context here directly synchronously, but we can use it for the tunnel
+          const myPeerId = createRoomPeerId(normalCode, false);
+          const peer = await initializePeer(myPeerId);
+          const remotePeerId = getRemotePeerId(normalCode, false);
+          const conn = await connectToRoom(peer, remotePeerId, 10000);
+          roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
+          console.log('🌊 [FLOW] Joiner calling runJoinerTunnel with recovered userId:', localUserId);
+          const payload = await runJoinerTunnel(conn, localUserId);
+          await handleMasterKeyReceived(payload, false);
+          return;
+        }
         throw new Error('Joiner user ID not initialized');
       }
       

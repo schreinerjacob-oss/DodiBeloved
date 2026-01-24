@@ -523,13 +523,32 @@ export async function waitForConnection(peer: Peer, timeout: number): Promise<Da
 
 export async function connectToRoom(peer: Peer, remoteId: string, timeout: number): Promise<DataConnection> {
   return new Promise((resolve, reject) => {
-    const conn = peer.connect(remoteId);
-    const t = setTimeout(() => reject(new Error('Connection timed out')), timeout);
+    console.log(`📡 [P2P] Attempting to connect to remote peer: ${remoteId}`);
+    // Explicitly set serialization for consistency
+    const conn = peer.connect(remoteId, {
+      reliable: true,
+      serialization: 'json'
+    });
+    
+    const t = setTimeout(() => {
+      if (!conn.open) {
+        console.warn(`⚠️ [P2P] Connection to ${remoteId} timed out after ${timeout}ms`);
+        conn.close();
+        reject(new Error('Connection timed out. Please check if your partner is ready.'));
+      }
+    }, timeout);
+
     conn.on('open', () => {
       clearTimeout(t);
+      console.log('✅ [P2P] Connection opened with remote peer');
       resolve(conn);
     });
-    conn.on('error', reject);
+
+    conn.on('error', (err) => {
+      clearTimeout(t);
+      console.error('❌ [P2P] Connection error:', err);
+      reject(err);
+    });
   });
 }
 
