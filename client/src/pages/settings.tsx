@@ -234,8 +234,8 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <ScrollArea className="flex-1 p-6">
-        <div className="max-w-2xl mx-auto space-y-6">
+      <ScrollArea className="flex-1 px-4 py-6">
+        <div className="max-w-md mx-auto space-y-6">
           <Card className="p-6 space-y-4 border-accent/20 bg-accent/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
