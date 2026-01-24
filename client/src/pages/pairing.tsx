@@ -156,10 +156,16 @@ export default function PairingPage() {
         await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
       }
       
+      console.log('✅ [PAIRING] Storage updated, updating global state...');
       onPeerConnected();
+      
+      // Force a small delay to ensure context state propagates before transition
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       if (roomRef.current) closeRoom(roomRef.current);
       setShowSuccess(true);
       setMode('success-animation');
+      console.log('✨ [PAIRING] Transitioning to success view');
     } catch (error) {
       if (roomRef.current) closeRoom(roomRef.current);
       console.error('❌ [ID AUDIT] Pairing failed:', error);
