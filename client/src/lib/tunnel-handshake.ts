@@ -212,81 +212,60 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
             return; // Exit after sending init to prevent processing other types in same turn
         }
         
-          if (data.type === 'tunnel-ack') {
-            console.log('📥 [TUNNEL] Received tunnel-ack, preparing key payload');
-            const { getSetting } = await import('./storage');
-            const masterKey = await getSetting('passphrase');
-            const salt = await getSetting('salt');
-            
-            const joinerId = data.joinerId;
-            console.log('🆔 [TUNNEL] Identified Joiner:', joinerId);
-            
-            if (!masterKey || !salt) {
+        if (data.type === 'tunnel-ack') {
+          console.log('📥 [TUNNEL] Received tunnel-ack, preparing key payload');
+          const { getSetting } = await import('./storage');
+          let masterKey = await getSetting('passphrase');
+          let salt = await getSetting('salt');
+          
+          const joinerId = data.joinerId;
+          console.log('🆔 [TUNNEL] Identified Joiner:', joinerId);
+          
+          // Fallback to localStorage if primary storage is empty
+          if (!masterKey || !salt) {
             console.warn('⚠️ [TUNNEL] Creator missing credentials in primary storage, checking localStorage...');
             const localMaster = localStorage.getItem('dodi-passphrase');
             const localSalt = localStorage.getItem('dodi-salt');
-            if (localMaster && localSalt && sharedKey) {
+            if (localMaster && localSalt) {
               console.log('✅ [TUNNEL] Found fallback credentials in localStorage');
-              const payload: MasterKeyPayload = {
-                masterKey: localMaster,
-                salt: localSalt,
-                creatorId: creatorId,
-                joinerId: data.joinerId
-              };
-              const keyMsg = await createTunnelKeyMessage(payload, sharedKey);
-              conn.send(keyMsg);
-              conn.off('data', handleMessage);
-              resolve(payload);
-              return;
-            } else if (localMaster && localSalt && !sharedKey) {
-               console.error('❌ [TUNNEL] Fallback credentials found but sharedKey is missing');
+              masterKey = localMaster;
+              salt = localSalt;
+            } else {
+              console.error('❌ [TUNNEL] Creator missing masterKey or salt in all storage locations');
+              throw new Error('Missing encryption credentials');
             }
-            console.error('❌ [TUNNEL] Creator missing masterKey or salt in all storage locations');
-            throw new Error('Missing encryption credentials');
           }
 
-          let payload: MasterKeyPayload | null = null;
+          if (!sharedKey) {
+            console.error('❌ [TUNNEL] sharedKey is null - cannot encrypt payload');
+            throw new Error('Shared key not established');
+          }
+
+          const payload: MasterKeyPayload = {
+            masterKey,
+            salt,
+            creatorId: creatorId,
+            joinerId: joinerId
+          };
           
           if (isRestore) {
             console.log('♾️ [RESTORE] Sending restoration payload to joiner');
             const { getEssentials } = await import('./storage-encrypted');
             const essentials = await getEssentials();
             
-            payload = {
-              masterKey,
-              salt,
-              creatorId: creatorId,
-              joinerId: data.joinerId,
-              essentials // Adding essentials to payload
-            } as any;
-            
-            if (sharedKey && payload) {
-              const keyMsg = await createTunnelKeyMessage(payload, sharedKey);
-              conn.send({ ...keyMsg, type: 'restore-key' });
-              console.log('Sent master key, ID, and essentials to restoring device');
-            } else if (payload) {
-              // Fallback for unencrypted if sharedKey failed (shouldn't happen in normal flow)
-              conn.send({ type: 'restore-key', ...payload });
-            }
-            // Small delay to ensure message delivery before closing tunnel
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          } else if (sharedKey) {
-            payload = {
-              masterKey,
-              salt,
-              creatorId: creatorId,
-              joinerId: data.joinerId
-            };
+            const restorePayload = { ...payload, essentials } as any;
+            const keyMsg = await createTunnelKeyMessage(restorePayload, sharedKey);
+            conn.send({ ...keyMsg, type: 'restore-key' });
+            console.log('Sent master key, ID, and essentials to restoring device');
+            await new Promise(r => setTimeout(r, 1000));
+          } else {
             const keyMsg = await createTunnelKeyMessage(payload, sharedKey);
             conn.send(keyMsg);
+            console.log('📤 [TUNNEL] Sent tunnel-key to joiner');
           }
           
           conn.off('data', handleMessage);
-          if (payload) {
-            resolve(payload);
-          } else {
-            reject(new Error('Failed to generate payload'));
-          }
+          resolve(payload);
         }
       } catch (err) {
         console.error('Tunnel error:', err);
