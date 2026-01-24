@@ -262,7 +262,7 @@ export default function SettingsPage() {
               <div className="flex items-center gap-3">
                 <ShieldCheck className="w-5 h-5 text-accent" />
                 <div>
-                  <h3 className="font-medium">Privacy Proof</h3>
+                  <h3 className="font-medium">Privacy Status</h3>
                   <p className="text-xs text-muted-foreground">Architectural verification</p>
                 </div>
               </div>
@@ -271,20 +271,20 @@ export default function SettingsPage() {
             
             <div className="pt-3 space-y-3 text-[11px] uppercase tracking-wider text-muted-foreground border-t">
               <div className="flex justify-between items-center">
-                <span>Content Stored</span>
-                <span className="text-foreground font-medium">100% On-Device (Encrypted)</span>
+                <span>Content</span>
+                <span className="text-foreground font-medium text-right">100% On-Device (Encrypted)</span>
               </div>
               <div className="flex justify-between items-center">
-                <span>Connection Type</span>
-                <span className="text-foreground font-medium">Direct P2P (No Relay)</span>
+                <span>Connection</span>
+                <span className="text-foreground font-medium text-right">Direct P2P (No Server Storage)</span>
               </div>
               <div className="flex justify-between items-center">
-                <span>Background Sync</span>
-                <span className="text-foreground font-medium">{allowWakeUp ? "Relay Enabled" : "Polling Only"}</span>
+                <span>Wake-ups</span>
+                <span className="text-foreground font-medium text-right">Relay Optional (Encrypted Signaling)</span>
               </div>
               <div className="flex justify-between items-center pt-1">
-                <span>Server-Side Code</span>
-                <span className="text-accent font-bold">Deleted & Non-Existent</span>
+                <span>Privacy Mode</span>
+                <span className="text-accent font-bold">Absolute (Zero Backend)</span>
               </div>
             </div>
           </Card>
