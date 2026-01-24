@@ -575,6 +575,19 @@ export default function CallsPage() {
     return (
       <div className="h-full flex flex-col bg-background">
         <div className="flex-1 flex items-center justify-center gap-4 p-4 relative">
+          {/* Prominent Call Timer Overlay */}
+          <div className="absolute top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
+            <div className="bg-black/40 backdrop-blur-xl px-8 py-3 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center gap-1 transition-all animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_12px_rgba(239,68,68,0.8)]" />
+                <span className="text-white/70 text-[10px] uppercase tracking-[0.2em] font-medium">Live</span>
+              </div>
+              <span className="text-white font-mono text-4xl tracking-tighter tabular-nums drop-shadow-md">
+                {formatDuration(callDuration)}
+              </span>
+            </div>
+          </div>
+
           {callType === 'video' && (
             <>
               <div className="flex-1 max-w-md w-full aspect-video">
@@ -624,7 +637,6 @@ export default function CallsPage() {
                     </>
                   )}
                 </div>
-                <p className="text-2xl font-mono text-foreground">{formatDuration(callDuration)}</p>
               </div>
             </div>
           )}
@@ -634,9 +646,6 @@ export default function CallsPage() {
           <div className="flex flex-col items-center gap-4">
             {callType === 'video' && (
               <div className="flex items-center gap-3">
-                <div className="text-sm font-mono bg-background/50 px-3 py-1 rounded-full border">
-                  {formatDuration(callDuration)}
-                </div>
                 <ConnectionIcon />
               </div>
             )}

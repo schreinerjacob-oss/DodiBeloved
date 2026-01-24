@@ -135,14 +135,14 @@ function MainApp() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <DodiProvider>
-        <OnboardingProvider>
-          <TooltipProvider>
+      <TooltipProvider>
+        <DodiProvider>
+          <OnboardingProvider>
             <MainApp />
             <Toaster />
-          </TooltipProvider>
-        </OnboardingProvider>
-      </DodiProvider>
+          </OnboardingProvider>
+        </DodiProvider>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }
