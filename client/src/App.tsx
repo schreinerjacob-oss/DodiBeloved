@@ -15,12 +15,10 @@ import OnboardingPage from "@/pages/onboarding";
 import ChatPage from "@/pages/chat";
 import MemoriesPage from "@/pages/memories";
 import OurMomentsPage from "@/pages/our-moments";
-import DailyWhisperPage from "@/pages/daily-whisper";
-import LoveNotesPage from "@/pages/love-notes";
-import PrayersPage from "@/pages/prayers";
+import HeartSpacePage from "@/pages/heart-space";
 import CallsPage from "@/pages/calls";
 import SettingsPage from "@/pages/settings";
-import { MessageSquare, Camera, CalendarHeart, Phone, Settings, Lock } from "lucide-react";
+import { MessageSquare, Camera, CalendarHeart, Phone, Settings, Lock, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConnectionStatus } from "@/components/connection-status";
 import { GlobalSyncHandler } from "@/components/global-sync-handler";
@@ -89,9 +87,9 @@ function MainApp() {
   const navItems = [
     { href: "/chat", icon: MessageSquare, label: "Chat" },
     { href: "/calls", icon: Phone, label: "Calls" },
+    { href: "/heart-space", icon: Heart, label: "Heart" },
     { href: "/memories", icon: Camera, label: "Memories" },
     { href: "/moments", icon: CalendarHeart, label: "Moments" },
-    { href: "/settings", icon: Settings, label: "Settings" },
   ];
 
   return (
@@ -103,9 +101,7 @@ function MainApp() {
           <Route path="/calls" component={CallsPage} />
           <Route path="/memories" component={MemoriesPage} />
           <Route path="/moments" component={OurMomentsPage} />
-          <Route path="/whisper" component={DailyWhisperPage} />
-          <Route path="/notes" component={LoveNotesPage} />
-          <Route path="/prayers" component={PrayersPage} />
+          <Route path="/heart-space" component={HeartSpacePage} />
           <Route path="/settings" component={SettingsPage} />
           <Route path="/" component={ChatPage} />
         </Switch>
