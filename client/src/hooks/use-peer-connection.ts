@@ -647,6 +647,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
     peer.on('open', (id) => {
       console.log('✅ My Peer ID is active:', id);
+      // Immediately notify listeners to update globalState with the active peerId
       notifyListeners();
       if (partnerId) connectToPartner(partnerId);
     });

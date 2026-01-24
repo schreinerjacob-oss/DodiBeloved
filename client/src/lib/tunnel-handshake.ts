@@ -202,17 +202,26 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
             
             // Send our init so the joiner can derive the secret too
             const initMsg = createTunnelInitMessage(ephemeralKeys.publicKey);
-            console.log('📤 [TUNNEL] Sending creator-init response to joiner');
-            conn.send({ ...initMsg, type: 'tunnel-init', fingerprint: ephemeralKeys.fingerprint });
+            console.log('📤 [TUNNEL] Sending creator-init response to joiner with ID:', creatorId);
+            conn.send({ 
+              ...initMsg, 
+              type: 'tunnel-init', 
+              fingerprint: ephemeralKeys.fingerprint,
+              creatorId: creatorId // Ensure ID is sent early
+            });
+            return; // Exit after sending init to prevent processing other types in same turn
         }
         
-        if (data.type === 'tunnel-ack') {
-          console.log('📥 [TUNNEL] Received tunnel-ack, preparing key payload');
-          const { getSetting } = await import('./storage');
-          const masterKey = await getSetting('passphrase');
-          const salt = await getSetting('salt');
-          
-          if (!masterKey || !salt) {
+          if (data.type === 'tunnel-ack') {
+            console.log('📥 [TUNNEL] Received tunnel-ack, preparing key payload');
+            const { getSetting } = await import('./storage');
+            const masterKey = await getSetting('passphrase');
+            const salt = await getSetting('salt');
+            
+            const joinerId = data.joinerId;
+            console.log('🆔 [TUNNEL] Identified Joiner:', joinerId);
+            
+            if (!masterKey || !salt) {
             console.warn('⚠️ [TUNNEL] Creator missing credentials in primary storage, checking localStorage...');
             const localMaster = localStorage.getItem('dodi-passphrase');
             const localSalt = localStorage.getItem('dodi-salt');
@@ -311,7 +320,8 @@ export async function runJoinerTunnel(conn: any, joinerId: string): Promise<Mast
               type: 'tunnel-ack', 
               joinerId: joinerId,
               publicKey: ephemeralKeys.publicKey,
-              fingerprint: ephemeralKeys.fingerprint 
+              fingerprint: ephemeralKeys.fingerprint,
+              creatorId: data.creatorId // Echo back the creatorId if received
             });
             ackSent = true;
           }
