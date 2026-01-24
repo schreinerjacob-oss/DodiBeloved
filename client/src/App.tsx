@@ -19,6 +19,7 @@ import OurMomentsPage from "@/pages/our-moments";
 import HeartSpacePage from "@/pages/heart-space";
 import CallsPage from "@/pages/calls";
 import SettingsPage from "@/pages/settings";
+import SubscriptionPage from "@/pages/subscription";
 import { MessageSquare, Camera, CalendarHeart, Phone, Settings, Lock, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConnectionStatus } from "@/components/connection-status";
@@ -123,6 +124,7 @@ function MainApp() {
           <Route path="/moments" component={OurMomentsPage} />
           <Route path="/heart-space" component={HeartSpacePage} />
           <Route path="/settings" component={SettingsPage} />
+          <Route path="/subscription" component={SubscriptionPage} />
           <Route path="/setup" component={ProfileSetupPage} />
           <Route path="/redundancy" component={RedundancyPage} />
           <Route path="/" component={ChatPage} />
