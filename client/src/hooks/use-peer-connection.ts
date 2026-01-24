@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import type { SyncMessage } from '@/types';
 import Peer, { type DataConnection } from 'peerjs';
+import { initializeBackgroundSync } from '@/lib/background-sync';
 import { notifyConnectionRestored } from '@/lib/notifications';
 import { saveToOfflineQueue, getOfflineQueue, removeFromOfflineQueue, getOfflineQueueSize } from '@/lib/storage';
 import { notifyQueueListeners } from '@/hooks/use-offline-queue';
@@ -238,7 +239,9 @@ async function flushOfflineQueue(conn: DataConnection) {
   console.log(`✅ Offline queue flushed: ${sentIds.length} sent, ${failedCount} failed`);
   
   // Notify user that queued messages were delivered
-  notifyConnectionRestored();
+  if (sentIds.length > 0) {
+    notifyConnectionRestored();
+  }
 }
 
 // Setup data connection - called globally
@@ -253,12 +256,12 @@ function setupConnection(conn: DataConnection) {
   async function handleReconcileInit(conn: DataConnection, partnerTimestamps: any) {
     try {
       const { getItemsSince } = await import('@/lib/storage-encrypted');
-      const stores = ['messages', 'memories', 'heartItems', 'reactions'] as const;
+      const stores = ['messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions'] as const;
       const batch: any[] = [];
 
       for (const storeName of stores) {
         const remoteLastSynced = partnerTimestamps[storeName] || 0;
-        const localNewItems = await getItemsSince(storeName as any, remoteLastSynced);
+        const localNewItems = await getItemsSince(storeName, remoteLastSynced);
         localNewItems.forEach(item => {
           batch.push({ store: storeName, data: item, timestamp: item.updatedAt || item.timestamp || Date.now() });
         });
@@ -317,7 +320,7 @@ function setupConnection(conn: DataConnection) {
     // START RECONCILIATION
     try {
       const { getLastSynced, getBatchForRestore } = await import('@/lib/storage-encrypted');
-      const stores = ['messages', 'memories', 'heartItems', 'reactions'] as const;
+      const stores = ['messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions'] as const;
       const lastSyncedTimestamps: Record<string, number> = {};
       for (const store of stores) {
         lastSyncedTimestamps[store] = await getLastSynced(store);
@@ -326,7 +329,7 @@ function setupConnection(conn: DataConnection) {
       conn.send({ type: 'reconcile-init', timestamps: lastSyncedTimestamps });
 
       // PHASE 2: Check for older data to sync in background
-      const batch = await getBatchForRestore(stores as any, lastSyncedTimestamps, 50);
+      const batch = await getBatchForRestore(stores, lastSyncedTimestamps, 50);
       if (batch.length > 0) {
         console.log('🔄 [RESTORE] Queueing background batch sync for older data...');
         setTimeout(() => {
@@ -392,10 +395,10 @@ function setupConnection(conn: DataConnection) {
 
     if (data.type === 'restore-batch-init') {
       const { getBatchForRestore } = await import('@/lib/storage-encrypted');
-      const stores = ['messages', 'memories', 'heartItems', 'reactions'] as const;
+      const stores = ['messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions'] as const;
       
       const processNextBatch = async () => {
-        const batch = await getBatchForRestore(stores as any, data.timestamps, 50);
+        const batch = await getBatchForRestore(stores, data.timestamps, 50);
         if (batch.length > 0) {
           console.log('📤 Sending older data batch:', batch.length);
           conn.send({ type: 'restore-batch-data', batch, timestamps: data.timestamps });
