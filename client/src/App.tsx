@@ -67,6 +67,7 @@ function MainApp() {
     );
   }
 
+  // Force signup page if no profile exists
   if (!userId) {
     return <ProfileSetupPage />;
   }

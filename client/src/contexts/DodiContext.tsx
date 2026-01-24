@@ -127,6 +127,11 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         if (storedIsPremiumObj?.value) {
           setIsPremium(storedIsPremiumObj.value === 'true' || storedIsPremiumObj.value === true);
         }
+        
+        // Ensure userId is correctly set from storage
+        if (storedUserIdObj?.value) {
+          setUserId(storedUserIdObj.value);
+        }
       } catch (error) {
         console.error('Failed to load pairing data:', error);
       } finally {
