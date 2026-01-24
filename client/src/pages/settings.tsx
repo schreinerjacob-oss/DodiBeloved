@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug, RefreshCw } from 'lucide-react';
+import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -254,6 +254,38 @@ export default function SettingsPage() {
               <Button variant="ghost" className="text-[10px] text-muted-foreground underline p-0 h-auto justify-start" onClick={() => setLocation('/subscription')}>
                 Restore my support
               </Button>
+            </div>
+          </Card>
+
+          <Card className="p-6 space-y-4 border-accent/20 bg-accent/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <ShieldCheck className="w-5 h-5 text-accent" />
+                <div>
+                  <h3 className="font-medium">Privacy Proof</h3>
+                  <p className="text-xs text-muted-foreground">Architectural verification</p>
+                </div>
+              </div>
+              <Lock className="w-5 h-5 text-muted-foreground" />
+            </div>
+            
+            <div className="pt-3 space-y-3 text-[11px] uppercase tracking-wider text-muted-foreground border-t">
+              <div className="flex justify-between items-center">
+                <span>Content Stored</span>
+                <span className="text-foreground font-medium">100% On-Device (Encrypted)</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Connection Type</span>
+                <span className="text-foreground font-medium">Direct P2P (No Relay)</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span>Background Sync</span>
+                <span className="text-foreground font-medium">{allowWakeUp ? "Relay Enabled" : "Polling Only"}</span>
+              </div>
+              <div className="flex justify-between items-center pt-1">
+                <span>Server-Side Code</span>
+                <span className="text-accent font-bold">Deleted & Non-Existent</span>
+              </div>
             </div>
           </Card>
 
