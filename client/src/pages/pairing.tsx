@@ -354,22 +354,39 @@ export default function PairingPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-    if (loading && (mode === 'pairing' || mode === 'restore-mode')) {
-      return (
-        <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center space-y-6">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-          >
-            <RefreshCw className="w-12 h-12 text-sage" />
-          </motion.div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-light text-sage">Restoring Your Garden...</h2>
-            <p className="text-muted-foreground italic text-sm">One moment while we regrow the vines of your connection ♾️</p>
-          </div>
+  if (loading && mode === 'pairing') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+        >
+          <Loader2 className="w-12 h-12 text-sage" />
+        </motion.div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-light text-sage">Connecting Your Gardens...</h2>
+          <p className="text-muted-foreground italic text-sm">Searching for your partner's light ♾️</p>
         </div>
-      );
-    }
+      </div>
+    );
+  }
+
+  if (loading && mode === 'restore-mode') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+        >
+          <RefreshCw className="w-12 h-12 text-sage" />
+        </motion.div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-light text-sage">Restoring Your Garden...</h2>
+          <p className="text-muted-foreground italic text-sm">One moment while we regrow the vines of your connection ♾️</p>
+        </div>
+      </div>
+    );
+  }
 
     const isRestoreFlow = searchParams.get('mode') === 'restore' || mode === 'restore-mode';
 
