@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { 
   Heart, Sparkles, Send, Smile, Star, Cloud, Sun, Moon, 
-  Pen, Lock, Plus, MessageSquareHeart, ScrollText, HandsPraying
+  Pen, Lock, Plus, MessageSquareHeart, ScrollText, HeartHandshake
 } from 'lucide-react';
 import { 
   getAllDailyRituals, saveDailyRitual, 
@@ -76,8 +76,8 @@ export default function HeartSpacePage() {
       }
     };
     
-    window.addEventListener('p2p-message', handleSync as EventListener);
-    return () => window.removeEventListener('p2p-message', handleSync as EventListener);
+    window.addEventListener('p2p-message', handleSync as unknown as EventListener);
+    return () => window.removeEventListener('p2p-message', handleSync as unknown as EventListener);
   }, [peerState.connected, partnerId, userId]);
 
   const loadAllData = async () => {
@@ -202,7 +202,7 @@ export default function HeartSpacePage() {
               <span className="text-xs">Notes</span>
             </TabsTrigger>
             <TabsTrigger value="prayers" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg flex gap-2 h-full">
-              <HandsPraying className="w-4 h-4" />
+              <HeartHandshake className="w-4 h-4" />
               <span className="text-xs">Prayers</span>
             </TabsTrigger>
           </TabsList>
@@ -306,7 +306,7 @@ export default function HeartSpacePage() {
             <TabsContent value="prayers" className="mt-0 space-y-6 animate-in fade-in slide-in-from-bottom-2">
               {!todayPrayerSubmitted ? (
                 <Card className="p-6 text-center space-y-4 border-blush/20">
-                  <HandsPraying className="w-10 h-10 mx-auto text-blush opacity-50" />
+                  <HeartHandshake className="w-10 h-10 mx-auto text-blush opacity-50" />
                   <div>
                     <h3 className="font-medium">Share Today's Gratitude</h3>
                     <p className="text-xs text-muted-foreground">What blessings are you thankful for today?</p>

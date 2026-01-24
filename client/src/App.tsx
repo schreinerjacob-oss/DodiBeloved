@@ -54,12 +54,13 @@ function MainApp() {
   
   const [location] = useLocation();
   
-  usePeerConnection();
+  const { state: peerState } = usePeerConnection();
+  const partnerActive = peerState?.connected || false;
 
   if (isLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-background">
-        <div className="animate-pulse text-sage font-medium">Entering Sanctuary...</div>
+        <div className="animate-pulse text-sage font-medium tracking-widest uppercase text-xs">Entering Sanctuary...</div>
       </div>
     );
   }
@@ -93,9 +94,21 @@ function MainApp() {
   ];
 
   return (
-    <div className="w-screen flex flex-col bg-background" style={{ minHeight: '100dvh' }}>
+    <div className="w-screen flex flex-col bg-background relative overflow-hidden" style={{ minHeight: '100dvh' }}>
       <GlobalSyncHandler />
-      <div className="flex-1 overflow-hidden">
+      
+      {/* Subtle Presence Glow / Vine Animation */}
+      {partnerActive && (
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-30 select-none">
+          <div className="absolute -top-32 -left-32 w-96 h-96 bg-primary/10 rounded-full blur-[120px] animate-pulse" />
+          <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-accent/10 rounded-full blur-[120px] animate-pulse delay-700" />
+          
+          <div className="absolute top-1/3 -left-16 w-48 h-48 bg-sage/10 rounded-full blur-[80px] animate-gentle-bounce" />
+          <div className="absolute bottom-1/3 -right-16 w-48 h-48 bg-sage/10 rounded-full blur-[80px] animate-gentle-bounce delay-1000" />
+        </div>
+      )}
+
+      <div className="flex-1 overflow-hidden relative z-10 flex flex-col h-full">
         <Switch>
           <Route path="/chat" component={ChatPage} />
           <Route path="/calls" component={CallsPage} />
@@ -107,7 +120,7 @@ function MainApp() {
         </Switch>
       </div>
 
-      <nav className="border-t bg-card/80 backdrop-blur-sm px-2 py-2 flex-shrink-0" style={{ paddingBottom: 'var(--safe-area-inset-bottom)' }}>
+      <nav className="border-t bg-card/80 backdrop-blur-sm px-2 py-2 flex-shrink-0 relative z-20" style={{ paddingBottom: 'var(--safe-area-inset-bottom)' }}>
         <div className="flex items-center justify-around max-w-md mx-auto">
           {navItems.map((item) => (
             <NavItem
