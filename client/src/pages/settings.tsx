@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,7 @@ import {
   DialogTrigger 
 } from "@/components/ui/dialog";
 import { savePIN, verifyPINAndGetPassphrase } from '@/lib/storage-encrypted';
+import { clearAndGoToPairing } from '@/lib/clear-app-data';
 
 export default function SettingsPage() {
   const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp, isPaired, isPremium, hasPIN } = useDodi();
@@ -682,6 +683,55 @@ export default function SettingsPage() {
                     data-testid="button-confirm-logout"
                   >
                     Unpair
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </Card>
+
+          <Card className="p-6 space-y-4 border-destructive/20">
+            <div className="flex items-center gap-3">
+              <Trash2 className="w-5 h-5 text-destructive" />
+              <div>
+                <h3 className="font-medium">Complete Reset</h3>
+                <p className="text-xs text-muted-foreground">Clear all data, caches, and service workers</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Use this if pairing is failing or the app is behaving unexpectedly. This clears everything and lets you start fresh.
+            </p>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full border-destructive/30 text-destructive"
+                  data-testid="button-clear-all"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Clear All Data & Restart
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear all app data?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will clear IndexedDB, localStorage, service workers, and all cached data. 
+                    The app will reload and you'll need to pair again. Your partner's data will remain on their device.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel data-testid="button-cancel-clear">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      toast({
+                        title: "Clearing all data...",
+                        description: "Your app will restart fresh.",
+                      });
+                      setTimeout(() => clearAndGoToPairing(), 500);
+                    }}
+                    data-testid="button-confirm-clear"
+                  >
+                    Clear Everything
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

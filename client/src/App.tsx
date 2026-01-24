@@ -10,6 +10,7 @@ import { usePeerConnection } from "@/hooks/use-peer-connection";
 import ProfileSetupPage from "@/pages/profile-setup";
 import PairingPage from "@/pages/pairing";
 import RedundancyPage from "@/pages/redundancy";
+import ResetPage from "@/pages/reset";
 import PinSetupPage from "@/pages/pin-setup";
 import PinLockPage from "@/pages/pin-lock";
 import OnboardingPage from "@/pages/onboarding";
@@ -58,6 +59,11 @@ function MainApp() {
   
   const { state: peerState } = usePeerConnection();
   const partnerActive = peerState?.connected || false;
+
+  // Allow reset route before any authentication checks
+  if (location === '/reset') {
+    return <ResetPage />;
+  }
 
   if (isLoading) {
     return (
@@ -129,6 +135,7 @@ function MainApp() {
           <Route path="/subscription" component={SubscriptionPage} />
           <Route path="/setup" component={ProfileSetupPage} />
           <Route path="/redundancy" component={RedundancyPage} />
+          <Route path="/reset" component={ResetPage} />
           <Route path="/" component={ChatPage} />
         </Switch>
       </div>

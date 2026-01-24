@@ -3,7 +3,7 @@ import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Heart, Loader2, Copy, Check, Leaf, RefreshCw } from 'lucide-react';
+import { Heart, Loader2, Copy, Check, Leaf, RefreshCw, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { QRCodeSVG } from 'qrcode.react';
@@ -13,6 +13,7 @@ import { normalizeRoomCode, isValidRoomCode, generateRoomCode } from '@/lib/pair
 import { initializePeer, createRoomPeerId, getRemotePeerId, waitForConnection, connectToRoom, closeRoom, type RoomConnection } from '@/hooks/use-peer-connection';
 import { runCreatorTunnel, runJoinerTunnel } from '@/lib/tunnel-handshake';
 import { requestNotificationPermission } from '@/lib/notifications';
+import { clearAndGoToPairing } from '@/lib/clear-app-data';
 import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
 
 type Mode = 'choose' | 'pairing' | 'success-animation' | 'restore-mode' | 'restore-entry';
@@ -708,6 +709,24 @@ export default function PairingPage() {
                   >
                     Restore from Partner
                   </Button>
+
+                  <div className="pt-4 border-t border-border/30">
+                    <Button 
+                      onClick={() => {
+                        toast({
+                          title: "Clearing all data...",
+                          description: "Your app will restart fresh.",
+                        });
+                        setTimeout(() => clearAndGoToPairing(), 500);
+                      }} 
+                      variant="ghost" 
+                      className="w-full h-10 text-xs text-muted-foreground"
+                      data-testid="button-start-fresh"
+                    >
+                      <Trash2 className="w-3 h-3 mr-2" />
+                      Having trouble? Start Fresh
+                    </Button>
+                  </div>
                 </div>
               </Card>
             </motion.div>
