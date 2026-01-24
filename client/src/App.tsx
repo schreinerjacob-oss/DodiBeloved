@@ -98,7 +98,7 @@ function MainApp() {
   ];
 
   return (
-    <div className="w-screen flex flex-col bg-background relative overflow-hidden" style={{ minHeight: '100dvh' }}>
+    <div className="w-screen flex flex-col bg-background relative overflow-hidden h-screen" style={{ height: '100dvh' }}>
       <GlobalSyncHandler />
       
       {/* Presence Glow & Vine Animation */}

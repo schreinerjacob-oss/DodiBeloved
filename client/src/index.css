@@ -171,8 +171,17 @@
   }
 
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased bg-background text-foreground overflow-hidden fixed inset-0 w-full h-full;
   }
+}
+
+#root {
+  @apply w-full h-full flex flex-col;
+}
+
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /**
