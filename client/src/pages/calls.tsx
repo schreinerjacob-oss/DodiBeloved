@@ -94,10 +94,34 @@ export default function CallsPage() {
 
   const ConnectionIcon = () => {
     switch (connectionQuality) {
-      case 'good': return <SignalHigh className="w-4 h-4 text-green-500" />;
-      case 'fair': return <SignalMedium className="w-4 h-4 text-yellow-500" />;
-      case 'poor': return <SignalLow className="w-4 h-4 text-red-500" />;
-      default: return <SignalZero className="w-4 h-4 text-muted-foreground animate-pulse" />;
+      case 'good': 
+        return (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-green-500/10 border border-green-500/20">
+            <SignalHigh className="w-4 h-4 text-green-500" />
+            <span className="text-[10px] font-bold text-green-500 uppercase tracking-tight">Good</span>
+          </div>
+        );
+      case 'fair': 
+        return (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-yellow-500/10 border border-yellow-500/20">
+            <SignalMedium className="w-4 h-4 text-yellow-500" />
+            <span className="text-[10px] font-bold text-yellow-500 uppercase tracking-tight">Fair</span>
+          </div>
+        );
+      case 'poor': 
+        return (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-red-500/10 border border-red-500/20">
+            <SignalLow className="w-4 h-4 text-red-500" />
+            <span className="text-[10px] font-bold text-red-500 uppercase tracking-tight">Poor</span>
+          </div>
+        );
+      default: 
+        return (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted/10 border border-muted/20">
+            <SignalZero className="w-4 h-4 text-muted-foreground animate-pulse" />
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Searching</span>
+          </div>
+        );
     }
   };
 
@@ -687,12 +711,8 @@ export default function CallsPage() {
 
         <div className="border-t bg-card/50 p-4 flex-shrink-0">
           <div className="flex flex-col items-center gap-4">
-            {callType === 'video' && (
-              <div className="flex items-center gap-3">
-                <ConnectionIcon />
-              </div>
-            )}
             <div className="flex items-center justify-center gap-4">
+              <ConnectionIcon />
               <Button
                 size="icon"
                 variant={micEnabled ? 'default' : 'destructive'}
