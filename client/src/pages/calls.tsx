@@ -17,10 +17,32 @@ export default function CallsPage() {
   const [incomingCallType, setIncomingCallType] = useState<'audio' | 'video' | null>(null);
   const [micEnabled, setMicEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(true);
+  const [callDuration, setCallDuration] = useState(0);
   const mediaCallRef = useRef<SimplePeer.Instance | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+
+  // Call timer effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (callActive) {
+      interval = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+    } else {
+      setCallDuration(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [callActive]);
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Listen for incoming call signals through P2P data channel
   useEffect(() => {
@@ -331,13 +353,22 @@ export default function CallsPage() {
               <div className="w-20 h-20 mx-auto rounded-full bg-sage/20 flex items-center justify-center">
                 <Phone className="w-10 h-10 text-sage animate-pulse" />
               </div>
-              <p className="text-muted-foreground">Audio call active</p>
+              <div className="space-y-1">
+                <p className="text-muted-foreground">Audio call active</p>
+                <p className="text-2xl font-mono text-foreground">{formatDuration(callDuration)}</p>
+              </div>
             </div>
           )}
         </div>
 
         <div className="border-t bg-card/50 p-4 flex-shrink-0">
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex flex-col items-center gap-4">
+            {callType === 'video' && (
+              <div className="text-sm font-mono bg-background/50 px-3 py-1 rounded-full border">
+                {formatDuration(callDuration)}
+              </div>
+            )}
+            <div className="flex items-center justify-center gap-4">
             <Button
               size="icon"
               variant={micEnabled ? 'default' : 'destructive'}
