@@ -489,17 +489,50 @@ export interface RoomConnection {
   peerId: string;
 }
 
-export async function initializePeer(id: string): Promise<Peer> {
-  return new Promise((resolve, reject) => {
-    const peer = new Peer(id, {
-      host: '0.peerjs.com',
-      port: 443,
-      secure: true,
-      debug: 1
-    });
-    peer.on('open', () => resolve(peer));
-    peer.on('error', reject);
-  });
+export async function initializePeer(id: string, retries: number = 3): Promise<Peer> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const peer = await new Promise<Peer>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          reject(new Error('Connection to signaling server timed out'));
+        }, 10000);
+        
+        const peer = new Peer(id, {
+          host: '0.peerjs.com',
+          port: 443,
+          secure: true,
+          debug: 1,
+          config: {
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun.stunprotocol.org:3478' }
+            ]
+          }
+        });
+        
+        peer.on('open', () => {
+          clearTimeout(timeoutId);
+          resolve(peer);
+        });
+        
+        peer.on('error', (err) => {
+          clearTimeout(timeoutId);
+          peer.destroy();
+          reject(err);
+        });
+      });
+      
+      return peer;
+    } catch (err) {
+      console.warn(`Peer init attempt ${attempt + 1}/${retries} failed:`, err);
+      if (attempt === retries - 1) {
+        throw new Error('Could not connect to pairing server. Please check your internet connection and try again.');
+      }
+      // Wait before retry with exponential backoff
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+  throw new Error('Failed to initialize peer connection');
 }
 
 export function createRoomPeerId(code: string, isCreator: boolean): string {
