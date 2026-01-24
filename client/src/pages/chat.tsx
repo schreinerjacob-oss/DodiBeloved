@@ -308,7 +308,7 @@ export default function ChatPage() {
       setNewMessage('');
 
       // Send via P2P data channel - if offline, P2P layer queues it automatically
-      console.log(`📤 [P2P] ${isOffline ? 'Queueing' : 'Sending'} message:`, messageId);
+      console.log(`📤 [P2P] Starting send process for:`, messageId, 'Offline:', isOffline);
       sendP2P({
         type: 'message',
         data: message,
@@ -316,6 +316,12 @@ export default function ChatPage() {
       });
 
       // NO UI UPDATE based on isOffline here - the status is already correct in the message object
+      if (isOffline) {
+        toast({
+          title: "Waiting for partner",
+          description: "Message queued and will send once you're both online",
+        });
+      }
       
       if (isDisappearing) {
         setTimeout(() => {

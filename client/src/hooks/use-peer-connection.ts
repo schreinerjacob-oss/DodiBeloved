@@ -362,11 +362,15 @@ function setupConnection(conn: DataConnection) {
 
     if (data.type === 'ping') {
       conn.send({ type: 'pong', timestamp: Date.now() });
+      // Notify listeners to ensure UI reflects 'connected' status immediately
+      notifyListeners();
       return;
     }
     if (data.type === 'pong') {
       console.log('✅ Pong received - connection healthy');
       lastPongReceived = Date.now();
+      // Notify listeners to ensure UI reflects 'connected' status immediately
+      notifyListeners();
       return;
     }
 
@@ -664,6 +668,10 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         if (!globalConn || !globalConn.open) {
           console.log('🌱 Reconnected direct after ping');
           connectToPartner(conn.peer);
+        } else {
+          // Even if we think we are open, partner thinks we aren't.
+          // Send a ping to verify and trigger a pong back to them.
+          globalConn.send({ type: 'ping', timestamp: Date.now() });
         }
         conn.close();
         return;
@@ -700,9 +708,11 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   }, [partnerId]);
 
   const send = useCallback(async (message: SyncMessage) => {
+    console.log('📤 [P2P] Attempting to send message:', message.type);
     sendP2PMessage(message);
     if (!globalConn || !globalConn.open) {
       if (partnerId) {
+        console.log('📡 [P2P] Device offline, triggered background connect');
         connectToPartner(partnerId);
         if (allowWakeUp) {
           sendWakeUpPing(partnerId);
