@@ -52,7 +52,7 @@ function MainApp() {
   const isLocked = dodi.isLocked;
   const showPinSetup = dodi.showPinSetup;
   const isLoading = dodi.isLoading;
-  const hasSeenTutorial = onboarding.hasSeenTutorial ?? true;
+  const hasSeenTutorial = onboarding.hasSeenTutorial;
   
   const [location] = useLocation();
   
