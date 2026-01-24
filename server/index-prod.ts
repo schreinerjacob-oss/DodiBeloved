@@ -11,8 +11,8 @@ const PORT = parseInt(process.env.PORT || '5000', 10);
 // Serve static files from the dist/public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Handle client-side routing - serve index.html for all routes
-app.get('/*', (req, res) => {
+// Handle client-side routing - serve index.html for all unmatched routes
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
