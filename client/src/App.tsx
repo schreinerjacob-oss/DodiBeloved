@@ -9,6 +9,7 @@ import { OnboardingProvider, useOnboarding } from "@/contexts/OnboardingContext"
 import { usePeerConnection } from "@/hooks/use-peer-connection";
 import ProfileSetupPage from "@/pages/profile-setup";
 import PairingPage from "@/pages/pairing";
+import RedundancyPage from "@/pages/redundancy";
 import PinSetupPage from "@/pages/pin-setup";
 import PinLockPage from "@/pages/pin-lock";
 import OnboardingPage from "@/pages/onboarding";
@@ -116,6 +117,7 @@ function MainApp() {
           <Route path="/moments" component={OurMomentsPage} />
           <Route path="/heart-space" component={HeartSpacePage} />
           <Route path="/settings" component={SettingsPage} />
+          <Route path="/redundancy" component={RedundancyPage} />
           <Route path="/" component={ChatPage} />
         </Switch>
       </div>
