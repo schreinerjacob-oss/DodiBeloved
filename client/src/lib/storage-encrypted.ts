@@ -89,7 +89,12 @@ export async function getEncryptionKey(): Promise<CryptoKey> {
     throw new Error('No encryption credentials available');
   }
 
-  const salt = base64ToArrayBuffer(storedSalt);
+  const saltStr = typeof storedSalt === 'string' ? storedSalt : (storedSalt as any).value;
+  if (!saltStr || typeof saltStr !== 'string') {
+    throw new Error('Invalid salt format in storage');
+  }
+
+  const salt = base64ToArrayBuffer(saltStr);
   cachedKey = await deriveKey(storedPassphrase, salt);
   return cachedKey;
 }
@@ -203,9 +208,12 @@ export async function savePIN(pin: string, passphrase: string): Promise<void> {
     // Safely decode salt with validation
     let salt: Uint8Array;
     try {
+      if (!storedSalt || typeof storedSalt !== 'string') {
+        throw new Error('Salt must be a base64 string');
+      }
       salt = base64ToArrayBuffer(storedSalt);
     } catch (e) {
-      console.error('Failed to decode salt:', e);
+      console.error('Failed to decode salt:', e, 'Value:', storedSalt);
       throw new Error('Invalid salt format');
     }
 
@@ -253,9 +261,12 @@ export async function verifyPINAndGetPassphrase(pin: string): Promise<string | n
     // Safely decode salt with validation
     let salt: Uint8Array;
     try {
+      if (!storedSalt || typeof storedSalt !== 'string') {
+        throw new Error('Salt must be a base64 string');
+      }
       salt = base64ToArrayBuffer(storedSalt);
     } catch (e) {
-      console.error('Failed to decode salt:', e);
+      console.error('Failed to decode salt:', e, 'Value:', storedSalt);
       return null;
     }
 
