@@ -212,8 +212,8 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
           const masterKeySetting = await getSetting('passphrase');
           const saltSetting = await getSetting('salt');
           
-          const masterKey = masterKeySetting?.value || masterKeySetting || 'error-missing-key';
-          const salt = saltSetting?.value || saltSetting || 'error-missing-salt';
+          const masterKey = (masterKeySetting as any)?.value || masterKeySetting || 'error-missing-key';
+          const salt = (saltSetting as any)?.value || saltSetting || 'error-missing-salt';
 
           let payload: MasterKeyPayload | null = null;
           
