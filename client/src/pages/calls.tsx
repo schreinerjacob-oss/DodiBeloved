@@ -72,8 +72,17 @@ export default function CallsPage() {
 
       const peer = new SimplePeer({
         initiator: isInitiator,
-        trickle: false,
+        trickle: true,
         stream: stream,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun.services.mozilla.com' },
+            { urls: 'stun:global.stun.twilio.com:3478' }
+          ]
+        }
       });
 
       mediaCallRef.current = peer;
