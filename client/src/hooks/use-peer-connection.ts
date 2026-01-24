@@ -589,16 +589,41 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       if (partnerId) connectToPartner(partnerId);
     });
 
-    peer.on('error', (err) => {
-      console.error('PeerJS Error:', err);
-      globalState.error = err.type === 'unavailable-id' ? 'Connection conflict' : err.message;
-      notifyListeners();
-    });
+  peer.on('error', (err) => {
+    console.error('PeerJS Error:', err);
+    
+    // Critical self-healing for ID conflicts or network issues
+    if (err.type === 'unavailable-id' || err.type === 'network' || err.type === 'server-error') {
+      console.log('🔄 Peer error detected, rebuilding peer in 5s...');
+      setTimeout(() => {
+        if (!peer.destroyed) {
+          peer.destroy();
+          // The useEffect dependency on globalPeer state will trigger a rebuild
+          // if we force a re-render or global state change
+          notifyListeners();
+        }
+      }, 5000);
+    }
+    
+    globalState.error = err.type === 'unavailable-id' ? 'Connection conflict' : err.message;
+    notifyListeners();
+  });
 
     peer.on('disconnected', () => {
       console.log('📡 Disconnected from signaling server. Attempting reconnect...');
       notifyListeners();
+      
+      // Attempt reconnection
       peer.reconnect();
+      
+      // If reconnection doesn't happen within 10s, destroy and let the effect rebuild
+      setTimeout(() => {
+        if (peer.disconnected && !peer.destroyed) {
+          console.log('🔄 Reconnect timed out, rebuilding peer...');
+          peer.destroy();
+          notifyListeners();
+        }
+      }, 10000);
     });
 
     peer.on('connection', (conn) => {
