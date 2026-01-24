@@ -134,25 +134,25 @@ export default function ChatPage() {
           if (incomingMessage.senderId === partnerId) {
             console.log('💾 [P2P] Saving partner message:', incomingMessage.id);
             
-            // If mediaUrl is ArrayBuffer (binary image data), convert to Blob and save
-            if (incomingMessage.mediaUrl && typeof incomingMessage.mediaUrl === 'object' && (incomingMessage.mediaUrl as unknown) instanceof ArrayBuffer) {
-              const { saveMediaBlob } = await import('@/lib/storage');
-              const blob = new Blob([incomingMessage.mediaUrl], { type: 'image/jpeg' });
-              await saveMediaBlob(incomingMessage.id, blob, 'message');
-              incomingMessage.mediaUrl = null; // Clear mediaUrl from object before saving metadata
-            }
-            
-            await saveMessage(incomingMessage);
-            
-            // Notify if app in background
-            notifyNewMessage();
-            
+            // Check if we already have this message to avoid duplicates from multiple sync paths
             setMessages(prev => {
-              // Deduplicate - don't add if already exists
               if (prev.some(m => m.id === incomingMessage.id)) {
-                console.log('⚠️ [P2P] Message already exists, skipping');
+                console.log('⚠️ [P2P] Message already exists in state, skipping');
                 return prev;
               }
+
+              // Process media if needed
+              (async () => {
+                if (incomingMessage.mediaUrl && typeof incomingMessage.mediaUrl === 'object' && (incomingMessage.mediaUrl as unknown) instanceof ArrayBuffer) {
+                  const { saveMediaBlob } = await import('@/lib/storage');
+                  const blob = new Blob([incomingMessage.mediaUrl], { type: 'image/jpeg' });
+                  await saveMediaBlob(incomingMessage.id, blob, 'message');
+                  incomingMessage.mediaUrl = null; 
+                }
+                await saveMessage(incomingMessage);
+                notifyNewMessage();
+              })();
+
               return [...prev, incomingMessage];
             });
             

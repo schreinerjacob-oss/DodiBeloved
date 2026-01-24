@@ -246,7 +246,10 @@ async function flushOfflineQueue(conn: DataConnection) {
 
 // Setup data connection - called globally
 function setupConnection(conn: DataConnection) {
+  // If we already have an open connection to the same peer, don't overwrite it
+  // unless the new one is actually open and the old one isn't.
   if (globalConn && globalConn.open && globalConn.peer === conn.peer && globalConn !== conn) {
+    console.log('🚫 Connection already open for', conn.peer, '- closing redundant connection');
     conn.close();
     return;
   }
@@ -613,6 +616,12 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       }
 
       if (conn.peer === partnerId) {
+        // If we have an existing open connection to this peer, don't replace it unless it's the same object
+        if (globalConn && globalConn.open && globalConn.peer === conn.peer) {
+          console.log('♻️ Reusing existing open connection for:', conn.peer);
+          conn.close();
+          return;
+        }
         setupConnection(conn);
       } else {
         console.warn('🚫 Blocked unknown peer:', conn.peer);
