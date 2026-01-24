@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Phone, Video, PhoneOff, Mic, MicOff, Camera, CameraOff, SignalHigh, SignalMedium, SignalLow, SignalZero } from 'lucide-react';
+import { Phone, Video, PhoneOff, Mic, MicOff, Camera, CameraOff, SignalHigh, SignalMedium, SignalLow, SignalZero, Wifi, WifiOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import SimplePeer from 'simple-peer';
+import { AudioEncoder, AudioDecoder, arrayBufferToBase64, base64ToArrayBuffer } from '@/lib/audio-codec';
 
 export default function CallsPage() {
   const { userId, partnerId } = useDodi();
@@ -19,20 +20,29 @@ export default function CallsPage() {
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [callDuration, setCallDuration] = useState(0);
   const [connectionQuality, setConnectionQuality] = useState<'good' | 'fair' | 'poor' | 'searching'>('searching');
+  const [isFallbackMode, setIsFallbackMode] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const ringtoneRef = useRef<HTMLAudioElement | null>(null);
   const mediaCallRef = useRef<SimplePeer.Instance | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const audioEncoderRef = useRef<AudioEncoder | null>(null);
+  const audioDecoderRef = useRef<AudioDecoder | null>(null);
+  const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const MAX_RECONNECT_ATTEMPTS = 3;
 
   // Call quality monitoring
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (callActive && mediaCallRef.current) {
       interval = setInterval(async () => {
-        if (!mediaCallRef.current?._pc) return;
+        const peer = mediaCallRef.current as any;
+        if (!peer?._pc) return;
         try {
-          const stats = await mediaCallRef.current._pc.getStats();
+          const stats = await peer._pc.getStats();
           let rtt = 0;
           let packetLoss = 0;
 
@@ -119,6 +129,17 @@ export default function CallsPage() {
         }
       } else if (message.type === 'call-end') {
         endCall();
+      } else if (message.type === 'audio-chunk') {
+        if (isFallbackMode && audioDecoderRef.current && message.data.chunk) {
+          const buffer = base64ToArrayBuffer(message.data.chunk);
+          audioDecoderRef.current.playChunk({
+            data: buffer,
+            timestamp: message.data.timestamp,
+            sampleRate: message.data.sampleRate || 16000,
+          });
+        }
+      } else if (message.type === 'fallback-audio-start') {
+        startFallbackAudioReceiver();
       }
     };
 
@@ -137,6 +158,139 @@ export default function CallsPage() {
     if ('vibrate' in navigator) {
       navigator.vibrate(0);
     }
+  };
+
+  const startFallbackAudio = async () => {
+    console.log('Starting fallback audio mode over DataChannel');
+    setIsFallbackMode(true);
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStreamRef.current = stream;
+      
+      const encoder = new AudioEncoder();
+      audioEncoderRef.current = encoder;
+      
+      await encoder.start(stream, (chunk) => {
+        sendP2P({
+          type: 'audio-chunk',
+          data: {
+            chunk: arrayBufferToBase64(chunk.data),
+            timestamp: chunk.timestamp,
+            sampleRate: chunk.sampleRate,
+          },
+          timestamp: Date.now(),
+        });
+      });
+      
+      const decoder = new AudioDecoder();
+      audioDecoderRef.current = decoder;
+      await decoder.start();
+      
+      sendP2P({
+        type: 'fallback-audio-start',
+        data: {},
+        timestamp: Date.now(),
+      });
+      
+      toast({
+        title: 'Audio fallback active',
+        description: 'Using backup audio connection through chat tunnel',
+      });
+    } catch (error) {
+      console.error('Failed to start fallback audio:', error);
+      toast({
+        title: 'Fallback failed',
+        description: 'Could not start backup audio connection',
+        variant: 'destructive',
+      });
+      endCall();
+    }
+  };
+
+  const startFallbackAudioReceiver = async () => {
+    console.log('Partner started fallback audio, initializing receiver');
+    setIsFallbackMode(true);
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStreamRef.current = stream;
+      
+      const encoder = new AudioEncoder();
+      audioEncoderRef.current = encoder;
+      
+      await encoder.start(stream, (chunk) => {
+        sendP2P({
+          type: 'audio-chunk',
+          data: {
+            chunk: arrayBufferToBase64(chunk.data),
+            timestamp: chunk.timestamp,
+            sampleRate: chunk.sampleRate,
+          },
+          timestamp: Date.now(),
+        });
+      });
+      
+      const decoder = new AudioDecoder();
+      audioDecoderRef.current = decoder;
+      await decoder.start();
+    } catch (error) {
+      console.error('Failed to start fallback audio receiver:', error);
+    }
+  };
+
+  const stopFallbackAudio = () => {
+    if (audioEncoderRef.current) {
+      audioEncoderRef.current.stop();
+      audioEncoderRef.current = null;
+    }
+    if (audioDecoderRef.current) {
+      audioDecoderRef.current.stop();
+      audioDecoderRef.current = null;
+    }
+    setIsFallbackMode(false);
+  };
+
+  const attemptReconnect = async () => {
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      toast({
+        title: 'Connection lost',
+        description: 'Unable to reconnect after multiple attempts. Switching to fallback audio.',
+      });
+      if (callType === 'audio') {
+        await startFallbackAudio();
+      } else {
+        endCall();
+      }
+      return;
+    }
+
+    setIsReconnecting(true);
+    setReconnectAttempts(prev => prev + 1);
+    
+    toast({
+      title: 'Reconnecting...',
+      description: `Attempt ${reconnectAttempts + 1} of ${MAX_RECONNECT_ATTEMPTS}`,
+    });
+
+    if (mediaCallRef.current) {
+      mediaCallRef.current.destroy();
+      mediaCallRef.current = null;
+    }
+
+    reconnectTimeoutRef.current = setTimeout(async () => {
+      try {
+        await initiatePeerConnection(callType!, true);
+        setIsReconnecting(false);
+        toast({
+          title: 'Reconnected',
+          description: 'Call connection restored',
+        });
+      } catch (error) {
+        console.error('Reconnect failed:', error);
+        attemptReconnect();
+      }
+    }, 2000);
   };
 
   const initiatePeerConnection = async (type: 'audio' | 'video', isInitiator: boolean, offerSignal?: any) => {
@@ -199,17 +353,26 @@ export default function CallsPage() {
 
       peer.on('error', (err: Error) => {
         console.error('Media peer error:', err);
-        toast({
-          title: 'Connection error',
-          description: 'Failed to establish call connection',
-          variant: 'destructive',
-        });
-        endCall();
+        if (callActive && !isReconnecting) {
+          attemptReconnect();
+        }
       });
 
       peer.on('close', () => {
-        endCall();
+        if (callActive && !isReconnecting && !isFallbackMode) {
+          attemptReconnect();
+        }
       });
+
+      if (fallbackTimeoutRef.current) {
+        clearTimeout(fallbackTimeoutRef.current);
+      }
+      fallbackTimeoutRef.current = setTimeout(() => {
+        if (callActive && !mediaCallRef.current?.connected && type === 'audio' && !isFallbackMode) {
+          console.log('WebRTC connection timeout, switching to fallback audio');
+          startFallbackAudio();
+        }
+      }, 8000);
 
       // If we're the answerer, immediately signal the offer we received
       if (!isInitiator && offerSignal) {
@@ -323,6 +486,20 @@ export default function CallsPage() {
 
   const endCall = () => {
     stopRingtone();
+    stopFallbackAudio();
+    
+    if (fallbackTimeoutRef.current) {
+      clearTimeout(fallbackTimeoutRef.current);
+      fallbackTimeoutRef.current = null;
+    }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    
+    setIsReconnecting(false);
+    setReconnectAttempts(0);
+    
     if (mediaCallRef.current) {
       mediaCallRef.current.destroy();
       mediaCallRef.current = null;
@@ -425,12 +602,27 @@ export default function CallsPage() {
           {callType === 'audio' && (
             <div className="text-center space-y-4">
               <div className="w-20 h-20 mx-auto rounded-full bg-sage/20 flex items-center justify-center">
-                <Phone className="w-10 h-10 text-sage animate-pulse" />
+                {isReconnecting ? (
+                  <WifiOff className="w-10 h-10 text-yellow-500 animate-pulse" />
+                ) : (
+                  <Phone className="w-10 h-10 text-sage animate-pulse" />
+                )}
               </div>
               <div className="space-y-1">
                 <div className="flex items-center justify-center gap-2">
-                  <p className="text-muted-foreground">Audio call active</p>
-                  <ConnectionIcon />
+                  {isReconnecting ? (
+                    <p className="text-yellow-500">Reconnecting... ({reconnectAttempts}/{MAX_RECONNECT_ATTEMPTS})</p>
+                  ) : isFallbackMode ? (
+                    <>
+                      <Wifi className="w-4 h-4 text-blue-500" />
+                      <p className="text-blue-500">Using backup connection</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-muted-foreground">Audio call active</p>
+                      <ConnectionIcon />
+                    </>
+                  )}
                 </div>
                 <p className="text-2xl font-mono text-foreground">{formatDuration(callDuration)}</p>
               </div>
