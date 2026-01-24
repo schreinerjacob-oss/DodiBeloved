@@ -691,7 +691,7 @@ export default function CallsPage() {
               <div className="space-y-1">
                 <div className="flex items-center justify-center gap-2">
                   {isReconnecting ? (
-                    <p className="text-yellow-500">Reconnecting... ({reconnectAttempts}/{MAX_RECONNECT_ATTEMPTS})</p>
+                    <p className="text-yellow-500 font-medium animate-pulse">Reconnecting... ({reconnectAttempts}/{MAX_RECONNECT_ATTEMPTS})</p>
                   ) : isFallbackMode ? (
                     <>
                       <Wifi className="w-4 h-4 text-blue-500" />
