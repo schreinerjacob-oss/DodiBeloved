@@ -233,7 +233,7 @@ export default function SettingsPage() {
                 <div>
                   <h3 className="font-medium">Support the Garden</h3>
                   <p className="text-xs text-muted-foreground">
-                    {isPremium ? 'Thank you for your eternal support' : 'Keep dodi private forever'}
+                    Your whispers stay only between you two — forever
                   </p>
                 </div>
               </div>
@@ -281,7 +281,7 @@ export default function SettingsPage() {
                 <div>
                   <h3 className="font-medium">Privacy & Security</h3>
                   <p className="text-xs text-muted-foreground">
-                    All data is encrypted end-to-end
+                    Your whispers stay only between you two — forever
                   </p>
                 </div>
               </div>

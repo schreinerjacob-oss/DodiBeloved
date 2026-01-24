@@ -478,7 +478,7 @@ export default function ChatPage() {
             <h2 className="font-medium text-foreground">my beloved</h2>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <Lock className="w-3 h-3" />
-              {peerState.connected ? '✨ Right here • Encrypted' : '⏳ Connecting...'} 
+              Your whispers stay only between you two — forever
             </p>
           </div>
         </div>

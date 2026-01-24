@@ -8,14 +8,14 @@ const screens = [
   {
     title: 'Welcome to Dodi',
     subtitle: 'Your private garden for two',
-    description: 'After pairing, all messages, photos, memories, prayers, and love notes stay only on your two phones — encrypted and private forever. No servers. No leaks.',
+    description: 'Your whispers stay only between you two — forever. Encrypted on your devices, never touching a server. No leaks possible.',
     icon: Heart,
     iconColor: 'text-accent',
   },
   {
     title: 'Completely Private',
     subtitle: '100% Direct Peer-to-Peer',
-    description: 'Everything flows directly between your devices alone. Even we cannot see your data. No central server. No tracking.',
+    description: 'Everything flows directly between your devices alone. Even we cannot see your data. Your connection is yours alone — forever.',
     icon: Lock,
     iconColor: 'text-primary',
   },

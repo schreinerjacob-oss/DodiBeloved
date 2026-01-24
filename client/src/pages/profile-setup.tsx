@@ -51,7 +51,7 @@ export default function ProfileSetupPage() {
           <img src={dodiTypographyLogo} alt="dodi" className="w-20 h-20 mx-auto" />
           <div className="space-y-2">
             <h1 className="text-3xl font-bold text-foreground">Welcome</h1>
-            <p className="text-muted-foreground">Create your account to begin your sacred connection</p>
+            <p className="text-muted-foreground">Your whispers stay only between you two — forever</p>
           </div>
         </div>
 
@@ -84,7 +84,7 @@ export default function ProfileSetupPage() {
 
         <p className="text-center text-xs text-muted-foreground">
           <Lock className="w-3 h-3 inline mr-1" />
-          Your data is encrypted and private
+          Your whispers stay only between you two — forever
         </p>
       </div>
     </div>
