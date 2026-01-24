@@ -169,6 +169,11 @@ export default function PairingPage() {
           await saveSetting('salt', payload.salt);
           await saveSetting('partnerId', isCreatorRole ? payload.joinerId : payload.creatorId);
           await saveSetting('pairingStatus', 'connected');
+          // Also save to localStorage for redundancy and health checks
+          localStorage.setItem('dodi-passphrase', payload.masterKey);
+          localStorage.setItem('dodi-salt', payload.salt);
+          localStorage.setItem('dodi-partnerId', isCreatorRole ? payload.joinerId : payload.creatorId);
+          localStorage.setItem('dodi-pairingStatus', 'connected');
         } catch (e) {
           console.error('Failed to double-save passphrase during pairing:', e);
         }

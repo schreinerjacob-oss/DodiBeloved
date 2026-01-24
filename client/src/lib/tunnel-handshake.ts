@@ -209,11 +209,13 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
         if (data.type === 'tunnel-ack') {
           console.log('📥 [TUNNEL] Received tunnel-ack, preparing key payload');
           const { getSetting } = await import('./storage');
-          const masterKeySetting = await getSetting('passphrase');
-          const saltSetting = await getSetting('salt');
+          const masterKey = await getSetting('passphrase');
+          const salt = await getSetting('salt');
           
-          const masterKey = (masterKeySetting as any)?.value || masterKeySetting || 'error-missing-key';
-          const salt = (saltSetting as any)?.value || saltSetting || 'error-missing-salt';
+          if (!masterKey || !salt) {
+            console.error('❌ [TUNNEL] Creator missing masterKey or salt in storage');
+            throw new Error('Missing encryption credentials');
+          }
 
           let payload: MasterKeyPayload | null = null;
           
