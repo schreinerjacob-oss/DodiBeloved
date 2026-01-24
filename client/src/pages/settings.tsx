@@ -548,9 +548,9 @@ export default function SettingsPage() {
             <div className="pt-3 space-y-4 border-t">
               {userId && (
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">YOUR ID</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Your ID</p>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-mono flex-1 break-all bg-muted/50 p-2 rounded text-foreground">
+                    <p className="text-sm font-mono flex-1 break-all bg-muted/50 p-3 rounded-lg text-foreground border border-border/50">
                       {userId}
                     </p>
                     <Button
@@ -558,6 +558,7 @@ export default function SettingsPage() {
                       variant="ghost"
                       onClick={handleCopyUserId}
                       data-testid="button-copy-user-id"
+                      className="hover-elevate h-11 w-11"
                     >
                       {copiedUserId ? (
                         <Check className="w-4 h-4 text-accent" />
@@ -570,9 +571,9 @@ export default function SettingsPage() {
               )}
               {partnerId && (
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">PARTNER ID</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Partner ID</p>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-mono flex-1 break-all bg-muted/50 p-2 rounded text-foreground">
+                    <p className="text-sm font-mono flex-1 break-all bg-muted/50 p-3 rounded-lg text-foreground border border-border/50">
                       {partnerId}
                     </p>
                     <Button
@@ -580,6 +581,7 @@ export default function SettingsPage() {
                       variant="ghost"
                       onClick={handleCopyPartnerId}
                       data-testid="button-copy-partner-id"
+                      className="hover-elevate h-11 w-11"
                     >
                       {copiedPartnerId ? (
                         <Check className="w-4 h-4 text-accent" />
@@ -592,9 +594,9 @@ export default function SettingsPage() {
               )}
               {passphrase && (
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">SHARED PASSPHRASE</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Shared Passphrase</p>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-mono flex-1 break-all bg-muted/50 p-2 rounded text-foreground">
+                    <p className="text-sm font-mono flex-1 break-all bg-muted/50 p-3 rounded-lg text-foreground border border-border/50">
                       {passphrase}
                     </p>
                     <Button
@@ -602,6 +604,7 @@ export default function SettingsPage() {
                       variant="ghost"
                       onClick={handleCopyPassphrase}
                       data-testid="button-copy-passphrase"
+                      className="hover-elevate h-11 w-11"
                     >
                       {copiedPassphrase ? (
                         <Check className="w-4 h-4 text-accent" />
@@ -610,6 +613,9 @@ export default function SettingsPage() {
                       )}
                     </Button>
                   </div>
+                  <p className="text-[10px] text-muted-foreground italic">
+                    This recovery key is only stored on your devices. Keep it secret.
+                  </p>
                 </div>
               )}
             </div>
