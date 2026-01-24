@@ -315,21 +315,7 @@ export default function ChatPage() {
         timestamp: Date.now(),
       });
 
-      // Update status based on connection state
-      if (!isOffline) {
-        setMessages(prev => prev.map(m => 
-          m.id === messageId ? { ...m, status: 'sent' } : m
-        ));
-      } else {
-        // Notify sender that message is queued
-        notifyMessageQueued();
-        
-        // Show toast for offline queue confirmation
-        toast({
-          title: "Message queued",
-          description: "Will be sent when connection is restored",
-        });
-      }
+      // NO UI UPDATE based on isOffline here - the status is already correct in the message object
       
       if (isDisappearing) {
         setTimeout(() => {

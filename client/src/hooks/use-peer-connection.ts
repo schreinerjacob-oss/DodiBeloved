@@ -533,6 +533,35 @@ export function closeRoom(room: RoomConnection) {
   room.peer.destroy();
 }
 
+// Send a message or queue it if offline
+export async function sendP2PMessage(message: SyncMessage) {
+  if (globalConn && globalConn.open) {
+    try {
+      globalConn.send(message);
+      console.log('📤 Message sent via P2P:', message.type);
+      return;
+    } catch (e) {
+      console.error('Failed to send message, queuing instead:', e);
+    }
+  }
+
+  // Queue the message if offline or send failed
+  const msgId = (message.data as any)?.id || `msg-${Date.now()}`;
+  console.log('📥 Connection offline, queuing message:', msgId);
+  
+  // Check for duplicates in memory queue
+  if (!offlineQueue.some(m => (m.data as any)?.id === msgId)) {
+    offlineQueue.push(message);
+    await saveToOfflineQueue(msgId, message);
+    notifyQueueListeners(offlineQueue.length);
+  }
+  
+  // Trigger reconnection if offline
+  if (globalPartnerId && (!globalConn || !globalConn.open)) {
+    connectToPartner(globalPartnerId);
+  }
+}
+
 export function usePeerConnection(): UsePeerConnectionReturn {
   const { userId, partnerId, pairingStatus, allowWakeUp } = useDodi();
   const [state, setState] = useState<PeerConnectionState>(globalState);
@@ -671,27 +700,8 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   }, [partnerId]);
 
   const send = useCallback(async (message: SyncMessage) => {
-    if (globalConn && globalConn.open) {
-      if (firstMessageSentAfterReconnect === null) {
-        firstMessageSentAfterReconnect = Date.now();
-      }
-      globalConn.send(message);
-      console.log('📤 Sent:', message.type);
-    } else {
-      // Queue message for later when reconnected (memory + persistent)
-      const msgId = (message.data as any)?.id;
-      if (!msgId) {
-        console.warn('Cannot queue message without id:', message.type);
-        return;
-      }
-      
-      console.log('📨 Queueing message (offline):', message.type, msgId);
-      offlineQueue.push(message);
-      
-      // Save to persistent storage using actual message ID
-      await saveToOfflineQueue(msgId, message);
-      notifyQueueListeners(offlineQueue.length);
-      
+    sendP2PMessage(message);
+    if (!globalConn || !globalConn.open) {
       if (partnerId) {
         connectToPartner(partnerId);
         if (allowWakeUp) {

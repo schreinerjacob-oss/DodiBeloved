@@ -368,6 +368,12 @@ export async function getEssentials(): Promise<Record<string, any[]>> {
 export async function saveMessage(message: Message): Promise<void> {
   try {
     const db = await initDB();
+    
+    // Ensure status is never 'failed' or empty when it should be queued
+    if (!message.status || (message.status as string) === 'failed') {
+      message.status = 'queued';
+    }
+    
     const encrypted = await encryptMessage(message);
     const record = {
       id: message.id,
