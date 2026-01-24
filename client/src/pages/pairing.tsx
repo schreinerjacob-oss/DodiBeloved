@@ -195,19 +195,20 @@ export default function PairingPage() {
     console.log('✅ [ID AUDIT] Creator userId exists:', userId);
     setLoading(true);
     setIsCreator(true);
-    if (mode === 'restore-mode' || initialMode === 'restore-mode') {
-      console.log('📋 Restore mode activated – waiting for partner to join');
+    
+    // IMPORTANT: For new pairings (not restore), we need to stay on the code display screen
+    // so the partner can see the code and connect.
+    if (mode !== 'restore-mode') {
+      // Stay on 'pairing' mode to show the code/QR
+      setMode('pairing');
     }
+    
     try {
       const myPeerId = createRoomPeerId(code, true);
       
       console.log('🌿 Creating room as creator:', code);
       console.log('📋 [ID AUDIT] Creator will send userId to tunnel:', userId);
       const peer = await initializePeer(myPeerId);
-      
-      if (mode !== 'restore-mode') {
-        setMode('pairing');
-      }
       
       const connPromise = waitForConnection(peer, 120000).then(async (conn) => {
         roomRef.current = { peer, conn, isCreator: true, peerId: myPeerId };

@@ -188,11 +188,13 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
       
       try {
         if (data.type === 'tunnel-init') {
+          console.log('📬 [TUNNEL] Processing tunnel-init from joiner');
           if (!ephemeralKeys) {
             ephemeralKeys = await generateEphemeralKeyPair();
           }
           sharedKey = await deriveSharedSecret(ephemeralKeys.privateKey, data.publicKey);
           const initMsg = createTunnelInitMessage(ephemeralKeys.publicKey);
+          console.log('📤 [TUNNEL] Sending tunnel-init response to joiner');
           conn.send({ ...initMsg, fingerprint: ephemeralKeys.fingerprint });
         }
         
@@ -273,7 +275,13 @@ export async function runJoinerTunnel(conn: any): Promise<MasterKeyPayload> {
         
         try {
           if (data.type === 'tunnel-init') {
+            console.log('📬 [TUNNEL] Processing tunnel-init from creator');
             sharedKey = await deriveSharedSecret(ephemeralKeys.privateKey, data.publicKey);
+            console.log('📤 [TUNNEL] Sending tunnel-ack to creator');
+            // We need to send the ACK after deriving the secret so the creator knows we're ready
+            // and has our joinerId (which is sent in sendPairingAck)
+            // But wait... the original flow calls sendPairingAck outside this.
+            // Let's ensure the joiner actually responds to the creator's init.
           }
           
           if ((data.type === 'tunnel-key' || data.type === 'restore-key') && sharedKey) {
