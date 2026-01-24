@@ -18,9 +18,8 @@ import OurMomentsPage from "@/pages/our-moments";
 import DailyWhisperPage from "@/pages/daily-whisper";
 import LoveNotesPage from "@/pages/love-notes";
 import PrayersPage from "@/pages/prayers";
-import CallsPage from "@/pages/calls";
 import SettingsPage from "@/pages/settings";
-import { MessageSquare, Camera, CalendarHeart, Phone, Settings, Lock } from "lucide-react";
+import { MessageSquare, Camera, CalendarHeart, Settings, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConnectionStatus } from "@/components/connection-status";
 import { GlobalSyncHandler } from "@/components/global-sync-handler";
@@ -88,7 +87,6 @@ function MainApp() {
 
   const navItems = [
     { href: "/chat", icon: MessageSquare, label: "Chat" },
-    { href: "/calls", icon: Phone, label: "Calls" },
     { href: "/memories", icon: Camera, label: "Memories" },
     { href: "/moments", icon: CalendarHeart, label: "Moments" },
     { href: "/settings", icon: Settings, label: "Settings" },
@@ -100,7 +98,6 @@ function MainApp() {
       <div className="flex-1 overflow-hidden">
         <Switch>
           <Route path="/chat" component={ChatPage} />
-          <Route path="/calls" component={CallsPage} />
           <Route path="/memories" component={MemoriesPage} />
           <Route path="/moments" component={OurMomentsPage} />
           <Route path="/whisper" component={DailyWhisperPage} />

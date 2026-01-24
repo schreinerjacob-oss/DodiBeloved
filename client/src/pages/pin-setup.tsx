@@ -112,7 +112,7 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
             <label className="text-sm font-medium text-muted-foreground">
               {step === 'entry' ? 'Enter PIN' : 'Confirm PIN'}
             </label>
-            <div className="flex gap-1 mt-2">
+            <div className="flex gap-2 mt-2 justify-center">
               {Array.from({ length: 6 }).map((_, i) => {
                 const value = step === 'entry' ? pin : confirmPin;
                 const digit = value[i] || '';
@@ -120,10 +120,10 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
                   <div
                     key={i}
                     className={cn(
-                      'flex-1 h-12 rounded-md border-2 flex items-center justify-center font-bold text-lg transition-all',
+                      'w-10 h-12 rounded-md border-2 flex items-center justify-center font-bold text-lg transition-all',
                       digit
-                        ? 'border-gold bg-gold/10 text-gold'
-                        : 'border-sage/30 bg-transparent text-muted-foreground'
+                        ? 'border-gold bg-gold/10 text-gold shadow-[0_0_10px_rgba(212,175,55,0.2)]'
+                        : 'border-sage/20 bg-transparent text-muted-foreground'
                     )}
                   >
                     {digit && '•'}
@@ -134,22 +134,13 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
             <Input
               type="text"
               inputMode="numeric"
-              placeholder="0000"
-              value={step === 'entry' ? pin : confirmPin}
-              onChange={(e) => handlePinChange(e.target.value)}
-              className="mt-3 text-center tracking-widest opacity-0 absolute pointer-events-none"
-              data-testid="input-pin"
-              autoFocus
-            />
-            <input
-              type="text"
-              inputMode="numeric"
               maxLength={6}
-              placeholder="Enter PIN"
               value={step === 'entry' ? pin : confirmPin}
               onChange={(e) => handlePinChange(e.target.value)}
-              className="w-full mt-3 text-center tracking-widest"
+              className="mt-4 text-center tracking-[1em] font-mono text-lg h-12"
+              placeholder="••••••"
               data-testid="input-pin-actual"
+              autoFocus
             />
           </div>
 

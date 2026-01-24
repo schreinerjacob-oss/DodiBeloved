@@ -163,17 +163,17 @@ export default function PinLockPage() {
 
         <div className="space-y-4">
           <div>
-            <div className="flex gap-1">
+            <div className="flex gap-2 justify-center">
               {Array.from({ length: 6 }).map((_, i) => {
                 const digit = pin[i] || '';
                 return (
                   <div
                     key={i}
                     className={cn(
-                      'flex-1 h-12 rounded-md border-2 flex items-center justify-center font-bold text-lg transition-all',
+                      'w-10 h-12 rounded-md border-2 flex items-center justify-center font-bold text-lg transition-all',
                       digit
-                        ? 'border-gold bg-gold/10 text-gold'
-                        : 'border-sage/30 bg-transparent text-muted-foreground'
+                        ? 'border-gold bg-gold/10 text-gold shadow-[0_0_10px_rgba(212,175,55,0.2)]'
+                        : 'border-sage/20 bg-transparent text-muted-foreground'
                     )}
                   >
                     {digit && '•'}
@@ -181,11 +181,10 @@ export default function PinLockPage() {
                 );
               })}
             </div>
-            <input
+            <Input
               type="text"
               inputMode="numeric"
               maxLength={6}
-              placeholder="Enter PIN"
               value={pin}
               onChange={(e) => handlePinChange(e.target.value)}
               onKeyPress={(e) => {
@@ -193,7 +192,8 @@ export default function PinLockPage() {
                   handleUnlockPin();
                 }
               }}
-              className="w-full mt-3 text-center tracking-widest"
+              className="mt-4 text-center tracking-[1em] font-mono text-lg h-12"
+              placeholder="••••••"
               data-testid="input-pin-lock"
               disabled={loading}
               autoFocus
