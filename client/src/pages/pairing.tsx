@@ -159,6 +159,19 @@ export default function PairingPage() {
       console.log('✅ [PAIRING] Storage updated, updating global state...');
       onPeerConnected();
       
+      // Update local state for immediate feedback
+      if (payload.masterKey) {
+        // We need to manually set this because the context load happens on mount
+        // and we want the settings page to show it immediately after redirect
+        try {
+          const db = await (await import('@/lib/storage')).initDB();
+          await db.put('settings', { key: 'passphrase', value: payload.masterKey });
+          await db.put('settings', { key: 'salt', value: payload.salt });
+        } catch (e) {
+          console.error('Failed to double-save passphrase during pairing:', e);
+        }
+      }
+
       // Force a small delay to ensure context state propagates before transition
       await new Promise(resolve => setTimeout(resolve, 500));
       

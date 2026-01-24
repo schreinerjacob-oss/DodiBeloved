@@ -62,7 +62,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       try {
         const db = await initDB();
-        const [storedUserId, storedDisplayName, storedPartnerId, storedPassphrase, storedPairingStatus, storedPinEnabled, storedInactivityMinutes, storedIsPremium] = await Promise.all([
+        const [storedUserId, storedDisplayName, storedPartnerId, storedPassphrase, storedPairingStatus, storedPinEnabled, storedInactivityMinutes, storedIsPremium, storedAllowWakeUp] = await Promise.all([
           db.get('settings', 'userId'),
           db.get('settings', 'displayName'),
           db.get('settings', 'partnerId'),
@@ -71,6 +71,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           db.get('settings', 'pinEnabled'),
           db.get('settings', 'inactivityMinutes'),
           db.get('settings', 'isPremium'),
+          db.get('settings', 'allowWakeUp'),
         ]);
 
         const storedUserIdObj = storedUserId as any;
@@ -82,12 +83,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
 
         const storedPassphraseObj = storedPassphrase as any;
         if (storedPassphraseObj?.value) {
-          const storedPinEnabledObj = storedPinEnabled as any;
-          if (storedPinEnabledObj?.value === 'true' || storedPinEnabledObj?.value === true) {
-            setPassphrase(null);
-          } else {
-            setPassphrase(storedPassphraseObj.value);
-          }
+          setPassphrase(storedPassphraseObj.value);
         }
 
         const storedPartnerIdObj = storedPartnerId as any;
@@ -98,20 +94,20 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         const storedPairingStatusObj = storedPairingStatus as any;
         if (storedPairingStatusObj?.value) {
           setPairingStatus(storedPairingStatusObj.value as PairingStatus);
-        } else if (userId && storedPassphraseObj?.value) {
-          if (storedPartnerIdObj?.value) {
-            setPairingStatus('connected');
-            await db.put('settings', { key: 'pairingStatus', value: 'connected' });
-          } else {
-            setPairingStatus('waiting');
-            await db.put('settings', { key: 'pairingStatus', value: 'waiting' });
-          }
         }
 
         const storedPinEnabledObjFinal = storedPinEnabled as any;
         if (storedPinEnabledObjFinal?.value === 'true' || storedPinEnabledObjFinal?.value === true) {
           setPinEnabled(true);
+          // If PIN is enabled, we lock the app and clear the in-memory passphrase
+          // The user will need to enter PIN to decrypt the passphrase back into memory
           setIsLocked(true);
+          setPassphrase(null);
+        }
+
+        const storedAllowWakeUpObj = storedAllowWakeUp as any;
+        if (storedAllowWakeUpObj?.value) {
+          setAllowWakeUpState(storedAllowWakeUpObj.value === 'true' || storedAllowWakeUpObj.value === true);
         }
 
         const storedInactivityMinutesObj = storedInactivityMinutes as any;
@@ -296,14 +292,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   };
 
   const [allowWakeUp, setAllowWakeUpState] = useState(false);
-  useEffect(() => {
-    const loadAllowWakeUp = async () => {
-      const db = await initDB();
-      const stored = await db.get('settings', 'allowWakeUp');
-      if (stored) setAllowWakeUpState(stored.value === 'true' || stored.value === true);
-    };
-    loadAllowWakeUp();
-  }, []);
 
   const setAllowWakeUp = async (enabled: boolean) => {
     setAllowWakeUpState(enabled);
