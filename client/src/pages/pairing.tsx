@@ -164,9 +164,11 @@ export default function PairingPage() {
         // We need to manually set this because the context load happens on mount
         // and we want the settings page to show it immediately after redirect
         try {
-          const db = await (await import('@/lib/storage')).initDB();
-          await db.put('settings', { key: 'passphrase', value: payload.masterKey });
-          await db.put('settings', { key: 'salt', value: payload.salt });
+          const { saveSetting } = await import('@/lib/storage');
+          await saveSetting('passphrase', payload.masterKey);
+          await saveSetting('salt', payload.salt);
+          await saveSetting('partnerId', isCreatorRole ? payload.joinerId : payload.creatorId);
+          await saveSetting('pairingStatus', 'connected');
         } catch (e) {
           console.error('Failed to double-save passphrase during pairing:', e);
         }

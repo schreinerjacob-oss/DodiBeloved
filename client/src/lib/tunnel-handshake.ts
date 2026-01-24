@@ -208,17 +208,12 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
         
         if (data.type === 'tunnel-ack') {
           console.log('📥 [TUNNEL] Received tunnel-ack, preparing key payload');
-          const { getSetting } = await import('./storage-encrypted');
+          const { getSetting } = await import('./storage');
           const masterKeySetting = await getSetting('passphrase');
           const saltSetting = await getSetting('salt');
           
-          const masterKey = typeof masterKeySetting === 'object' && masterKeySetting !== null && 'value' in masterKeySetting 
-            ? (masterKeySetting as any).value 
-            : (typeof masterKeySetting === 'string' ? masterKeySetting : 'error-missing-key');
-            
-          const salt = typeof saltSetting === 'object' && saltSetting !== null && 'value' in saltSetting 
-            ? (saltSetting as any).value 
-            : (typeof saltSetting === 'string' ? saltSetting : 'error-missing-salt');
+          const masterKey = masterKeySetting?.value || masterKeySetting || 'error-missing-key';
+          const salt = saltSetting?.value || saltSetting || 'error-missing-salt';
 
           let payload: MasterKeyPayload | null = null;
           
