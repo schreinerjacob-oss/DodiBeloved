@@ -174,12 +174,9 @@ export default function PairingPage() {
   };
 
   const handleCreateRoom = async () => {
-    // Generate code if it doesn't exist (e.g. restore mode)
-    let code = roomCode;
-    if (!code) {
-      code = generateRoomCode();
-      setRoomCode(code);
-    }
+    // Generate code fresh every time for new pairings
+    const code = generateRoomCode();
+    setRoomCode(code);
 
     // VALIDATION: Ensure userId exists
     if (!userId) {
