@@ -199,19 +199,24 @@ async function derivePINKey(pin: string, salt: Uint8Array): Promise<CryptoKey> {
 export async function savePIN(pin: string, passphrase: string): Promise<void> {
   try {
     const db = await initDB();
-    const storedSalt = await getSettingRaw('salt');
+    let storedSalt = await getSettingRaw('salt');
     
     if (!storedSalt) {
-      throw new Error('Salt not available');
+      console.warn('⚠️ [STORAGE] No salt found during PIN setup - fetching fallback');
+      const fallbackSalt = await getSettingRaw('salt');
+      if (!fallbackSalt) throw new Error('Salt not available');
+      storedSalt = fallbackSalt;
     }
 
     // Safely decode salt with validation
     let salt: Uint8Array;
     try {
-      if (!storedSalt || typeof storedSalt !== 'string') {
+      // Handle wrapped objects or strings
+      const saltStr = typeof storedSalt === 'string' ? storedSalt : (storedSalt as any).value;
+      if (!saltStr || typeof saltStr !== 'string') {
         throw new Error('Salt must be a base64 string');
       }
-      salt = base64ToArrayBuffer(storedSalt);
+      salt = base64ToArrayBuffer(saltStr);
     } catch (e) {
       console.error('Failed to decode salt:', e, 'Value:', storedSalt);
       throw new Error('Invalid salt format');
@@ -255,16 +260,18 @@ export async function verifyPINAndGetPassphrase(pin: string): Promise<string | n
     const storedEncryptedPassphrase = await db.get('settings', 'encryptedPassphrase');
     
     if (!storedSalt || !storedEncryptedPassphrase) {
+      console.warn('⚠️ [STORAGE] Missing salt or encrypted passphrase for PIN verification');
       return null;
     }
 
     // Safely decode salt with validation
     let salt: Uint8Array;
     try {
-      if (!storedSalt || typeof storedSalt !== 'string') {
+      const saltStr = typeof storedSalt === 'string' ? storedSalt : (storedSalt as any).value;
+      if (!saltStr || typeof saltStr !== 'string') {
         throw new Error('Salt must be a base64 string');
       }
-      salt = base64ToArrayBuffer(storedSalt);
+      salt = base64ToArrayBuffer(saltStr);
     } catch (e) {
       console.error('Failed to decode salt:', e, 'Value:', storedSalt);
       return null;

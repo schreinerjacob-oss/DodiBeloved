@@ -84,9 +84,9 @@ export async function checkP2PConnection(): Promise<PrivacyCheckResult> {
     if (peerState?.connected) {
       result.status = 'passed';
       result.detail = 'WebRTC data channel active';
-    } else if (peerState?.isReconnecting) {
+    } else if (peerState?.isReconnecting || peerState?.peerId) {
       result.status = 'warning';
-      result.detail = 'Reconnecting to partner...';
+      result.detail = 'Connecting to signaling relay...';
     } else {
       result.status = 'warning';
       result.detail = 'Partner offline (messages queued locally)';
