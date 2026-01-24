@@ -93,8 +93,8 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
   const isValidPin = (value: string) => value.length >= 4 && value.length <= 6;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cream via-sage/10 to-blush/20 dark:from-background dark:via-card dark:to-secondary flex items-center justify-center p-6">
-      <Card className="w-full max-w-md p-8 space-y-6 border-sage/30">
+    <div className="flex flex-col items-center justify-center p-6 bg-background h-full w-full overflow-y-auto" style={{ minHeight: '100dvh' }}>
+      <Card className="w-full max-w-sm p-8 space-y-6 border-sage/30 shadow-none bg-transparent">
         <div className="space-y-3 text-center">
           <div className="flex justify-center mb-3">
             <Lock className="w-12 h-12 text-gold animate-pulse-glow" />

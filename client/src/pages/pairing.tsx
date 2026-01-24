@@ -359,7 +359,7 @@ export default function PairingPage() {
 
   if (loading && mode === 'pairing') {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center space-y-8">
+      <div className="flex flex-col items-center justify-center p-6 text-center space-y-8 bg-background h-full w-full overflow-y-auto" style={{ minHeight: '100dvh' }}>
         <div className="w-full max-w-sm space-y-8">
           <div className="space-y-4">
             <motion.div
@@ -435,7 +435,7 @@ export default function PairingPage() {
 
   if (loading && mode === 'restore-mode') {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center space-y-6">
+      <div className="flex flex-col items-center justify-center p-6 text-center space-y-6 bg-background h-full w-full overflow-y-auto" style={{ minHeight: '100dvh' }}>
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
@@ -472,7 +472,7 @@ export default function PairingPage() {
     };
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-cream via-sage/10 to-blush/20 dark:from-background dark:via-card dark:to-secondary flex items-center justify-center p-6 overflow-hidden">
+      <div className="flex flex-col items-center justify-center p-6 overflow-hidden bg-background h-full w-full" style={{ minHeight: '100dvh' }}>
         {/* Vines Animation Elements */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <motion.div 

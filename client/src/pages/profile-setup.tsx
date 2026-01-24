@@ -45,8 +45,8 @@ export default function ProfileSetupPage() {
   };
 
   return (
-    <div className="w-screen flex flex-col items-center justify-center bg-background" style={{ minHeight: '100dvh' }}>
-      <div className="w-full max-w-sm px-6 space-y-8">
+    <div className="w-full flex flex-col items-center justify-center bg-background h-full overflow-y-auto" style={{ minHeight: '100dvh' }}>
+      <div className="w-full max-w-sm px-6 py-12 space-y-8">
         <div className="text-center space-y-4">
           <img src={dodiTypographyLogo} alt="dodi" className="w-20 h-20 mx-auto" />
           <div className="space-y-2">
