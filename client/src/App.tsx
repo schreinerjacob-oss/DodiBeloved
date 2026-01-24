@@ -90,7 +90,6 @@ function MainApp() {
     { href: "/calls", icon: Phone, label: "Calls" },
     { href: "/heart-space", icon: Heart, label: "Heart" },
     { href: "/memories", icon: Camera, label: "Memories" },
-    { href: "/moments", icon: CalendarHeart, label: "Moments" },
   ];
 
   return (
@@ -113,7 +112,6 @@ function MainApp() {
           <Route path="/chat" component={ChatPage} />
           <Route path="/calls" component={CallsPage} />
           <Route path="/memories" component={MemoriesPage} />
-          <Route path="/moments" component={OurMomentsPage} />
           <Route path="/heart-space" component={HeartSpacePage} />
           <Route path="/settings" component={SettingsPage} />
           <Route path="/" component={ChatPage} />
