@@ -356,16 +356,75 @@ export default function PairingPage() {
 
   if (loading && mode === 'pairing') {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center space-y-6">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-        >
-          <Loader2 className="w-12 h-12 text-sage" />
-        </motion.div>
-        <div className="space-y-2">
-          <h2 className="text-2xl font-light text-sage">Connecting Your Gardens...</h2>
-          <p className="text-muted-foreground italic text-sm">Searching for your partner's light ♾️</p>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center space-y-8">
+        <div className="w-full max-w-sm space-y-8">
+          <div className="space-y-4">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              className="mx-auto w-12 h-12"
+            >
+              <Loader2 className="w-12 h-12 text-sage" />
+            </motion.div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-light text-sage tracking-tight">Connecting Your Gardens...</h2>
+              <p className="text-muted-foreground italic text-sm">Searching for your partner's light ♾️</p>
+            </div>
+          </div>
+
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="space-y-6"
+          >
+            <div className="bg-sage/5 border border-sage/20 rounded-2xl p-6 space-y-4">
+              <p className="text-sm text-sage font-medium">Share this code with your partner:</p>
+              <div className="flex items-center justify-center gap-3">
+                <code className="text-3xl font-mono tracking-widest text-foreground bg-white dark:bg-card px-4 py-2 rounded-lg border border-sage/10 shadow-sm">
+                  {roomCode}
+                </code>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleCopyCode}
+                  className="text-sage hover:bg-sage/10"
+                >
+                  {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground uppercase tracking-widest">
+                <div className="h-px w-8 bg-muted-foreground/20" />
+                <span>Or scan to connect</span>
+                <div className="h-px w-8 bg-muted-foreground/20" />
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl shadow-inner border border-sage/10 inline-block mx-auto">
+                <QRCodeSVG 
+                  value={roomCode} 
+                  size={160}
+                  level="M"
+                  includeMargin={false}
+                  className="dark:invert"
+                />
+              </div>
+            </div>
+
+            <Button 
+              variant="ghost" 
+              onClick={() => {
+                if (roomRef.current) closeRoom(roomRef.current);
+                setMode('choose');
+                setLoading(false);
+              }}
+              className="text-muted-foreground hover:text-foreground text-sm"
+            >
+              Cancel Connection
+            </Button>
+          </motion.div>
         </div>
       </div>
     );
