@@ -3,7 +3,7 @@ import { useDodi } from '@/contexts/DodiContext';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Phone, Video, PhoneOff, Mic, MicOff, Camera, CameraOff } from 'lucide-react';
+import { Phone, Video, PhoneOff, Mic, MicOff, Camera, CameraOff, SignalHigh, SignalMedium, SignalLow, SignalZero } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import SimplePeer from 'simple-peer';
 
@@ -18,11 +18,47 @@ export default function CallsPage() {
   const [micEnabled, setMicEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [callDuration, setCallDuration] = useState(0);
+  const [connectionQuality, setConnectionQuality] = useState<'good' | 'fair' | 'poor' | 'searching'>('searching');
   const ringtoneRef = useRef<HTMLAudioElement | null>(null);
   const mediaCallRef = useRef<SimplePeer.Instance | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+
+  // Call quality monitoring
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (callActive && mediaCallRef.current) {
+      interval = setInterval(async () => {
+        if (!mediaCallRef.current?._pc) return;
+        try {
+          const stats = await mediaCallRef.current._pc.getStats();
+          let rtt = 0;
+          let packetLoss = 0;
+
+          stats.forEach((report: any) => {
+            if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+              rtt = report.currentRoundTripTime * 1000;
+            }
+            if (report.type === 'inbound-rtp') {
+              packetLoss = report.packetsLost;
+            }
+          });
+
+          if (rtt < 100 && packetLoss < 2) setConnectionQuality('good');
+          else if (rtt < 300 && packetLoss < 5) setConnectionQuality('fair');
+          else setConnectionQuality('poor');
+        } catch (e) {
+          console.error('Error getting stats:', e);
+        }
+      }, 3000);
+    } else {
+      setConnectionQuality('searching');
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [callActive]);
 
   // Call timer effect
   useEffect(() => {
@@ -43,6 +79,15 @@ export default function CallsPage() {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const ConnectionIcon = () => {
+    switch (connectionQuality) {
+      case 'good': return <SignalHigh className="w-4 h-4 text-green-500" />;
+      case 'fair': return <SignalMedium className="w-4 h-4 text-yellow-500" />;
+      case 'poor': return <SignalLow className="w-4 h-4 text-red-500" />;
+      default: return <SignalZero className="w-4 h-4 text-muted-foreground animate-pulse" />;
+    }
   };
 
   // Listen for incoming call signals through P2P data channel
@@ -352,25 +397,25 @@ export default function CallsPage() {
   if (callActive) {
     return (
       <div className="h-full flex flex-col bg-background">
-        <div className="flex-1 flex items-center justify-center gap-4 p-4">
+        <div className="flex-1 flex items-center justify-center gap-4 p-4 relative">
           {callType === 'video' && (
             <>
-              <div className="flex-1 max-w-md">
+              <div className="flex-1 max-w-md w-full aspect-video">
                 <video
                   ref={remoteVideoRef}
                   autoPlay
                   playsInline
-                  className="w-full h-full rounded-lg bg-muted"
+                  className="w-full h-full rounded-lg bg-muted object-cover"
                   data-testid="video-remote"
                 />
               </div>
-              <div className="absolute bottom-4 right-4 w-24 h-24">
+              <div className="absolute top-4 right-4 w-32 aspect-video z-10">
                 <video
                   ref={localVideoRef}
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full rounded-lg bg-muted"
+                  className="w-full h-full rounded-lg bg-muted object-cover border-2 border-background shadow-lg"
                   data-testid="video-local"
                 />
               </div>
@@ -383,7 +428,10 @@ export default function CallsPage() {
                 <Phone className="w-10 h-10 text-sage animate-pulse" />
               </div>
               <div className="space-y-1">
-                <p className="text-muted-foreground">Audio call active</p>
+                <div className="flex items-center justify-center gap-2">
+                  <p className="text-muted-foreground">Audio call active</p>
+                  <ConnectionIcon />
+                </div>
                 <p className="text-2xl font-mono text-foreground">{formatDuration(callDuration)}</p>
               </div>
             </div>
@@ -393,39 +441,43 @@ export default function CallsPage() {
         <div className="border-t bg-card/50 p-4 flex-shrink-0">
           <div className="flex flex-col items-center gap-4">
             {callType === 'video' && (
-              <div className="text-sm font-mono bg-background/50 px-3 py-1 rounded-full border">
-                {formatDuration(callDuration)}
+              <div className="flex items-center gap-3">
+                <div className="text-sm font-mono bg-background/50 px-3 py-1 rounded-full border">
+                  {formatDuration(callDuration)}
+                </div>
+                <ConnectionIcon />
               </div>
             )}
             <div className="flex items-center justify-center gap-4">
-            <Button
-              size="icon"
-              variant={micEnabled ? 'default' : 'destructive'}
-              onClick={toggleMic}
-              data-testid="button-toggle-mic"
-            >
-              {micEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-            </Button>
-
-            {callType === 'video' && (
               <Button
                 size="icon"
-                variant={cameraEnabled ? 'default' : 'destructive'}
-                onClick={toggleCamera}
-                data-testid="button-toggle-camera"
+                variant={micEnabled ? 'default' : 'destructive'}
+                onClick={toggleMic}
+                data-testid="button-toggle-mic"
               >
-                {cameraEnabled ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
+                {micEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
               </Button>
-            )}
 
-            <Button
-              size="icon"
-              variant="destructive"
-              onClick={endCall}
-              data-testid="button-end-call"
-            >
-              <PhoneOff className="w-5 h-5" />
-            </Button>
+              {callType === 'video' && (
+                <Button
+                  size="icon"
+                  variant={cameraEnabled ? 'default' : 'destructive'}
+                  onClick={toggleCamera}
+                  data-testid="button-toggle-camera"
+                >
+                  {cameraEnabled ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
+                </Button>
+              )}
+
+              <Button
+                size="icon"
+                variant="destructive"
+                onClick={endCall}
+                data-testid="button-end-call"
+              >
+                <PhoneOff className="w-5 h-5" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
