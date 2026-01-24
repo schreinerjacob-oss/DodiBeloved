@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import type { SyncMessage } from '@/types';
 import Peer, { type DataConnection } from 'peerjs';
@@ -252,30 +252,6 @@ function setupConnection(conn: DataConnection) {
   }
 
   globalConn = conn;
-
-  const sync = useCallback(async (conn: DataConnection) => {
-    if (globalSyncInProgress) return;
-    globalSyncInProgress = true;
-    
-    try {
-      console.log('🔄 [SYNC] Starting reconciliation handshake...');
-      const { getLastSynced } = await import('@/lib/storage-encrypted');
-      const stores = ['messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions'];
-      const lastSyncedTimestamps: Record<string, number> = {};
-      
-      for (const store of stores) {
-        lastSyncedTimestamps[store] = await getLastSynced(store);
-      }
-      
-      conn.send({
-        type: 'reconcile-init',
-        timestamps: lastSyncedTimestamps
-      });
-    } catch (err) {
-      console.error('❌ [SYNC] Reconciliation initiation failed:', err);
-      globalSyncInProgress = false;
-    }
-  }, []);
 
   async function handleReconcileInit(conn: DataConnection, partnerTimestamps: any) {
     try {
