@@ -439,7 +439,7 @@ export default function CallsPage() {
           console.log('WebRTC connection timeout, switching to fallback audio');
           startFallbackAudio();
         }
-      }, 8000);
+      }, 5000);
 
       // If we're the answerer, immediately signal the offer we received
       if (!isInitiator && offerSignal) {
