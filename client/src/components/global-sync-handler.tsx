@@ -61,7 +61,7 @@ export function GlobalSyncHandler() {
           console.log('✨ [SYNC] Received daily ritual:', ritual.id);
           await saveDailyRitual(ritual);
           notifyDailyRitual();
-          window.dispatchEvent(new CustomEvent('ritual-synced', { detail: ritual }));
+          window.dispatchEvent(new CustomEvent('p2p-message', { detail: message }));
         }
         
         // Handle love letter sync
@@ -73,7 +73,7 @@ export function GlobalSyncHandler() {
             await setLastSynced('letters', Number((letter as any).timestamp));
           }
           notifyNewLoveLetter();
-          window.dispatchEvent(new CustomEvent('letter-synced', { detail: letter }));
+          window.dispatchEvent(new CustomEvent('p2p-message', { detail: message }));
         }
         
         // Handle prayer sync
@@ -84,7 +84,7 @@ export function GlobalSyncHandler() {
           if ((prayer as any).timestamp) {
             await setLastSynced('prayers', Number((prayer as any).timestamp));
           }
-          window.dispatchEvent(new CustomEvent('prayer-synced', { detail: prayer }));
+          window.dispatchEvent(new CustomEvent('p2p-message', { detail: message }));
         }
         
         // Handle reaction sync

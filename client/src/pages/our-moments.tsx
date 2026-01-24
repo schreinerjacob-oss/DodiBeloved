@@ -278,29 +278,11 @@ export default function OurMomentsPage() {
             <Button
               variant="ghost"
               className="w-full justify-start text-muted-foreground"
-              onClick={() => setLocation('/whisper')}
-              data-testid="link-daily-whisper"
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              Daily Whisper
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-muted-foreground"
-              onClick={() => setLocation('/notes')}
-              data-testid="link-love-notes"
+              onClick={() => setLocation('/heart-space')}
+              data-testid="link-heart-space"
             >
               <Heart className="w-4 h-4 mr-2" />
-              Love Notes
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-muted-foreground"
-              onClick={() => setLocation('/prayers')}
-              data-testid="link-prayers"
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              Gratitude
+              Heart Space
             </Button>
           </div>
         </div>
