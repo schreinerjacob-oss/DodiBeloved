@@ -46,25 +46,6 @@ export default function SettingsPage() {
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinSaving, setPinSaving] = useState(false);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [peerState, setPeerState] = useState<any>(null);
-
-  useEffect(() => {
-    if (showDiagnostics) {
-      const interval = setInterval(() => {
-        setPeerState((window as any).__DODI_PEER_STATE__);
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [showDiagnostics]);
-
-  const handleTestSync = async () => {
-    toast({
-      title: "Simulating Reconnect",
-      description: "Triggering reconciliation protocol..."
-    });
-    reconnect();
-  };
 
   const handleSyncNow = async () => {
     if (!isPaired) {
@@ -414,25 +395,6 @@ export default function SettingsPage() {
                   {isOnline ? 'Direct P2P – no server involved' : 'Offline - changes saved locally'}
                 </p>
               </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Bug className="w-5 h-5 text-blue-400" />
-                <div>
-                  <h3 className="font-medium">Developer Mode</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Show diagnostics panel for testing
-                  </p>
-                </div>
-              </div>
-              <Switch 
-                checked={showDiagnostics} 
-                onCheckedChange={setShowDiagnostics}
-                data-testid="switch-developer-mode"
-              />
             </div>
           </Card>
 
