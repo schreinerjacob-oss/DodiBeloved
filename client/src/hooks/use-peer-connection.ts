@@ -254,6 +254,7 @@ function setupConnection(conn: DataConnection) {
     return;
   }
 
+  // Update globalConn BEFORE adding listeners to ensure 'open' event can use it
   globalConn = conn;
 
   async function handleReconcileInit(conn: DataConnection, partnerTimestamps: any) {

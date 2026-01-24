@@ -309,9 +309,13 @@ export default function ChatPage() {
 
       // Send via P2P data channel - if offline, P2P layer queues it automatically
       console.log(`📤 [P2P] Starting send process for:`, messageId, 'Offline:', isOffline);
+      
+      // Ensure the message object is clean before sending
+      const messageToSend = { ...message };
+      
       sendP2P({
         type: 'message',
-        data: message,
+        data: messageToSend,
         timestamp: Date.now(),
       });
 
