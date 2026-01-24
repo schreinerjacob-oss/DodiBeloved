@@ -376,8 +376,8 @@ export async function saveMessage(message: Message): Promise<void> {
     
     const encrypted = await encryptMessage(message);
     const record = {
-      id: message.id,
       ...encrypted,
+      id: message.id,
       timestamp: message.timestamp, // Keep for indexing
     };
     await db.put('messages', record);
