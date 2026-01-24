@@ -227,12 +227,17 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   }, [pairingStatus, pinEnabled]);
 
   const setPINHandler = async (pin: string) => {
-    if (!passphrase) throw new Error('Passphrase not available');
-    const { savePIN } = await import('@/lib/storage-encrypted');
-    await savePIN(pin, passphrase);
-    await saveSetting('pinEnabled', 'true');
-    setPinEnabled(true);
-    setShowPinSetup(false);
+    try {
+      if (!passphrase) throw new Error('Passphrase not available');
+      const { savePIN } = await import('@/lib/storage-encrypted');
+      await savePIN(pin, passphrase);
+      await saveSetting('pinEnabled', 'true');
+      setPinEnabled(true);
+      setShowPinSetup(false);
+    } catch (error: any) {
+      console.error('PIN setup failed:', error);
+      throw new Error(error.message || 'Failed to set up PIN');
+    }
   };
 
   const unlockWithPINHandler = async (pin: string): Promise<boolean> => {

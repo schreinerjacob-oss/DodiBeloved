@@ -202,10 +202,16 @@ export async function savePIN(pin: string, passphrase: string): Promise<void> {
     let storedSalt = await getSettingRaw('salt');
     
     if (!storedSalt) {
-      console.warn('⚠️ [STORAGE] No salt found during PIN setup - fetching fallback');
-      const fallbackSalt = await getSettingRaw('salt');
-      if (!fallbackSalt) throw new Error('Salt not available');
-      storedSalt = fallbackSalt;
+      console.warn('⚠️ [STORAGE] No salt found during PIN setup - checking fallback locations');
+      // Try to get from localStorage directly as a last resort
+      try {
+        const localSalt = localStorage.getItem('dodi-salt');
+        if (localSalt) storedSalt = localSalt;
+      } catch (e) {}
+      
+      if (!storedSalt) {
+        throw new Error('Encryption salt not found. Please ensure devices are paired.');
+      }
     }
 
     // Safely decode salt with validation
@@ -260,7 +266,7 @@ export async function verifyPINAndGetPassphrase(pin: string): Promise<string | n
     const storedEncryptedPassphrase = await db.get('settings', 'encryptedPassphrase');
     
     if (!storedSalt || !storedEncryptedPassphrase) {
-      console.warn('⚠️ [STORAGE] Missing salt or encrypted passphrase for PIN verification');
+      console.warn('⚠️ [STORAGE] Missing credentials for PIN verification', { hasSalt: !!storedSalt, hasEnc: !!storedEncryptedPassphrase });
       return null;
     }
 
