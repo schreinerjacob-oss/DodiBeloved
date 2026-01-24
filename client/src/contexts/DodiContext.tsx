@@ -83,7 +83,10 @@ export function DodiProvider({ children }: { children: ReactNode }) {
 
         const storedPassphraseObj = (storedPassphrase as any)?.value || storedPassphrase;
         if (storedPassphraseObj) {
+          console.log('🔑 [CONTEXT] Found passphrase in storage:', storedPassphraseObj.substring(0, 5) + '...');
           setPassphrase(storedPassphraseObj);
+        } else {
+          console.warn('⚠️ [CONTEXT] Passphrase NOT FOUND in storage');
         }
 
         const storedPartnerIdObj = (storedPartnerId as any)?.value || storedPartnerId;

@@ -142,6 +142,7 @@ export async function checkNoServerLeaks(): Promise<PrivacyCheckResult> {
   };
 
   try {
+    const { getSetting } = await import('@/lib/storage');
     const passphrase = await getSetting('passphrase');
     const salt = await getSetting('salt');
     
@@ -150,7 +151,7 @@ export async function checkNoServerLeaks(): Promise<PrivacyCheckResult> {
       result.detail = 'Encryption keys stored locally only';
     } else {
       result.status = 'warning';
-      result.detail = 'Pairing not complete';
+      result.detail = 'Pairing data not yet synchronized';
     }
   } catch (error) {
     result.status = 'passed';

@@ -204,7 +204,10 @@ export async function getSetting(key: string): Promise<string | undefined> {
   // Try localStorage first (faster, more reliable for PWA)
   try {
     const value = localStorage.getItem(`dodi-${key}`);
-    if (value) return value;
+    if (value) {
+      console.log(`📦 [STORAGE] Found ${key} in localStorage`);
+      return value;
+    }
   } catch (e) {
     console.warn('localStorage unavailable:', e);
   }
@@ -213,7 +216,12 @@ export async function getSetting(key: string): Promise<string | undefined> {
   try {
     const db = await initDB();
     const result = await db.get('settings', key);
-    return result?.value;
+    const value = (result as any)?.value || result;
+    if (value) {
+      console.log(`📦 [STORAGE] Found ${key} in IndexedDB`);
+      return value;
+    }
+    return undefined;
   } catch (e) {
     console.error('Failed to get setting from IndexedDB:', e);
     return undefined;
