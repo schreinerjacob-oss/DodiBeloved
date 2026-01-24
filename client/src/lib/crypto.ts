@@ -91,6 +91,12 @@ export function generatePassphrase(): string {
   const array = new Uint32Array(4);
   window.crypto.getRandomValues(array);
   
+  // Verify entropy by checking if all values are unique and non-zero
+  const uniqueValues = new Set(array);
+  if (uniqueValues.size < 4 || Array.from(array).some(v => v === 0)) {
+    window.crypto.getRandomValues(array);
+  }
+
   return Array.from(array)
     .map(val => words[val % words.length])
     .join("-");

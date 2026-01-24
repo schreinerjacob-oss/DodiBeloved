@@ -86,7 +86,23 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           console.log('🔑 [CONTEXT] Found passphrase in storage:', storedPassphraseObj.substring(0, 5) + '...');
           setPassphrase(storedPassphraseObj);
         } else {
-          console.warn('⚠️ [CONTEXT] Passphrase NOT FOUND in storage');
+          // Fallback to localStorage for PWA reliability
+          const localPassphrase = localStorage.getItem('dodi-passphrase');
+          if (localPassphrase) {
+            console.log('🔑 [CONTEXT] Recovered passphrase from localStorage');
+            setPassphrase(localPassphrase);
+          } else {
+            console.warn('⚠️ [CONTEXT] Passphrase NOT FOUND in storage');
+          }
+        }
+
+        const storedSalt = await db.get('settings', 'salt');
+        if (!storedSalt) {
+           const localSalt = localStorage.getItem('dodi-salt');
+           if (localSalt) {
+             console.log('🧂 [CONTEXT] Recovered salt from localStorage');
+             await db.put('settings', { key: 'salt', value: localSalt });
+           }
         }
 
         const storedPartnerIdObj = (storedPartnerId as any)?.value || storedPartnerId;
