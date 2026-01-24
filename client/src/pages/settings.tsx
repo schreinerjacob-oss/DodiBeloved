@@ -229,11 +229,11 @@ export default function SettingsPage() {
           <Card className="p-6 space-y-4 border-accent/20 bg-accent/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Heart className={`w-5 h-5 ${isPremium ? 'text-accent' : 'text-muted-foreground'}`} />
+                <Heart className={`w-5 h-5 ${isPremium ? 'text-accent fill-accent' : 'text-muted-foreground'}`} />
                 <div>
-                  <h3 className="font-medium">Support the Garden</h3>
+                  <h3 className="font-medium">Support Status</h3>
                   <p className="text-xs text-muted-foreground">
-                    Your whispers stay only between you two — forever
+                    {isPremium ? 'You are an Eternal Guardian' : 'Help keep Dodi private forever'}
                   </p>
                 </div>
               </div>
@@ -243,7 +243,16 @@ export default function SettingsPage() {
                 onClick={() => setLocation('/subscription')}
                 className="hover-elevate"
               >
-                {isPremium ? 'Manage Support' : 'Support Now'}
+                {isPremium ? 'View Details' : 'Support Now'}
+              </Button>
+            </div>
+            
+            <div className="pt-4 border-t flex flex-col gap-3">
+              <Button variant="ghost" className="text-xs text-accent underline p-0 h-auto justify-start" onClick={() => setLocation('/subscription')}>
+                Why support? Your gift keeps Dodi serverless, private, and free of ads — for you and others.
+              </Button>
+              <Button variant="ghost" className="text-[10px] text-muted-foreground underline p-0 h-auto justify-start" onClick={() => setLocation('/subscription')}>
+                Restore my support
               </Button>
             </div>
           </Card>

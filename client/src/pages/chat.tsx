@@ -12,6 +12,7 @@ import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { useOfflineQueueSize } from '@/hooks/use-offline-queue';
 import { MessageMediaImage } from '@/components/message-media-image';
 import { MemoryResurfacing } from '@/components/resurfacing/memory-resurfacing';
+import { SupportInvitation } from '@/components/support-invitation';
 import { notifyNewMessage, notifyMessageQueued } from '@/lib/notifications';
 import type { Message, SyncMessage } from '@/types';
 import { nanoid } from 'nanoid';
@@ -27,10 +28,18 @@ const QUICK_REACTIONS = [
 const MESSAGES_PER_PAGE = 50;
 
 export default function ChatPage() {
-  const { userId, partnerId, isOnline } = useDodi();
+  const { userId, partnerId, isOnline, isPremium } = useDodi();
   const { toast } = useToast();
   const { send: sendP2P, state: peerState } = usePeerConnection();
   const pendingCount = useOfflineQueueSize();
+  const [showInvitation, setShowInvitation] = useState(false);
+
+  useEffect(() => {
+    // 5% chance to show invitation on chat open if not premium
+    if (!isPremium && Math.random() < 0.05) {
+      setShowInvitation(true);
+    }
+  }, [isPremium]);
 
   useEffect(() => {
     const handleReconciliation = (event: any) => {
@@ -469,6 +478,7 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-full bg-background">
       <MemoryResurfacing />
+      {showInvitation && <SupportInvitation onDismiss={() => setShowInvitation(false)} triggerReason="A growing connection..." />}
       <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b bg-card/50">
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-sage to-blush flex items-center justify-center ${peerState.connected ? 'animate-gentle-pulse' : ''}`}>
