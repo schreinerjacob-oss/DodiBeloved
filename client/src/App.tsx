@@ -123,6 +123,7 @@ function MainApp() {
           <Route path="/moments" component={OurMomentsPage} />
           <Route path="/heart-space" component={HeartSpacePage} />
           <Route path="/settings" component={SettingsPage} />
+          <Route path="/setup" component={ProfileSetupPage} />
           <Route path="/redundancy" component={RedundancyPage} />
           <Route path="/" component={ChatPage} />
         </Switch>
