@@ -1,6 +1,9 @@
 // Global polyfills for PeerJS/Simple-Peer WebRTC libraries
-import 'events';
-import 'util';
+import { EventEmitter } from 'events';
+
+if (!globalThis.EventEmitter) {
+  (globalThis as any).EventEmitter = EventEmitter;
+}
 
 if (!globalThis.global) {
   (globalThis as any).global = globalThis;
