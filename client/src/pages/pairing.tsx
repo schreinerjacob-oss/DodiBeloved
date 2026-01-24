@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { normalizeRoomCode, isValidRoomCode, generateRoomCode } from '@/lib/pairing-codes';
 import { initializePeer, createRoomPeerId, getRemotePeerId, waitForConnection, connectToRoom, closeRoom, type RoomConnection } from '@/hooks/use-peer-connection';
-import { runCreatorTunnel, runJoinerTunnel, sendPairingAck } from '@/lib/tunnel-handshake';
+import { runCreatorTunnel, runJoinerTunnel } from '@/lib/tunnel-handshake';
 import { requestNotificationPermission } from '@/lib/notifications';
 import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
 
@@ -271,21 +271,19 @@ export default function PairingPage() {
       const remotePeerId = getRemotePeerId(normalCode, false);
       const conn = await connectToRoom(peer, remotePeerId, 6000);
       roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
-      console.log('🌊 [FLOW] Joiner calling runJoinerTunnel...');
-      const payload = await runJoinerTunnel(conn);
+      console.log('🌊 [FLOW] Joiner calling runJoinerTunnel with userId:', userId);
+      
+      // Pass userId so the tunnel can send the ACK with joinerId inline
+      const payload = await runJoinerTunnel(conn, userId);
       
       console.log('📋 [ID AUDIT] Joiner received tunnel payload:', {
         creatorId: payload.creatorId,
         hasCreatorId: !!payload.creatorId,
-        joinerReadyToSendAck: !!userId,
       });
       
       if (!payload.creatorId) {
         throw new Error('Creator ID not received in tunnel');
       }
-      
-      console.log('💾 [ID AUDIT] Joiner sending ACK with userId:', userId);
-      await sendPairingAck(conn, userId);
       
       console.log('✅ [ID AUDIT] Joiner pairing complete:', {
         myId: userId,

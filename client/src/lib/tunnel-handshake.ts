@@ -267,28 +267,31 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
   });
 }
 
-export async function runJoinerTunnel(conn: any): Promise<MasterKeyPayload> {
+export async function runJoinerTunnel(conn: any, joinerId: string): Promise<MasterKeyPayload> {
   return new Promise(async (resolve, reject) => {
     try {
       console.log('🌱 [TUNNEL] Starting joiner handshake');
       const ephemeralKeys = await generateEphemeralKeyPair();
       let sharedKey: CryptoKey | null = null;
+      let ackSent = false;
 
       const handleMessage = async (data: any) => {
         console.log('📬 [TUNNEL] Joiner received:', data.type);
         
         try {
-          if (data.type === 'tunnel-init') {
+          if (data.type === 'tunnel-init' && !ackSent) {
             console.log('📬 [TUNNEL] Processing tunnel-init from creator');
             sharedKey = await deriveSharedSecret(ephemeralKeys.privateKey, data.publicKey);
             
-            // Critical fix: Respond to creator's init immediately so they know we're ready
-            console.log('📤 [TUNNEL] Sending joiner-init response to creator');
+            // Send ACK with joiner's ID so Creator can proceed to send the key
+            console.log('📤 [TUNNEL] Sending tunnel-ack with joinerId:', joinerId);
             conn.send({ 
-              type: 'tunnel-init', 
+              type: 'tunnel-ack', 
+              joinerId: joinerId,
               publicKey: ephemeralKeys.publicKey,
               fingerprint: ephemeralKeys.fingerprint 
             });
+            ackSent = true;
           }
           
           if ((data.type === 'tunnel-key' || data.type === 'restore-key') && sharedKey) {
@@ -306,7 +309,7 @@ export async function runJoinerTunnel(conn: any): Promise<MasterKeyPayload> {
       };
 
       conn.on('data', handleMessage);
-      // Wait for creator to send their init first, or we can send ours to kickstart
+      // Send initial tunnel-init to kickstart the handshake
       console.log('📤 [TUNNEL] Sending initial tunnel-init to creator');
       conn.send(createTunnelInitMessage(ephemeralKeys.publicKey));
     } catch (err) {
