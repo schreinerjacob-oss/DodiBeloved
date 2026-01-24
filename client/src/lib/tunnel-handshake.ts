@@ -187,52 +187,63 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
       console.log('📬 [TUNNEL] Creator received:', data.type);
       
       try {
-          if (data.type === 'tunnel-init') {
-            console.log('📬 [TUNNEL] Processing tunnel-init from joiner');
-            if (!ephemeralKeys) {
-              ephemeralKeys = await generateEphemeralKeyPair();
-            }
-            sharedKey = await deriveSharedSecret(ephemeralKeys.privateKey, data.publicKey);
-            
-            // SECURITY: Verify the public key length and format before proceeding
-            const peerKeyRaw = base64ToArrayBuffer(data.publicKey);
-            if (peerKeyRaw.length !== 65) {
-              throw new Error('Invalid peer public key entropy');
-            }
-            
-            // Send our init so the joiner can derive the secret too
-            const initMsg = createTunnelInitMessage(ephemeralKeys.publicKey);
-            console.log('📤 [TUNNEL] Sending creator-init response to joiner with ID:', creatorId);
-            conn.send({ 
-              ...initMsg, 
-              type: 'tunnel-init', 
-              fingerprint: ephemeralKeys.fingerprint,
-              creatorId: creatorId // Ensure ID is sent early
-            });
-            return; // Exit after sending init to prevent processing other types in same turn
+        if (data.type === 'tunnel-init') {
+          console.log('📬 [TUNNEL] Processing tunnel-init from joiner');
+          if (!ephemeralKeys) {
+            ephemeralKeys = await generateEphemeralKeyPair();
+          }
+          sharedKey = await deriveSharedSecret(ephemeralKeys.privateKey, data.publicKey);
+          
+          // SECURITY: Verify the public key length and format before proceeding
+          const peerKeyRaw = base64ToArrayBuffer(data.publicKey);
+          if (peerKeyRaw.length !== 65) {
+            throw new Error('Invalid peer public key entropy');
+          }
+          
+          // Send our init so the joiner can derive the secret too
+          const initMsg = createTunnelInitMessage(ephemeralKeys.publicKey);
+          console.log('📤 [TUNNEL] Sending creator-init response to joiner with ID:', creatorId);
+          conn.send({ 
+            ...initMsg, 
+            type: 'tunnel-init', 
+            fingerprint: ephemeralKeys.fingerprint,
+            creatorId: creatorId
+          });
+          return;
         }
         
         if (data.type === 'tunnel-ack') {
           console.log('📥 [TUNNEL] Received tunnel-ack, preparing key payload');
-          const { getSetting } = await import('./storage');
+          const { getSetting, saveSetting } = await import('./storage');
           let masterKey = await getSetting('passphrase');
           let salt = await getSetting('salt');
           
           const joinerId = data.joinerId;
           console.log('🆔 [TUNNEL] Identified Joiner:', joinerId);
           
-          // Fallback to localStorage if primary storage is empty
+          // For NEW pairings: generate credentials if they don't exist
+          // For RESTORE pairings: use existing credentials
           if (!masterKey || !salt) {
-            console.warn('⚠️ [TUNNEL] Creator missing credentials in primary storage, checking localStorage...');
+            console.log('🔑 [TUNNEL] Checking localStorage fallback...');
             const localMaster = localStorage.getItem('dodi-passphrase');
             const localSalt = localStorage.getItem('dodi-salt');
+            
             if (localMaster && localSalt) {
-              console.log('✅ [TUNNEL] Found fallback credentials in localStorage');
+              console.log('✅ [TUNNEL] Found credentials in localStorage (restore scenario)');
               masterKey = localMaster;
               salt = localSalt;
             } else {
-              console.error('❌ [TUNNEL] Creator missing masterKey or salt in all storage locations');
-              throw new Error('Missing encryption credentials');
+              // NEW PAIRING: Generate fresh credentials
+              console.log('🆕 [TUNNEL] New pairing detected - generating master key and salt');
+              masterKey = generateMasterKey();
+              salt = generateMasterSalt();
+              
+              // Save to both storage locations for durability
+              await saveSetting('passphrase', masterKey);
+              await saveSetting('salt', salt);
+              localStorage.setItem('dodi-passphrase', masterKey);
+              localStorage.setItem('dodi-salt', salt);
+              console.log('✅ [TUNNEL] Generated and saved new credentials');
             }
           }
 
