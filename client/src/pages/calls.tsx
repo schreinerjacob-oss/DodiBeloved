@@ -23,7 +23,8 @@ export default function CallsPage() {
   const [isFallbackMode, setIsFallbackMode] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
-  const ringtoneRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const ringtoneOscillatorsRef = useRef<OscillatorNode[]>([]);
   const mediaCallRef = useRef<SimplePeer.Instance | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -112,17 +113,7 @@ export default function CallsPage() {
         // Store the offer signal for when we accept
         sessionStorage.setItem('call-offer-signal', JSON.stringify(message.data.signal));
         
-        // Play ringtone and vibrate
-        if (!ringtoneRef.current) {
-          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3');
-          audio.loop = true;
-          ringtoneRef.current = audio;
-        }
-        ringtoneRef.current.play().catch(e => console.error('Error playing ringtone:', e));
-        
-        if ('vibrate' in navigator) {
-          navigator.vibrate([500, 500, 500, 500]);
-        }
+        playGentleRingtone();
       } else if (message.type === 'call-signal') {
         if (mediaCallRef.current && message.data.signal) {
           mediaCallRef.current.signal(message.data.signal);
@@ -151,12 +142,64 @@ export default function CallsPage() {
   }, []);
 
   const stopRingtone = () => {
-    if (ringtoneRef.current) {
-      ringtoneRef.current.pause();
-      ringtoneRef.current.currentTime = 0;
+    if (audioContextRef.current) {
+      ringtoneOscillatorsRef.current.forEach(osc => {
+        try { osc.stop(); } catch (e) {}
+      });
+      ringtoneOscillatorsRef.current = [];
+      if (audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close();
+      }
+      audioContextRef.current = null;
     }
     if ('vibrate' in navigator) {
       navigator.vibrate(0);
+    }
+  };
+
+  const playGentleRingtone = () => {
+    try {
+      stopRingtone();
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = ctx;
+
+      const playChime = (time: number, freq: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, time);
+        
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.2, time + 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 2);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.start(time);
+        osc.stop(time + 2);
+        ringtoneOscillatorsRef.current.push(osc);
+      };
+
+      // Loop the gentle chime
+      const sequence = () => {
+        if (!audioContextRef.current) return;
+        const now = ctx.currentTime;
+        playChime(now, 440); // A4
+        playChime(now + 0.5, 554.37); // C#5
+        playChime(now + 1.0, 659.25); // E5
+        
+        setTimeout(sequence, 3000);
+      };
+
+      sequence();
+
+      if ('vibrate' in navigator) {
+        navigator.vibrate([500, 200, 500, 200, 500]);
+      }
+    } catch (e) {
+      console.error('Error playing Web Audio ringtone:', e);
     }
   };
 
