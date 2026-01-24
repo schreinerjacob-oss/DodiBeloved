@@ -97,6 +97,12 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         const storedPairingStatusObj = (storedPairingStatus as any)?.value || storedPairingStatus;
         if (storedPairingStatusObj) {
           setPairingStatus(storedPairingStatusObj as PairingStatus);
+        } else {
+          // Fallback to localStorage for PWA reliability
+          const localPairingStatus = localStorage.getItem('dodi-pairingStatus');
+          if (localPairingStatus) {
+            setPairingStatus(localPairingStatus as PairingStatus);
+          }
         }
 
         const storedPinEnabledObjFinal = (storedPinEnabled as any)?.value || storedPinEnabled;
