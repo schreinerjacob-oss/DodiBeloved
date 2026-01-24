@@ -20,6 +20,7 @@ interface DodiContextType {
   inactivityMinutes: number;
   allowWakeUp: boolean;
   isPremium: boolean;
+  hasPIN: boolean;
   setPremiumStatus: (status: boolean) => Promise<void>;
   setAllowWakeUp: (enabled: boolean) => Promise<void>;
   initializeProfile: (displayName: string) => Promise<string>;
@@ -319,6 +320,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       value={{
         userId, displayName, partnerId, passphrase, pairingStatus, isPaired, isOnline,
         isLocked, pinEnabled, showPinSetup, inactivityMinutes, allowWakeUp, isPremium,
+        hasPIN: pinEnabled,
         setAllowWakeUp, setPremiumStatus, initializeProfile, initializePairing, completePairingWithMasterKey,
         completePairingAsCreator, setPartnerIdForCreator, onPeerConnected,
         setPIN: setPINHandler, skipPINSetup: () => setShowPinSetup(false),

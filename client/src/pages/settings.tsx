@@ -34,7 +34,7 @@ import {
 import { savePIN, verifyPINAndGetPassphrase } from '@/lib/storage-encrypted';
 
 export default function SettingsPage() {
-  const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp, isPaired, isPremium } = useDodi();
+  const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp, isPaired, isPremium, hasPIN } = useDodi();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const { reconnect } = usePeerConnection();
@@ -151,7 +151,7 @@ export default function SettingsPage() {
 
   const handleChangePIN = async () => {
     // Validate inputs
-    if (!currentPin.trim()) {
+    if (hasPIN && !currentPin.trim()) {
       toast({
         title: "Current PIN required",
         description: "Please enter your current PIN to proceed.",
@@ -180,22 +180,31 @@ export default function SettingsPage() {
 
     setPinSaving(true);
     try {
-      // Verify current PIN and get passphrase
-      const currentPassphrase = await verifyPINAndGetPassphrase(currentPin);
-      if (!currentPassphrase) {
-        toast({
-          title: "Incorrect PIN",
-          description: "The current PIN you entered is incorrect.",
-          variant: "destructive",
-        });
-        setPinSaving(false);
-        return;
+      let activePassphrase = passphrase;
+
+      // If we have a PIN, we must verify it to get the passphrase securely
+      if (hasPIN) {
+        const verifiedPassphrase = await verifyPINAndGetPassphrase(currentPin);
+        if (!verifiedPassphrase) {
+          toast({
+            title: "Incorrect PIN",
+            description: "The current PIN you entered is incorrect.",
+            variant: "destructive",
+          });
+          setPinSaving(false);
+          return;
+        }
+        activePassphrase = verifiedPassphrase;
+      }
+
+      if (!activePassphrase) {
+        throw new Error("Shared passphrase not available");
       }
 
       // Save new PIN with the recovered passphrase
-      await savePIN(newPin, currentPassphrase);
+      await savePIN(newPin, activePassphrase);
       toast({
-        title: "PIN changed",
+        title: hasPIN ? "PIN changed" : "PIN set",
         description: "Your PIN has been updated successfully.",
       });
 
@@ -205,9 +214,10 @@ export default function SettingsPage() {
       setConfirmPin('');
       setPinDialogOpen(false);
     } catch (error) {
+      console.error("PIN update error:", error);
       toast({
-        title: "Failed to change PIN",
-        description: "An error occurred. Please try again.",
+        title: "Failed to update PIN",
+        description: error instanceof Error ? error.message : "An error occurred. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -368,22 +378,26 @@ export default function SettingsPage() {
               </DialogTrigger>
               <DialogContent data-testid="dialog-change-pin">
                 <DialogHeader>
-                  <DialogTitle>Change Your PIN</DialogTitle>
+                  <DialogTitle>{hasPIN ? 'Change Your PIN' : 'Set App PIN'}</DialogTitle>
                   <DialogDescription>
-                    Enter your current PIN, then set a new one. PINs must be at least 4 characters.
+                    {hasPIN 
+                      ? 'Enter your current PIN, then set a new one. PINs must be at least 4 characters.'
+                      : 'Secure your app with a 4-digit PIN. This will be required to open the app.'}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Current PIN</label>
-                    <Input
-                      type="password"
-                      placeholder="Enter current PIN"
-                      value={currentPin}
-                      onChange={(e) => setCurrentPin(e.target.value)}
-                      data-testid="input-current-pin"
-                    />
-                  </div>
+                  {hasPIN && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Current PIN</label>
+                      <Input
+                        type="password"
+                        placeholder="Enter current PIN"
+                        value={currentPin}
+                        onChange={(e) => setCurrentPin(e.target.value)}
+                        data-testid="input-current-pin"
+                      />
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">New PIN</label>
                     <Input
@@ -418,7 +432,7 @@ export default function SettingsPage() {
                     disabled={pinSaving}
                     data-testid="button-confirm-pin-change"
                   >
-                    {pinSaving ? 'Changing...' : 'Change PIN'}
+                    {pinSaving ? 'Saving...' : (hasPIN ? 'Change PIN' : 'Set PIN')}
                   </Button>
                 </div>
               </DialogContent>
