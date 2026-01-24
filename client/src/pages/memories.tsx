@@ -248,22 +248,22 @@ export default function MemoriesPage() {
                 {loadingMore ? 'Loading...' : 'Load Earlier Memories'}
               </Button>
             )}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {memories.map((memory) => (
               <Card
                 key={memory.id}
-                className="group relative overflow-hidden aspect-square border-sage/30 hover-elevate cursor-pointer rounded-lg"
+                className="group relative overflow-hidden aspect-square border-sage/30 hover-elevate cursor-pointer"
                 data-testid={`memory-${memory.id}`}
               >
                 <MemoryMediaImage memoryId={memory.id} />
-                <div className="absolute inset-0 bg-gradient-to-br from-sage/20 to-blush/20 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
-                  <div className="flex items-center gap-1 text-white text-[10px] opacity-80">
+                <div className="absolute inset-0 bg-gradient-to-br from-sage/20 to-blush/20" />
+                <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent">
+                  <div className="flex items-center gap-1 text-white text-xs">
                     <Calendar className="w-3 h-3" />
                     {format(new Date(memory.timestamp), 'MMM d, yyyy')}
                   </div>
                   {memory.caption && (
-                    <p className="text-white text-xs mt-1 line-clamp-2 font-light italic">"{memory.caption}"</p>
+                    <p className="text-white text-xs mt-1 line-clamp-2">{memory.caption}</p>
                   )}
                 </div>
               </Card>
