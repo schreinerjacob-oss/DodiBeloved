@@ -573,18 +573,27 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <RefreshCw className="w-5 h-5 text-sage" />
               <div>
-                <h3 className="font-medium text-sage">Relink Device</h3>
-                <p className="text-xs text-muted-foreground">Reconnect with your partner if one device was reset</p>
+                <h3 className="font-medium text-sage">The Redundant Garden</h3>
+                <p className="text-xs text-muted-foreground">How your devices act as servers for each other</p>
               </div>
             </div>
             <Button 
-              variant="outline" 
-              className="w-full border-sage/30 text-sage hover:bg-sage/10 hover-elevate"
-              onClick={() => setLocation('/pairing?mode=restore')}
-              data-testid="button-restore-partner"
+              variant="ghost" 
+              className="w-full text-sage underline text-xs justify-start h-auto p-0"
+              onClick={() => setLocation('/redundancy')}
             >
-              Reconnect & Restore Partner Device
+              Learn how your data stays safe without a cloud →
             </Button>
+            <div className="pt-2">
+              <Button 
+                variant="outline" 
+                className="w-full border-sage/30 text-sage hover:bg-sage/10 hover-elevate"
+                onClick={() => setLocation('/pairing?mode=restore')}
+                data-testid="button-restore-partner"
+              >
+                Reconnect & Restore Partner Device
+              </Button>
+            </div>
           </Card>
 
           <Card className="p-6 space-y-4">
