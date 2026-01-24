@@ -18,6 +18,7 @@ export default function CallsPage() {
   const [micEnabled, setMicEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [callDuration, setCallDuration] = useState(0);
+  const ringtoneRef = useRef<HTMLAudioElement | null>(null);
   const mediaCallRef = useRef<SimplePeer.Instance | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -55,6 +56,18 @@ export default function CallsPage() {
         setIncomingCallType(message.data.callType);
         // Store the offer signal for when we accept
         sessionStorage.setItem('call-offer-signal', JSON.stringify(message.data.signal));
+        
+        // Play ringtone and vibrate
+        if (!ringtoneRef.current) {
+          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3');
+          audio.loop = true;
+          ringtoneRef.current = audio;
+        }
+        ringtoneRef.current.play().catch(e => console.error('Error playing ringtone:', e));
+        
+        if ('vibrate' in navigator) {
+          navigator.vibrate([500, 500, 500, 500]);
+        }
       } else if (message.type === 'call-signal') {
         if (mediaCallRef.current && message.data.signal) {
           mediaCallRef.current.signal(message.data.signal);
@@ -65,8 +78,21 @@ export default function CallsPage() {
     };
 
     window.addEventListener('p2p-message', handleP2PMessage as EventListener);
-    return () => window.removeEventListener('p2p-message', handleP2PMessage as EventListener);
+    return () => {
+      window.removeEventListener('p2p-message', handleP2PMessage as EventListener);
+      stopRingtone();
+    };
   }, []);
+
+  const stopRingtone = () => {
+    if (ringtoneRef.current) {
+      ringtoneRef.current.pause();
+      ringtoneRef.current.currentTime = 0;
+    }
+    if ('vibrate' in navigator) {
+      navigator.vibrate(0);
+    }
+  };
 
   const initiatePeerConnection = async (type: 'audio' | 'video', isInitiator: boolean, offerSignal?: any) => {
     try {
@@ -219,6 +245,7 @@ export default function CallsPage() {
   const acceptCall = async () => {
     if (!incomingCallType) return;
 
+    stopRingtone();
     setCallActive(true);
     setCallType(incomingCallType);
     setIncomingCall(false);
@@ -239,6 +266,7 @@ export default function CallsPage() {
   };
 
   const rejectCall = () => {
+    stopRingtone();
     setIncomingCall(false);
     sessionStorage.removeItem('call-offer-signal');
     sendP2P({
@@ -249,6 +277,7 @@ export default function CallsPage() {
   };
 
   const endCall = () => {
+    stopRingtone();
     if (mediaCallRef.current) {
       mediaCallRef.current.destroy();
       mediaCallRef.current = null;
