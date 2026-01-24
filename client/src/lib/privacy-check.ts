@@ -25,12 +25,18 @@ export async function checkEncryptionActive(): Promise<PrivacyCheckResult> {
   try {
     const { getEncryptionKey } = await import('@/lib/storage-encrypted');
     const key = await getEncryptionKey();
-    if (key) {
-      result.status = 'passed';
-      result.detail = 'Master key loaded and verified';
+    if (key && key.algorithm.name === 'AES-GCM') {
+      const algorithm = key.algorithm as any;
+      if (algorithm.length === 256) {
+        result.status = 'passed';
+        result.detail = 'AES-GCM 256-bit encryption verified';
+      } else {
+        result.status = 'warning';
+        result.detail = `Encryption key strength: ${algorithm.length} bits`;
+      }
     } else {
       result.status = 'failed';
-      result.detail = 'No encryption key found';
+      result.detail = 'Encryption algorithm mismatch';
     }
   } catch (error) {
     result.status = 'failed';

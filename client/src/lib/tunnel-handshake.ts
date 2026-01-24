@@ -187,15 +187,21 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
       console.log('📬 [TUNNEL] Creator received:', data.type);
       
       try {
-        if (data.type === 'tunnel-init') {
-          console.log('📬 [TUNNEL] Processing tunnel-init from joiner');
-          if (!ephemeralKeys) {
-            ephemeralKeys = await generateEphemeralKeyPair();
-          }
-          sharedKey = await deriveSharedSecret(ephemeralKeys.privateKey, data.publicKey);
-          
-          // Send our init so the joiner can derive the secret too
-          const initMsg = createTunnelInitMessage(ephemeralKeys.publicKey);
+          if (data.type === 'tunnel-init') {
+            console.log('📬 [TUNNEL] Processing tunnel-init from joiner');
+            if (!ephemeralKeys) {
+              ephemeralKeys = await generateEphemeralKeyPair();
+            }
+            sharedKey = await deriveSharedSecret(ephemeralKeys.privateKey, data.publicKey);
+            
+            // SECURITY: Verify the public key length and format before proceeding
+            const peerKeyRaw = base64ToArrayBuffer(data.publicKey);
+            if (peerKeyRaw.length !== 65) {
+              throw new Error('Invalid peer public key entropy');
+            }
+            
+            // Send our init so the joiner can derive the secret too
+            const initMsg = createTunnelInitMessage(ephemeralKeys.publicKey);
           console.log('📤 [TUNNEL] Sending creator-init response to joiner');
           conn.send({ ...initMsg, fingerprint: ephemeralKeys.fingerprint });
         }

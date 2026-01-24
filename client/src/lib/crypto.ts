@@ -82,9 +82,16 @@ export function generatePassphrase(): string {
   const words = [
     "sunset", "ocean", "mountain", "river", "forest", "meadow", "breeze", "starlight",
     "whisper", "embrace", "harmony", "serenity", "bloom", "radiant", "gentle", "precious",
-    "treasure", "beloved", "cherish", "eternal", "promise", "devotion", "moonlight", "dawn"
+    "treasure", "beloved", "cherish", "eternal", "promise", "devotion", "moonlight", "dawn",
+    "willow", "garden", "candle", "spirit", "nature", "peace", "divine", "breath",
+    "candle", "glowing", "silver", "golden", "velvet", "tender", "infinite", "always"
   ];
   
-  const shuffled = [...words].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 4).join("-");
+  // Use crypto.getRandomValues for true randomness in word selection
+  const array = new Uint32Array(4);
+  window.crypto.getRandomValues(array);
+  
+  return Array.from(array)
+    .map(val => words[val % words.length])
+    .join("-");
 }
