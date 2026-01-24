@@ -495,7 +495,8 @@ export async function initializePeer(id: string): Promise<Peer> {
 }
 
 export function createRoomPeerId(code: string, isCreator: boolean): string {
-  return `dodi-room-${code}-${isCreator ? 'creator' : 'joiner'}`;
+  const normalized = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return `dodi-room-${normalized}-${isCreator ? 'creator' : 'joiner'}`;
 }
 
 export function getRemotePeerId(code: string, isCreator: boolean): string {

@@ -175,8 +175,9 @@ export default function PairingPage() {
 
   const handleCreateRoom = async () => {
     // Generate code fresh every time for new pairings
-    const code = generateRoomCode();
-    setRoomCode(code);
+    const freshCode = generateRoomCode();
+    setRoomCode(freshCode);
+    const normalizedCode = normalizeRoomCode(freshCode);
 
     // VALIDATION: Ensure userId exists
     if (!userId) {
@@ -201,9 +202,9 @@ export default function PairingPage() {
     }
     
     try {
-      const myPeerId = createRoomPeerId(code, true);
+      const myPeerId = createRoomPeerId(normalizedCode, true);
       
-      console.log('🌿 Creating room as creator:', code);
+      console.log('🌿 Creating room as creator:', normalizedCode);
       console.log('📋 [ID AUDIT] Creator will send userId to tunnel:', userId);
       const peer = await initializePeer(myPeerId);
       
