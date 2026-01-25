@@ -39,9 +39,32 @@ let reconnectTimeout: NodeJS.Timeout | null = null;
 let healthCheckInterval: NodeJS.Timeout | null = null;
 let lastPongReceived = Date.now();
 let firstMessageSentAfterReconnect: number | null = null;
-const MAX_BACKOFF = 30000;
-const PING_INTERVAL = 15000;
-const PONG_TIMEOUT = 30000;
+const MAX_BACKOFF = 15000;
+const PING_INTERVAL = 10000;
+const PONG_TIMEOUT = 20000;
+const AGGRESSIVE_RECONNECT_INTERVAL = 5000;
+
+let aggressiveReconnectInterval: NodeJS.Timeout | null = null;
+
+function clearAggressiveReconnect() {
+  if (aggressiveReconnectInterval) {
+    clearInterval(aggressiveReconnectInterval);
+    aggressiveReconnectInterval = null;
+  }
+}
+
+function startAggressiveReconnect() {
+  if (aggressiveReconnectInterval) return;
+  console.log('💓 [P2P] Starting aggressive reconnect heartbeat');
+  aggressiveReconnectInterval = setInterval(() => {
+    if (globalPartnerId && (!globalConn || !globalConn.open)) {
+      console.log('💓 [P2P] Aggressive reconnect heartbeat...');
+      connectToPartner(globalPartnerId);
+    } else if (globalConn && globalConn.open) {
+      clearAggressiveReconnect();
+    }
+  }, AGGRESSIVE_RECONNECT_INTERVAL);
+}
 
 function clearReconnectTimeout() {
   if (reconnectTimeout) {
@@ -68,7 +91,7 @@ function startHealthCheck(conn: DataConnection) {
       
       const timeSinceLastPong = Date.now() - lastPongReceived;
       if (timeSinceLastPong > PONG_TIMEOUT) {
-        console.warn('⚠️ No pong received in 30s - triggering reconnect');
+        console.warn('⚠️ No pong received - triggering reconnect');
         conn.close();
         startReconnecting();
       }
@@ -84,6 +107,9 @@ function startReconnecting() {
     clearReconnectTimeout();
     return;
   }
+
+  // Also start aggressive polling
+  startAggressiveReconnect();
 
   const backoff = Math.min(Math.pow(2, reconnectAttempt) * 1000, MAX_BACKOFF);
   console.log(`📡 Reconnecting in ${backoff / 1000} seconds (Attempt ${reconnectAttempt + 1})`);
@@ -317,6 +343,7 @@ function setupConnection(conn: DataConnection) {
     reconnectAttempt = 0;
     globalSyncCancelled = false; // Reset cancellation on new connection
     clearReconnectTimeout();
+    clearAggressiveReconnect();
     startHealthCheck(conn);
     notifyListeners();
     conn.send({ type: 'ping', timestamp: Date.now() });
@@ -638,6 +665,15 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
   // 1. ESTABLISH PEER when userId and pairingStatus change
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && globalPartnerId && (!globalConn || !globalConn.open)) {
+        console.log('👀 [P2P] App visible - triggering immediate reconnect');
+        reconnectAttempt = 0;
+        connectToPartner(globalPartnerId);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     if (pairingStatus !== 'connected' || !userId) {
       if (globalPeer) {
         console.log('🛑 [P2P] Destroying peer due to disconnection or logout');
@@ -646,6 +682,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         globalConn = null;
         notifyListeners();
       }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       return;
     }
     
@@ -759,15 +796,29 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     };
   }, [userId, pairingStatus]);
 
-  // 2. CONNECT TO PARTNER whenever partnerId changes
+  // 2. CONNECT TO PARTNER whenever partnerId changes + Visibility triggers
   useEffect(() => {
     if (partnerId) {
       globalPartnerId = partnerId;
     }
-    if (!partnerId || !globalPeer || globalPeer.destroyed) return;
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && partnerId && (!globalConn || !globalConn.open)) {
+        console.log('👀 [P2P] App visible - triggering immediate reconnect');
+        reconnectAttempt = 0;
+        connectToPartner(partnerId);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    if (!partnerId || !globalPeer || globalPeer.destroyed) {
+      return () => document.removeEventListener('visibilitychange', handleVisibility);
+    }
     
     console.log('🔗 partnerId changed, connecting to:', partnerId);
     connectToPartner(partnerId);
+
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [partnerId]);
 
   const send = useCallback(async (message: SyncMessage) => {
