@@ -52,17 +52,13 @@ export function useInactivityTimer({
       document.addEventListener(event, handleActivity);
     });
 
-    // Handle page visibility changes (when user switches back to app)
+    // Handle page visibility changes (lock immediately when hidden)
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        const now = Date.now();
-        const inactiveTime = now - lastActivityRef.current;
-        if (inactiveTime > timeoutMinutes * 60 * 1000) {
-          console.log('Visibility check: Inactivity timeout reached');
-          onInactivity();
-        } else {
-          resetTimer();
-        }
+      if (document.visibilityState === 'hidden') {
+        console.log('Visibility check: App hidden, locking immediately');
+        onInactivity();
+      } else if (document.visibilityState === 'visible') {
+        resetTimer();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
