@@ -665,15 +665,6 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
   // 1. ESTABLISH PEER when userId and pairingStatus change
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && globalPartnerId && (!globalConn || !globalConn.open)) {
-        console.log('👀 [P2P] App visible - triggering immediate reconnect');
-        reconnectAttempt = 0;
-        connectToPartner(globalPartnerId);
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
     if (pairingStatus !== 'connected' || !userId) {
       if (globalPeer) {
         console.log('🛑 [P2P] Destroying peer due to disconnection or logout');
@@ -682,7 +673,6 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         globalConn = null;
         notifyListeners();
       }
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
       return;
     }
     
