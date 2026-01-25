@@ -57,29 +57,51 @@ Several bugs and inconsistencies were found that affect **restore sync**, **esse
 
 ---
 
-## Remaining Issues (Not Fixed)
+### 5. **`getEssentials` and `getBatchForRestore` – Incorrect Love Letters Filtering**
 
-### 5. **`getEssentials` – loveLetters vs future letters**
+**Location:** `client/src/lib/storage-encrypted.ts` – `getEssentials`, `getBatchForRestore`, `saveLoveLetter`, `saveFutureLetter`, `savePrayer`
 
-**Location:** `client/src/lib/storage-encrypted.ts` – `getEssentials`
+**Problem:** The initial filtering logic in `getEssentials` and `getBatchForRestore` for the `loveLetters` store was too aggressive, only sending items matching "true" love letters (`!('gratitude' in dec) && !('unlockDate' in dec)`) and discarding `prayers` and `futureLetters`. Since all three types are stored in the same `loveLetters` database store, this caused `prayers` and `futureLetters` to be excluded entirely from restoration, leading to data loss.
 
-**Problem:** The `loveLetters` store holds love letters, prayers, and future letters. `getEssentials` treats all as “future letters” and sends them under `loveLetters`. The comment says “filter on receiving end,” but the sender still over-sends and mixes types. Decryption would be needed to filter correctly before send.
-
-**Recommendation:** Either decrypt and filter before adding to essentials, or clearly document that “loveLetters” in essentials means “all loveLetters store contents” and ensure the receiver handles that.
+**Fix:**
+1. **`saveLoveLetter`, `saveFutureLetter`, `savePrayer`:** Modified to store relevant timestamp fields (`createdAt`, `unlockDate`, `prayerDate`) at the top level of the encrypted record.
+2. **`getEssentials` and `getBatchForRestore`:** Updated to fetch and filter *all* encrypted items from the `loveLetters` store based on these new top-level timestamp fields (e.g., within 30 days for essentials, newer than `partnerLastSynced` for batch restore) without content-based filtering. Type-specific filtering now occurs only when data is *read* from the database (e.g., `getAllPrayers`, `getAllLoveLetters`, `getAllFutureLetters`). This ensures all data types from the `loveLetters` store are correctly preserved and restored.
 
 ---
 
-### 6. **Join with Code vs Restore – misleading copy**
+### 6. **Join with Code vs Restore – Misleading Copy**
 
 **Location:** `client/src/pages/pairing.tsx`
 
-**Problem:** “Join with Code” (new pairing) and “Restore from Partner” (reconnect) both lead to a code-entry flow. When joining via “Join with Code,” the pairing UI still shows “Enter Restore Code” and “Regrow your connection from your partner’s device,” which is restore-oriented. Users doing a **new** pairing may think they’re in a restore flow.
+**Problem:** The "Join with Code" (new pairing) and "Restore from Partner" (reconnect) flows both led to UI copy ("Enter Restore Code" and "Regrow your connection from your partner’s device") that was oriented towards restoration, confusing users attempting a new pairing.
 
-**Recommendation:** Use separate copy for “Join with Code” (e.g. “Enter your partner’s code”) vs “Restore” (e.g. “Enter restore code from partner’s device”), or use distinct modes/screens.
+**Fix:** The UI copy in `pairing.tsx` was updated to clearly differentiate between "Join with Code" (for new pairings) and "Enter Restore Code" / "Regrow your connection" (for restoration).
 
 ---
 
-### 7. **`conn.open` in wake-up ping timeout**
+### 7. **Pin Setup – Duplicate Inputs**
+
+**Location:** `client/src/pages/pin-setup.tsx`
+
+**Problem:** The PIN setup page contained two redundant input fields for the same PIN, one visible and one hidden. This was unnecessary and could potentially cause accessibility or unexpected behavior issues.
+
+**Fix:** The redundant hidden input field was removed, consolidating the PIN entry to a single, visible native `<input>` element.
+
+---
+
+### 8. **`dodi-restore-payload` Global Listener Scope**
+
+**Location:** Originally `client/src/pages/pairing.tsx` (listener)
+
+**Problem:** The `dodi-restore-payload` event listener was confined to the `pairing.tsx` page. This meant that if a P2P restore-key message was dispatched while the user was already in the main application (e.g., Chat or Settings page), the event would not be processed, preventing successful restoration.
+
+**Fix:** A new globally-mounted component, `DodiRestoreListener.tsx`, was created and integrated into `client/src/App.tsx` (within `DodiProvider`). This ensures that the `dodi-restore-payload` event is handled regardless of the current page, allowing P2P restore-key messages to be processed successfully even when the user is in the main app. The listener was removed from `pairing.tsx`.
+
+---
+
+## Remaining Issues (Not Fixed)
+
+### 1. **`conn.open` in wake-up ping timeout**
 
 **Location:** `client/src/hooks/use-peer-connection.ts` – `sendWakeUpPing`
 
@@ -89,7 +111,7 @@ Several bugs and inconsistencies were found that affect **restore sync**, **esse
 
 ---
 
-### 8. **`package.json` dev script – Windows**
+### 2. **`package.json` dev script – Windows**
 
 **Location:** `package.json` – `"dev": "NODE_ENV=development tsx server/index-dev.ts"`
 
@@ -98,44 +120,24 @@ Several bugs and inconsistencies were found that affect **restore sync**, **esse
 **Recommendation:** Use `cross-env` (e.g. `cross-env NODE_ENV=development tsx server/index-dev.ts`) so it works on Windows and Unix.
 
 ---
-
-### 9. **Pin setup – duplicate inputs**
-
-**Location:** `client/src/pages/pin-setup.tsx`
-
-**Problem:** There are two inputs for the same PIN: one with `opacity-0 absolute pointer-events-none` and one visible. Both bind to the same state. The hidden one appears to be unused or legacy.
-
-**Recommendation:** Remove the hidden input if it’s not required for accessibility or form behavior; otherwise document why both exist.
-
----
-
-### 10. **`dodi-restore-payload` only when Pairing page is mounted**
-
-**Location:** `client/src/pages/pairing.tsx` (listener) vs `client/src/hooks/use-peer-connection.ts` (dispatches `dodi-restore-payload`)
-
-**Problem:** Restore payloads over the **pairing tunnel** are handled in `runJoinerTunnel` / `handleMasterKeyReceived`. The **P2P** `restore-key` message dispatches `dodi-restore-payload`, which the Pairing page listens for. When the app is **paired and connected** (e.g. Chat, Settings), the Pairing page is not mounted, so no one handles `dodi-restore-payload`. A restore-key over P2P while already in the main app would fire the event but not be processed.
-
-**Recommendation:** If P2P restore-key is meant to work when already paired, add a global listener (e.g. in `App` or a top-level provider) that handles `dodi-restore-payload` and updates context/storage. Otherwise, document that P2P restore-key is only used during initial pairing/restore.
-
----
-
 ## Summary of Code Changes
 
 | File | Change |
 |------|--------|
-| `client/src/lib/storage-encrypted.ts` | `getBatchForRestore` filters by `partnerTimestamps`; `saveMemory` persists `timestamp`; `saveDailyRitual` persists `ritualDate`, `updatedAt`, `timestamp`. |
+| `client/src/lib/storage-encrypted.ts` | `saveLoveLetter`, `saveFutureLetter`, `savePrayer` now persist `createdAt`, `unlockDate`, `prayerDate` at top-level of encrypted records. `getEssentials` and `getBatchForRestore` filter by these top-level timestamps and send all items from `loveLetters` store. |
 | `client/src/contexts/DodiContext.tsx` | `allowWakeUp` state moved above the effect that uses it. |
-| `client/src/pages/pairing.tsx` | “Scan QR” shows a “coming soon” toast; `showScanner` state removed. |
+| `client/src/pages/pairing.tsx` | “Scan QR” shows a “coming soon” toast; `showScanner` state removed. UI copy updated for "Join with Code" vs "Restore". |
+| `client/src/pages/pin-setup.tsx` | Removed redundant hidden PIN input. |
+| `client/src/components/dodi-restore-listener.tsx` | New component created to globally handle `dodi-restore-payload` events. |
+| `client/src/App.tsx` | Integrated `DodiRestoreListener` for global handling of restore payloads. |
 
 ---
 
 ## Suggested Next Steps
 
-1. **Implement QR scanning** for Restore (and optionally Join) using `html5-qrcode`, and align with `QR_SCANNING_DEBUG_GUIDE.md`.
-2. **Differentiate “Join with Code” vs “Restore”** in UX and copy.
-3. **Add `cross-env`** for the dev script.
-4. **Clarify P2P restore-key** handling when already paired, and add a global listener if needed.
-5. **Test restore and essentials** end-to-end with two devices after the storage changes.
+1. **Test restore and essentials** end-to-end with two devices after the storage and listener changes.
+2. **Verify `conn.open` in wake-up ping timeout** on target browsers (iOS Safari, Android Chrome, and desktop) and add a try/catch around `conn.close()` if needed.
+3. **Add `cross-env`** for the dev script in `package.json` to ensure compatibility across Windows and Unix environments.
 
 ---
 
