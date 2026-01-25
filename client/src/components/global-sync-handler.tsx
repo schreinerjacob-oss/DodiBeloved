@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { saveMemory, saveCalendarEvent, saveDailyRitual, saveLoveLetter, savePrayer, saveReaction } from '@/lib/storage-encrypted';
-import { notifyNewMemory, notifyCalendarEvent, notifyDailyRitual, notifyNewLoveLetter } from '@/lib/notifications';
+import { notifyNewMemory, notifyCalendarEvent, notifyDailyRitual, notifyNewLoveLetter, notifyNewMessage } from '@/lib/notifications';
 import type { SyncMessage, Memory, CalendarEvent, DailyRitual, LoveLetter, Prayer, Reaction } from '@/types';
 
 export function GlobalSyncHandler() {
@@ -101,9 +101,13 @@ export function GlobalSyncHandler() {
         }
 
         // Handle chat messages (if not explicitly handled by page)
-        if (message.type === 'chat') {
+        if (message.type === 'chat' || message.type === 'message') {
            const chatMsg = message.data as any;
            const { saveMessage } = await import('@/lib/storage-encrypted');
+           
+           // Notify before saving to avoid race conditions with background sync
+           notifyNewMessage();
+           
            await saveMessage(chatMsg);
            await setLastSynced('chat', Number(chatMsg.timestamp));
            window.dispatchEvent(new CustomEvent('chat-message-received', { detail: chatMsg }));

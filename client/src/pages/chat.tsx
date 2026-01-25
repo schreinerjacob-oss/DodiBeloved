@@ -134,6 +134,9 @@ export default function ChatPage() {
           if (incomingMessage.senderId === partnerId) {
             console.log('💾 [P2P] Saving partner message:', incomingMessage.id);
             
+            // Handle notification before saving/state update
+            notifyNewMessage();
+
             // Check if we already have this message to avoid duplicates from multiple sync paths
             setMessages(prev => {
               if (prev.some(m => m.id === incomingMessage.id)) {
@@ -155,7 +158,6 @@ export default function ChatPage() {
                   }
                 }
                 await saveMessage(incomingMessage);
-                notifyNewMessage();
               })();
 
               return [...prev, incomingMessage];
