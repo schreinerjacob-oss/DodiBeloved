@@ -48,8 +48,20 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const [passphrase, setPassphrase] = useState<string | null>(null);
   const [pairingStatus, setPairingStatus] = useState<PairingStatus>('unpaired');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isLocked, setIsLocked] = useState(false);
-  const [pinEnabled, setPinEnabled] = useState(false);
+  const [isLocked, setIsLocked] = useState(() => {
+    try {
+      return localStorage.getItem('dodi-pinEnabled') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [pinEnabled, setPinEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('dodi-pinEnabled') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [inactivityMinutes, setInactivityMinutesState] = useState(10);
   const [isPremium, setIsPremium] = useState(false);
@@ -61,98 +73,60 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     const loadPairingData = async () => {
       setIsLoading(true);
       try {
-        const db = await initDB();
-        const [storedUserId, storedDisplayName, storedPartnerId, storedPassphrase, storedPairingStatus, storedPinEnabled, storedInactivityMinutes, storedIsPremium, storedAllowWakeUp] = await Promise.all([
-          db.get('settings', 'userId'),
-          db.get('settings', 'displayName'),
-          db.get('settings', 'partnerId'),
-          db.get('settings', 'passphrase'),
-          db.get('settings', 'pairingStatus'),
-          db.get('settings', 'pinEnabled'),
-          db.get('settings', 'inactivityMinutes'),
-          db.get('settings', 'isPremium'),
-          db.get('settings', 'allowWakeUp'),
+        const [
+          storedUserId,
+          storedDisplayName,
+          storedPartnerId,
+          storedPassphrase,
+          storedPairingStatus,
+          storedPinEnabled,
+          storedInactivityMinutes,
+          storedIsPremium,
+          storedAllowWakeUp,
+          storedSalt
+        ] = await Promise.all([
+          getSetting('userId'),
+          getSetting('displayName'),
+          getSetting('partnerId'),
+          getSetting('passphrase'),
+          getSetting('pairingStatus'),
+          getSetting('pinEnabled'),
+          getSetting('inactivityMinutes'),
+          getSetting('isPremium'),
+          getSetting('allowWakeUp'),
+          getSetting('salt')
         ]);
 
-        const storedUserIdObj = (storedUserId as any)?.value || storedUserId;
-        if (storedUserIdObj) {
-          setUserId(storedUserIdObj);
-          const storedDisplayNameObj = (storedDisplayName as any)?.value || storedDisplayName;
-          setDisplayName(storedDisplayNameObj || null);
+        if (storedUserId) setUserId(storedUserId);
+        if (storedDisplayName) setDisplayName(storedDisplayName);
+        if (storedPartnerId) setPartnerId(storedPartnerId);
+        
+        if (storedPairingStatus) {
+          setPairingStatus(storedPairingStatus as PairingStatus);
         }
 
-        const storedPassphraseObj = (storedPassphrase as any)?.value || storedPassphrase;
-        if (storedPassphraseObj) {
-          console.log('🔑 [CONTEXT] Found passphrase in storage:', storedPassphraseObj.substring(0, 5) + '...');
-          setPassphrase(storedPassphraseObj);
-        } else {
-          // Fallback to localStorage for PWA reliability
-          const localPassphrase = localStorage.getItem('dodi-passphrase');
-          if (localPassphrase) {
-            console.log('🔑 [CONTEXT] Recovered passphrase from localStorage');
-            setPassphrase(localPassphrase);
-          } else {
-            console.warn('⚠️ [CONTEXT] Passphrase NOT FOUND in storage');
-          }
-        }
-
-        const storedSalt = await db.get('settings', 'salt');
-        if (!storedSalt) {
-           const localSalt = localStorage.getItem('dodi-salt');
-           if (localSalt) {
-             console.log('🧂 [CONTEXT] Recovered salt from localStorage');
-             await db.put('settings', { key: 'salt', value: localSalt });
-           }
-        }
-
-        const storedPartnerIdObj = (storedPartnerId as any)?.value || storedPartnerId;
-        if (storedPartnerIdObj) {
-          setPartnerId(storedPartnerIdObj);
-        }
-
-        const storedPairingStatusObj = (storedPairingStatus as any)?.value || storedPairingStatus;
-        if (storedPairingStatusObj) {
-          setPairingStatus(storedPairingStatusObj as PairingStatus);
-        } else {
-          // Fallback to localStorage for PWA reliability
-          const localPairingStatus = localStorage.getItem('dodi-pairingStatus');
-          if (localPairingStatus) {
-            setPairingStatus(localPairingStatus as PairingStatus);
-          }
-        }
-
-        const storedPinEnabledObjFinal = (storedPinEnabled as any)?.value || storedPinEnabled;
-        console.log('🔐 [CONTEXT] PIN enabled check:', storedPinEnabledObjFinal);
-        if (storedPinEnabledObjFinal === 'true' || storedPinEnabledObjFinal === true) {
+        if (storedPinEnabled === 'true' || storedPinEnabled === true) {
           console.log('🔐 [CONTEXT] App is PIN enabled, locking...');
           setPinEnabled(true);
           setIsLocked(true);
+          // If locked, we don't set the passphrase in memory until unlocked
           setPassphrase(null);
+        } else if (storedPassphrase) {
+          console.log('🔑 [CONTEXT] Found passphrase, app unlocked');
+          setPassphrase(storedPassphrase);
         }
 
-        const storedAllowWakeUpObj = storedAllowWakeUp as any;
-        if (storedAllowWakeUpObj?.value) {
-          setAllowWakeUpState(storedAllowWakeUpObj.value === 'true' || storedAllowWakeUpObj.value === true);
+        if (storedAllowWakeUp === 'true' || storedAllowWakeUp === true) {
+          setAllowWakeUpState(true);
         }
 
-        const storedInactivityMinutesObj = storedInactivityMinutes as any;
-        if (storedInactivityMinutesObj?.value) {
-          const minutes = typeof storedInactivityMinutesObj.value === 'string' 
-            ? parseInt(storedInactivityMinutesObj.value, 10) 
-            : storedInactivityMinutesObj.value as number;
-          if (!isNaN(minutes)) {
-            setInactivityMinutesState(minutes);
-          }
+        if (storedInactivityMinutes) {
+          const minutes = parseInt(String(storedInactivityMinutes), 10);
+          if (!isNaN(minutes)) setInactivityMinutesState(minutes);
         }
 
-        const storedIsPremiumObj = storedIsPremium as any;
-        if (storedIsPremiumObj?.value) {
-          setIsPremium(storedIsPremiumObj.value === 'true' || storedIsPremiumObj.value === true);
-        }
-        
-        // Ensure userId is correctly set from storage
-        if (storedUserIdObj?.value) {
-          setUserId(storedUserIdObj.value);
+        if (storedIsPremium === 'true' || storedIsPremium === true) {
+          setIsPremium(true);
         }
       } catch (error) {
         console.error('Failed to load pairing data:', error);
