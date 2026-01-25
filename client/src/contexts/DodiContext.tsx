@@ -122,10 +122,10 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         }
 
         const storedPinEnabledObjFinal = (storedPinEnabled as any)?.value || storedPinEnabled;
-        if (storedPinEnabledObjFinal?.value === 'true' || storedPinEnabledObjFinal?.value === true) {
+        console.log('🔐 [CONTEXT] PIN enabled check:', storedPinEnabledObjFinal);
+        if (storedPinEnabledObjFinal === 'true' || storedPinEnabledObjFinal === true) {
+          console.log('🔐 [CONTEXT] App is PIN enabled, locking...');
           setPinEnabled(true);
-          // If PIN is enabled, we lock the app and clear the in-memory passphrase
-          // The user will need to enter PIN to decrypt the passphrase back into memory
           setIsLocked(true);
           setPassphrase(null);
         }

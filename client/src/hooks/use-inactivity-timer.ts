@@ -52,10 +52,26 @@ export function useInactivityTimer({
       document.addEventListener(event, handleActivity);
     });
 
+    // Handle page visibility changes (when user switches back to app)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const now = Date.now();
+        const inactiveTime = now - lastActivityRef.current;
+        if (inactiveTime > timeoutMinutes * 60 * 1000) {
+          console.log('Visibility check: Inactivity timeout reached');
+          onInactivity();
+        } else {
+          resetTimer();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       events.forEach((event) => {
         document.removeEventListener(event, handleActivity);
       });
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (timerRef.current) {
         clearTimeout(timerRef.current);
       }
