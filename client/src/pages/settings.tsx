@@ -235,8 +235,8 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <ScrollArea className="flex-1 px-4 py-6">
-        <div className="max-w-md mx-auto space-y-6">
+      <ScrollArea className="flex-1 px-4 py-6 w-full">
+        <div className="max-w-md mx-auto space-y-6 pb-20 w-full">
           <Card className="p-6 space-y-4 border-accent/20 bg-accent/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -550,7 +550,7 @@ export default function SettingsPage() {
               {userId && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Your ID</p>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-start gap-2">
                     <p className="text-sm font-mono flex-1 break-all bg-muted/50 p-3 rounded-lg text-foreground border border-border/50">
                       {userId}
                     </p>
@@ -559,7 +559,7 @@ export default function SettingsPage() {
                       variant="ghost"
                       onClick={handleCopyUserId}
                       data-testid="button-copy-user-id"
-                      className="hover-elevate h-11 w-11"
+                      className="hover-elevate h-11 w-11 flex-shrink-0"
                     >
                       {copiedUserId ? (
                         <Check className="w-4 h-4 text-accent" />
@@ -573,7 +573,7 @@ export default function SettingsPage() {
               {partnerId && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Partner ID</p>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-start gap-2">
                     <p className="text-sm font-mono flex-1 break-all bg-muted/50 p-3 rounded-lg text-foreground border border-border/50">
                       {partnerId}
                     </p>
@@ -582,7 +582,7 @@ export default function SettingsPage() {
                       variant="ghost"
                       onClick={handleCopyPartnerId}
                       data-testid="button-copy-partner-id"
-                      className="hover-elevate h-11 w-11"
+                      className="hover-elevate h-11 w-11 flex-shrink-0"
                     >
                       {copiedPartnerId ? (
                         <Check className="w-4 h-4 text-accent" />
