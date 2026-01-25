@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Lock, Check, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -131,16 +130,6 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
                 );
               })}
             </div>
-            <Input
-              type="text"
-              inputMode="numeric"
-              placeholder="0000"
-              value={step === 'entry' ? pin : confirmPin}
-              onChange={(e) => handlePinChange(e.target.value)}
-              className="mt-3 text-center tracking-widest opacity-0 absolute pointer-events-none"
-              data-testid="input-pin"
-              autoFocus
-            />
             <input
               type="text"
               inputMode="numeric"
@@ -149,7 +138,8 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
               value={step === 'entry' ? pin : confirmPin}
               onChange={(e) => handlePinChange(e.target.value)}
               className="w-full mt-3 text-center tracking-widest"
-              data-testid="input-pin-actual"
+              data-testid="input-pin"
+              autoFocus
             />
           </div>
 

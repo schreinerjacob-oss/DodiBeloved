@@ -66,6 +66,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const [inactivityMinutes, setInactivityMinutesState] = useState(10);
   const [isPremium, setIsPremium] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [allowWakeUp, setAllowWakeUpState] = useState(false);
 
   const isPaired = pairingStatus === 'connected';
 
@@ -297,8 +298,6 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setPartnerId(null);
     setPairingStatus('unpaired');
   };
-
-  const [allowWakeUp, setAllowWakeUpState] = useState(false);
 
   const setAllowWakeUp = async (enabled: boolean) => {
     setAllowWakeUpState(enabled);

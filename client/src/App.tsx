@@ -25,6 +25,7 @@ import { MessageSquare, Camera, CalendarHeart, Phone, Settings, Lock, Heart } fr
 import { cn } from "@/lib/utils";
 import { ConnectionStatus } from "@/components/connection-status";
 import { GlobalSyncHandler } from "@/components/global-sync-handler";
+import { DodiRestoreListener } from "@/components/dodi-restore-listener";
 
 function NavItem({ href, icon: Icon, label, active }: { href: string; icon: any; label: string; active: boolean }) {
   const [, setLocation] = useLocation();
@@ -166,6 +167,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <DodiProvider>
+          <DodiRestoreListener />
           <OnboardingProvider>
             <MainApp />
             <Toaster />

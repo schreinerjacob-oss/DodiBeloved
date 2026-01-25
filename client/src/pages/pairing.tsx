@@ -27,7 +27,6 @@ export default function PairingPage() {
   
   const [mode, setMode] = useState<Mode>(initialMode);
   const [roomCode, setRoomCode] = useState<string>('');
-  const [showScanner, setShowScanner] = useState(false);
   const [restoreProgress, setRestoreProgress] = useState(0);
   const [isRestoringEssentials, setIsRestoringEssentials] = useState(false);
   const [isSyncingOlder, setIsSyncingOlder] = useState(false);
@@ -60,14 +59,6 @@ export default function PairingPage() {
   }, [pairingStatus]);
 
   useEffect(() => {
-    const handleRestorePayload = async (e: any) => {
-      const payload = e.detail;
-      console.log('♾️ [RESTORE] Processing restoration payload:', payload);
-      await handleMasterKeyReceived(payload, false);
-    };
-
-    window.addEventListener('dodi-restore-payload', handleRestorePayload);
-    
     const handleSyncComplete = () => {
       setIsSyncingOlder(false);
       toast({
@@ -75,7 +66,7 @@ export default function PairingPage() {
         description: "Your entire garden history is now synchronized.",
       });
     };
-    
+
     const handleSyncProgress = (e: any) => {
       setIsSyncingOlder(true);
       setSyncBatchCount(prev => prev + 1);
@@ -86,13 +77,12 @@ export default function PairingPage() {
 
     window.addEventListener('dodi-sync-complete', handleSyncComplete);
     window.addEventListener('dodi-sync-batch', handleSyncProgress);
-    
+
     return () => {
-      window.removeEventListener('dodi-restore-payload', handleRestorePayload);
       window.removeEventListener('dodi-sync-complete', handleSyncComplete);
       window.removeEventListener('dodi-sync-batch', handleSyncProgress);
     };
-  }, []);
+  }, [toast]);
 
   const handleMasterKeyReceived = async (payload: any, isCreatorRole: boolean) => {
     try {
@@ -743,8 +733,8 @@ export default function PairingPage() {
               <Card className="p-8 space-y-6 border-sage/30 shadow-lg">
                 <div className="space-y-3 text-center">
                   <RefreshCw className="w-8 h-8 mx-auto text-sage" />
-                  <h2 className="text-2xl font-light">Restore Garden</h2>
-                  <p className="text-sm text-muted-foreground">Enter the code from your partner's device to reconnect</p>
+                  <h2 className="text-2xl font-light">Enter Restore Code</h2>
+                  <p className="text-sm text-muted-foreground">Regrow your connection from your partner's device</p>
                 </div>
 
                 <div className="space-y-4">
@@ -770,8 +760,14 @@ export default function PairingPage() {
                       {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                       Restore
                     </Button>
-                    <Button 
-                      onClick={() => setShowScanner(true)}
+                    <Button
+                      onClick={() => {
+                        toast({
+                          title: "Scan QR coming soon",
+                          description: "Please enter the 8-character code from your partner's device for now.",
+                          variant: "default",
+                        });
+                      }}
                       variant="outline"
                       className="h-12 hover-elevate"
                       data-testid="button-restore-scan"
@@ -886,8 +882,8 @@ export default function PairingPage() {
                 ) : (
                   <>
                     <div className="text-center space-y-2">
-                      <h2 className="text-xl font-light">Enter Restore Code</h2>
-                      <p className="text-sm text-muted-foreground italic">Regrow your connection from your partner's device</p>
+                      <h2 className="text-xl font-light">Join with Code</h2>
+                      <p className="text-sm text-muted-foreground italic">Enter the code your partner shared with you</p>
                     </div>
 
                     <Input 
