@@ -143,9 +143,10 @@ export default function ChatPage() {
 
               // Process media if needed
               (async () => {
-                if (incomingMessage.mediaUrl && typeof incomingMessage.mediaUrl === 'object' && (incomingMessage.mediaUrl as unknown) instanceof ArrayBuffer) {
+                if (incomingMessage.mediaUrl && typeof incomingMessage.mediaUrl === 'string' && incomingMessage.mediaUrl.startsWith('data:image')) {
                   const { saveMediaBlob } = await import('@/lib/storage');
-                  const blob = new Blob([incomingMessage.mediaUrl], { type: 'image/jpeg' });
+                  const response = await fetch(incomingMessage.mediaUrl);
+                  const blob = await response.blob();
                   await saveMediaBlob(incomingMessage.id, blob, 'message');
                   incomingMessage.mediaUrl = null; 
                 }
@@ -436,14 +437,18 @@ export default function ChatPage() {
       // Add to local state
       setMessages(prev => [...prev, message]);
 
-      // Send via P2P data channel as ArrayBuffer (no Base64 overhead)
-      const arrayBuffer = await compressedBlob.arrayBuffer();
-      console.log('📤 [P2P] Sending compressed image via P2P:', messageId, `(${arrayBuffer.byteLength}B)`);
-      sendP2P({
-        type: 'message',
-        data: { ...message, mediaUrl: arrayBuffer },
-        timestamp: Date.now(),
-      });
+      // Send via P2P data channel as Base64 (JSON safe)
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64data = reader.result as string;
+        console.log('📤 [P2P] Sending compressed image via P2P:', messageId, `(${base64data.length} chars)`);
+        sendP2P({
+          type: 'message',
+          data: { ...message, mediaUrl: base64data },
+          timestamp: Date.now(),
+        });
+      };
+      reader.readAsDataURL(compressedBlob);
 
       toast({
         title: "Image sent",

@@ -26,10 +26,11 @@ export function GlobalSyncHandler() {
           if (isOurMemory) {
             console.log('📸 [SYNC] Received memory:', incomingMemory.id);
             
-            // If mediaUrl is ArrayBuffer (binary image data), convert to Blob and save
-            if (incomingMemory.mediaUrl && typeof incomingMemory.mediaUrl === 'object' && (incomingMemory.mediaUrl as unknown) instanceof ArrayBuffer) {
+            // If mediaUrl is Base64 string, convert to Blob and save
+            if (incomingMemory.mediaUrl && typeof incomingMemory.mediaUrl === 'string' && incomingMemory.mediaUrl.startsWith('data:image')) {
               const { saveMediaBlob } = await import('@/lib/storage');
-              const blob = new Blob([incomingMemory.mediaUrl], { type: 'image/jpeg' });
+              const response = await fetch(incomingMemory.mediaUrl);
+              const blob = await response.blob();
               await saveMediaBlob(incomingMemory.id, blob, 'memory');
               incomingMemory.mediaUrl = null;
             }
