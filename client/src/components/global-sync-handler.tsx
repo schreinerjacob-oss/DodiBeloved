@@ -28,11 +28,15 @@ export function GlobalSyncHandler() {
             
             // If mediaUrl is Base64 string, convert to Blob and save
             if (incomingMemory.mediaUrl && typeof incomingMemory.mediaUrl === 'string' && incomingMemory.mediaUrl.startsWith('data:image')) {
-              const { saveMediaBlob } = await import('@/lib/storage');
-              const response = await fetch(incomingMemory.mediaUrl);
-              const blob = await response.blob();
-              await saveMediaBlob(incomingMemory.id, blob, 'memory');
-              incomingMemory.mediaUrl = null;
+              try {
+                const { saveMediaBlob } = await import('@/lib/storage');
+                const response = await fetch(incomingMemory.mediaUrl);
+                const blob = await response.blob();
+                await saveMediaBlob(incomingMemory.id, blob, 'memory');
+                incomingMemory.mediaUrl = null;
+              } catch (e) {
+                console.error('❌ [SYNC] Failed to process incoming media:', e);
+              }
             }
             
             await saveMemory(incomingMemory);

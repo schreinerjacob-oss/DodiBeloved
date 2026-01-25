@@ -144,11 +144,15 @@ export default function ChatPage() {
               // Process media if needed
               (async () => {
                 if (incomingMessage.mediaUrl && typeof incomingMessage.mediaUrl === 'string' && incomingMessage.mediaUrl.startsWith('data:image')) {
-                  const { saveMediaBlob } = await import('@/lib/storage');
-                  const response = await fetch(incomingMessage.mediaUrl);
-                  const blob = await response.blob();
-                  await saveMediaBlob(incomingMessage.id, blob, 'message');
-                  incomingMessage.mediaUrl = null; 
+                  try {
+                    const { saveMediaBlob } = await import('@/lib/storage');
+                    const response = await fetch(incomingMessage.mediaUrl);
+                    const blob = await response.blob();
+                    await saveMediaBlob(incomingMessage.id, blob, 'message');
+                    incomingMessage.mediaUrl = null; 
+                  } catch (e) {
+                    console.error('❌ [P2P] Failed to process incoming media:', e);
+                  }
                 }
                 await saveMessage(incomingMessage);
                 notifyNewMessage();
