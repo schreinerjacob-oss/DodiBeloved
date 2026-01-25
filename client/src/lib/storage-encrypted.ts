@@ -341,35 +341,13 @@ export async function getEssentials(): Promise<Record<string, any[]>> {
   const allMemories = await db.getAll('memories');
   const recentMemories = allMemories.filter(m => Number(m.timestamp || 0) > thirtyDaysAgo);
 
-  // 3. Love letters only (decrypt, filter, re-encrypt)
-  const allLetters = await db.getAll('loveLetters');
-  const decryptedLetters = await Promise.all(
-    allLetters.map(async (enc) => {
-      try {
-        const dec = await decryptLoveLetter(enc);
-        // Only include true love letters (not prayers with 'gratitude' or future letters with 'unlockDate')
-        if (dec && !('gratitude' in dec) && !('unlockDate' in dec)) {
-          return dec as LoveLetter;
-        }
-        return null;
-      } catch {
-        return null;
-      }
-    })
-  );
-  
-  const validLoveLetters = decryptedLetters.filter((item): item is LoveLetter => item !== null);
-  const recentLoveLetters = validLoveLetters.filter(letter => {
-    const letterTime = letter.createdAt instanceof Date 
-      ? letter.createdAt.getTime() 
-      : Number(letter.createdAt || 0);
-    return letterTime > thirtyDaysAgo;
+  // 3. All items from loveLetters store (love letters, prayers, future letters) from last 30 days
+  const allLoveLettersStoreItems = await db.getAll('loveLetters');
+  const recentLoveLettersStoreItems = allLoveLettersStoreItems.filter(item => {
+    // Use available top-level timestamp fields for filtering
+    const itemTime = Number(item.createdAt ?? item.unlockDate ?? item.prayerDate ?? 0);
+    return itemTime > thirtyDaysAgo;
   });
-  
-  // Re-encrypt the filtered love letters
-  const encryptedLoveLetters = await Promise.all(
-    recentLoveLetters.map(letter => encryptLoveLetter(letter))
-  );
 
   // 4. Daily whispers (Rituals) from last 30 days
   const allRituals = await db.getAll('dailyRituals');
@@ -381,7 +359,7 @@ export async function getEssentials(): Promise<Record<string, any[]>> {
   return {
     messages: encryptedMessages.map((m, i) => ({ ...m, id: messages[i].id, timestamp: messages[i].timestamp })),
     memories: recentMemories,
-    loveLetters: encryptedLoveLetters.map((enc, i) => ({ ...enc, id: recentLoveLetters[i].id })),
+    loveLetters: recentLoveLettersStoreItems.map(item => ({ ...item })),
     dailyRituals: recentRituals,
     reactions: await db.getAll('reactions')
   };
@@ -506,9 +484,11 @@ export async function saveLoveLetter(letter: LoveLetter): Promise<void> {
   try {
     const db = await initDB();
     const encrypted = await encryptLoveLetter(letter);
+    const createdAt = letter.createdAt instanceof Date ? letter.createdAt.getTime() : Number(letter.createdAt || 0);
     const record = {
       id: letter.id,
       ...encrypted,
+      createdAt, // Add createdAt at the top level for filtering
     };
     await db.put('loveLetters', record);
   } catch (error) {
@@ -522,8 +502,15 @@ export async function saveLoveLetter(letter: LoveLetter): Promise<void> {
 export async function saveFutureLetter(letter: FutureLetter): Promise<void> {
   const db = await initDB();
   const encrypted = await encryptFutureLetter(letter);
-  const withId = { ...encrypted, id: letter.id };
-  await db.put('loveLetters', withId);
+  const createdAt = letter.createdAt instanceof Date ? letter.createdAt.getTime() : Number(letter.createdAt || 0);
+  const unlockDate = letter.unlockDate instanceof Date ? letter.unlockDate.getTime() : Number(letter.unlockDate || 0);
+  const record = {
+    id: letter.id,
+    ...encrypted,
+    createdAt,  // Add createdAt at the top level
+    unlockDate, // Add unlockDate at the top level for filtering
+  };
+  await db.put('loveLetters', record);
 }
 
 export async function getAllFutureLetters(): Promise<FutureLetter[]> {
@@ -546,8 +533,15 @@ export async function getAllFutureLetters(): Promise<FutureLetter[]> {
 export async function savePrayer(prayer: Prayer): Promise<void> {
   const db = await initDB();
   const encrypted = await encryptPrayer(prayer);
-  const withId = { ...encrypted, id: prayer.id };
-  await db.put('loveLetters', withId);
+  const createdAt = prayer.createdAt instanceof Date ? prayer.createdAt.getTime() : Number(prayer.createdAt || 0);
+  const prayerDate = prayer.prayerDate instanceof Date ? prayer.prayerDate.getTime() : Number(prayer.prayerDate || 0);
+  const record = {
+    id: prayer.id,
+    ...encrypted,
+    createdAt, // Add createdAt at the top level
+    prayerDate, // Add prayerDate at the top level for filtering
+  };
+  await db.put('loveLetters', record);
 }
 
 // REMOVED DUPLICATE getAllPrayers
@@ -562,53 +556,18 @@ export async function getBatchForRestore(stores: readonly StoreName[], partnerTi
     const partnerLastSynced = partnerTimestamps[storeName] || 0;
     const allItems = await db.getAll(storeName);
     
-    // Special handling for loveLetters: decrypt, filter to only actual love letters, re-encrypt
-    if (storeName === 'loveLetters') {
-      const decrypted = await Promise.all(
-        allItems.map(async (enc) => {
-          try {
-            const dec = await decryptLoveLetter(enc);
-            // Only include true love letters (not prayers with 'gratitude' or future letters with 'unlockDate')
-            if (dec && !('gratitude' in dec) && !('unlockDate' in dec)) {
-              return { decrypted: dec as LoveLetter, encrypted: enc };
-            }
-            return null;
-          } catch {
-            return null;
-          }
-        })
-      );
-      
-      const validLetters = decrypted.filter((item): item is { decrypted: LoveLetter; encrypted: EncryptedData } => item !== null);
-      const filtered = validLetters.filter(item => {
-        const itemTime = item.decrypted.createdAt instanceof Date 
-          ? item.decrypted.createdAt.getTime() 
-          : Number(item.decrypted.createdAt || 0);
-        return itemTime > partnerLastSynced;
-      });
-      
-      const sliceSize = Math.min(batchSize - batch.length, filtered.length);
-      const itemsToSend = filtered.slice(0, sliceSize);
-      itemsToSend.forEach(item => {
-        // Send the encrypted form (already encrypted, just filtered)
-        batch.push({ store: 'loveLetters', data: item.encrypted });
-      });
-    } else {
-      // For other stores, use existing logic
-      const filtered = allItems.filter(item => {
-        const itemTime = Number(item.updatedAt ?? item.timestamp ?? 0);
-        return itemTime > partnerLastSynced;
-      });
-      const sliceSize = Math.min(batchSize - batch.length, filtered.length);
-      const itemsToSend = filtered.slice(0, sliceSize);
-      itemsToSend.forEach(item => {
-        batch.push({ store: storeName, data: item });
-      });
-    }
-  }
-  
-  return batch;
-}
+    // For all stores, including loveLetters, send items newer than partnerLastSynced directly
+    const filtered = allItems.filter(item => {
+      // For loveLetters store, use createdAt, unlockDate, or prayerDate for filtering.
+      // For other stores, use updatedAt or timestamp.
+      const itemTime = Number(item.createdAt ?? item.unlockDate ?? item.prayerDate ?? item.updatedAt ?? item.timestamp ?? 0);
+      return itemTime > partnerLastSynced;
+    });
+    const sliceSize = Math.min(batchSize - batch.length, filtered.length);
+    const itemsToSend = filtered.slice(0, sliceSize);
+    itemsToSend.forEach(item => {
+      batch.push({ store: storeName, data: item });
+    });
 
 export async function saveReaction(reaction: Reaction): Promise<void> {
   try {
