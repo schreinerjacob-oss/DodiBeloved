@@ -588,6 +588,10 @@ export async function getBatchForRestore(stores: readonly StoreName[], partnerTi
     itemsToSend.forEach(item => {
       batch.push({ store: storeName, data: item });
     });
+  }
+  
+  return batch;
+}
 
 export async function saveReaction(reaction: Reaction): Promise<void> {
   try {

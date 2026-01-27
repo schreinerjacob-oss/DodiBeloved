@@ -106,7 +106,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           setPairingStatus(storedPairingStatus as PairingStatus);
         }
 
-        if (storedPinEnabled === 'true' || storedPinEnabled === true) {
+        if (storedPinEnabled === 'true') {
           console.log('🔐 [CONTEXT] App is PIN enabled, locking...');
           setPinEnabled(true);
           setIsLocked(true);
@@ -117,7 +117,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           setPassphrase(storedPassphrase);
         }
 
-        if (storedAllowWakeUp === 'true' || storedAllowWakeUp === true) {
+        if (storedAllowWakeUp === 'true') {
           setAllowWakeUpState(true);
         }
 
@@ -126,7 +126,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           if (!isNaN(minutes)) setInactivityMinutesState(minutes);
         }
 
-        if (storedIsPremium === 'true' || storedIsPremium === true) {
+        if (storedIsPremium === 'true') {
           setIsPremium(true);
         }
       } catch (error) {
