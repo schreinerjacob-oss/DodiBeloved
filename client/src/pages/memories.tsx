@@ -20,7 +20,7 @@ const MEMORIES_PER_PAGE = 20;
 export default function MemoriesPage() {
   const { userId, partnerId } = useDodi();
   const { toast } = useToast();
-  const { send: sendP2P, state: peerState } = usePeerConnection();
+  const { send: sendP2P, sendMedia, state: peerState } = usePeerConnection();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [caption, setCaption] = useState<string>('');
@@ -88,6 +88,7 @@ export default function MemoriesPage() {
     setSaving(true);
     try {
       const memoryId = nanoid();
+      const isOffline = !peerState.connected;
       
       // Compress image to Blob (70-90% size reduction)
       console.log('🖼️ Compressing memory image...');
@@ -115,14 +116,15 @@ export default function MemoriesPage() {
       // Add to local state immediately
       setMemories(prev => [...prev, memory]);
       
-      // Send to partner via P2P data channel as ArrayBuffer (no Base64 overhead)
-      const arrayBuffer = await compressedBlob.arrayBuffer();
-      console.log('📤 [P2P] Sending compressed memory image via P2P:', memoryId, `(${arrayBuffer.byteLength}B)`);
+      // Send metadata first (small + queue-friendly)
       sendP2P({
         type: 'memory',
-        data: { ...memory, mediaUrl: arrayBuffer, imageData: '' },
+        data: { ...memory, mediaUrl: null, imageData: '' },
         timestamp: Date.now(),
       });
+
+      // Then send the actual media as binary chunks (queued if offline)
+      await sendMedia({ mediaId: memoryId, kind: 'memory', mime: compressedBlob.type || previewFile.type || 'image/jpeg' });
       
       setCaption('');
       setPreview('');

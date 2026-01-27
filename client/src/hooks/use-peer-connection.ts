@@ -4,7 +4,7 @@ import type { SyncMessage } from '@/types';
 import Peer, { type DataConnection } from 'peerjs';
 import { initializeBackgroundSync } from '@/lib/background-sync';
 import { notifyConnectionRestored } from '@/lib/notifications';
-import { saveToOfflineQueue, getOfflineQueue, removeFromOfflineQueue, getOfflineQueueSize } from '@/lib/storage';
+import { saveToOfflineQueue, getOfflineQueue, removeFromOfflineQueue, getOfflineQueueSize, getMediaBlob, saveToOfflineMediaQueue, getOfflineMediaQueue, removeFromOfflineMediaQueue, saveMediaBlob, isInOfflineMediaQueue } from '@/lib/storage';
 import { notifyQueueListeners } from '@/hooks/use-offline-queue';
 
 interface PeerConnectionState {
@@ -17,12 +17,14 @@ interface PeerConnectionState {
 interface UsePeerConnectionReturn {
   state: PeerConnectionState;
   send: (message: SyncMessage) => void;
+  sendMedia: (args: { mediaId: string; kind: 'message' | 'memory'; mime: string }) => Promise<void>;
   reconnect: () => void;
 }
 
 // Global singleton variables to persist across renders
 let globalPeer: Peer | null = null;
 let globalConn: DataConnection | null = null;
+let globalMediaConn: DataConnection | null = null;
 let globalPartnerId: string | null = null;
 let globalSyncInProgress = false;
 let globalSyncCancelled = false;
@@ -127,6 +129,15 @@ let offlineQueue: SyncMessage[] = [];
 let queueFlushInProgress = false;
 let persistentQueueLoaded = false;
 
+let mediaFlushInProgress = false;
+const MEDIA_CHUNK_SIZE = 64 * 1024; // 64KB chunks for broad WebRTC compatibility
+const MEDIA_RESEND_COOLDOWN_MS = 15_000;
+const inFlightMedia = new Map<string, number>(); // mediaId -> lastSentAt
+const incomingMedia = new Map<
+  string,
+  { kind: 'message' | 'memory'; mime: string; totalChunks: number; received: number; chunks: ArrayBuffer[] }
+>();
+
 // Subscription system - track all active hook listeners
 const listeners = new Set<(state: PeerConnectionState) => void>();
 
@@ -194,8 +205,180 @@ function connectToPartner(targetId: string) {
   const conn = globalPeer.connect(targetId, {
     reliable: true,
     serialization: 'json',
+    label: 'main',
   });
   setupConnection(conn);
+
+  // Separate binary channel for media blobs (ArrayBuffer chunks)
+  const mediaConn = globalPeer.connect(targetId, {
+    reliable: true,
+    serialization: 'binary',
+    label: 'media',
+  });
+  setupMediaConnection(mediaConn);
+}
+
+async function flushOfflineMediaQueue() {
+  if (mediaFlushInProgress) return;
+  if (!globalMediaConn || !globalMediaConn.open) return;
+
+  mediaFlushInProgress = true;
+  try {
+    const queued = await getOfflineMediaQueue();
+    if (queued.length === 0) return;
+
+    console.log('🖼️ [MEDIA] Flushing offline media queue:', queued.length);
+    for (const item of queued) {
+      try {
+        const lastSentAt = inFlightMedia.get(item.id) || 0;
+        if (Date.now() - lastSentAt < MEDIA_RESEND_COOLDOWN_MS) {
+          continue;
+        }
+
+        const blob = await getMediaBlob(item.id, item.kind);
+        if (!blob) {
+          // If blob is missing locally, drop queue item to avoid infinite retries
+          console.warn('🖼️ [MEDIA] Missing local blob for queued media, dropping:', item.id);
+          await removeFromOfflineMediaQueue(item.id);
+          continue;
+        }
+        inFlightMedia.set(item.id, Date.now());
+        await sendMediaInternal({ mediaId: item.id, kind: item.kind, mime: item.mime, blob });
+        // Removal happens on ACK for strongest guarantee; keep as backup
+      } catch (e) {
+        console.error('🖼️ [MEDIA] Failed to flush queued media:', item.id, e);
+      }
+    }
+  } finally {
+    mediaFlushInProgress = false;
+  }
+}
+
+async function sendMediaInternal(args: { mediaId: string; kind: 'message' | 'memory'; mime: string; blob: Blob }) {
+  if (!globalMediaConn || !globalMediaConn.open) throw new Error('Media channel not connected');
+
+  const buffer = await args.blob.arrayBuffer();
+  const totalChunks = Math.ceil(buffer.byteLength / MEDIA_CHUNK_SIZE);
+
+  // Init frame
+  globalMediaConn.send({
+    type: 'media-init',
+    mediaId: args.mediaId,
+    kind: args.kind,
+    mime: args.mime,
+    byteLength: buffer.byteLength,
+    chunkSize: MEDIA_CHUNK_SIZE,
+    totalChunks,
+    timestamp: Date.now(),
+  });
+
+  // Chunk frames (ordered, reliable)
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * MEDIA_CHUNK_SIZE;
+    const end = Math.min(buffer.byteLength, start + MEDIA_CHUNK_SIZE);
+    const chunk = buffer.slice(start, end);
+    globalMediaConn.send({
+      type: 'media-chunk',
+      mediaId: args.mediaId,
+      index: i,
+      data: chunk,
+      timestamp: Date.now(),
+    });
+  }
+
+  globalMediaConn.send({
+    type: 'media-done',
+    mediaId: args.mediaId,
+    timestamp: Date.now(),
+  });
+}
+
+function setupMediaConnection(conn: DataConnection) {
+  // Keep only one open media connection
+  if (globalMediaConn && globalMediaConn.open && globalMediaConn.peer === conn.peer && globalMediaConn !== conn) {
+    conn.close();
+    return;
+  }
+  globalMediaConn = conn;
+
+  conn.on('open', async () => {
+    console.log('🖼️ [MEDIA] Binary channel established with:', conn.peer);
+    // New connection: allow resend attempts for pending media
+    inFlightMedia.clear();
+    // Flush queued media on connect
+    flushOfflineMediaQueue();
+  });
+
+  conn.on('data', async (data: any) => {
+    // ACK from receiver → mark synced
+    if (data?.type === 'media-ack' && data.mediaId) {
+      console.log('✅ [MEDIA] Image synced:', data.mediaId);
+      try {
+        await removeFromOfflineMediaQueue(data.mediaId);
+      } catch {}
+      inFlightMedia.delete(data.mediaId);
+      return;
+    }
+
+    if (data?.type === 'media-init') {
+      incomingMedia.set(data.mediaId, {
+        kind: data.kind,
+        mime: data.mime,
+        totalChunks: Number(data.totalChunks),
+        received: 0,
+        chunks: new Array(Number(data.totalChunks)),
+      });
+      return;
+    }
+
+    if (data?.type === 'media-chunk') {
+      const entry = incomingMedia.get(data.mediaId);
+      if (!entry) return;
+      const idx = Number(data.index);
+      if (Number.isFinite(idx) && idx >= 0 && idx < entry.totalChunks && !entry.chunks[idx]) {
+        entry.chunks[idx] = data.data as ArrayBuffer;
+        entry.received += 1;
+      }
+      return;
+    }
+
+    if (data?.type === 'media-done') {
+      const entry = incomingMedia.get(data.mediaId);
+      if (!entry) return;
+      if (entry.received !== entry.totalChunks || entry.chunks.some((c) => !c)) {
+        console.warn('🖼️ [MEDIA] media-done received but chunks incomplete:', data.mediaId, entry.received, '/', entry.totalChunks);
+        return;
+      }
+
+      try {
+        const blob = new Blob(entry.chunks, { type: entry.mime });
+        await saveMediaBlob(data.mediaId, blob, entry.kind);
+        console.log('📥 [MEDIA] Image stored locally:', data.mediaId);
+        window.dispatchEvent(new CustomEvent('dodi-media-ready', { detail: { mediaId: data.mediaId, kind: entry.kind } }));
+
+        // Send ACK to sender
+        if (conn.open) {
+          conn.send({ type: 'media-ack', mediaId: data.mediaId, timestamp: Date.now() });
+        }
+      } catch (e) {
+        console.error('🖼️ [MEDIA] Failed to store incoming media:', e);
+      } finally {
+        incomingMedia.delete(data.mediaId);
+      }
+      return;
+    }
+  });
+
+  conn.on('close', () => {
+    if (globalMediaConn === conn) globalMediaConn = null;
+    inFlightMedia.clear();
+  });
+
+  conn.on('error', (err) => {
+    console.error('🖼️ [MEDIA] Media connection error:', err);
+    if (globalMediaConn === conn) globalMediaConn = null;
+    inFlightMedia.clear();
+  });
 }
 
 // Send a tiny wake-up signal via signaling server (Relay)
@@ -377,6 +560,9 @@ function setupConnection(conn: DataConnection) {
     if (offlineQueue.length > 0) {
       flushOfflineQueue(conn);
     }
+
+    // Also flush any queued media blobs (via binary channel)
+    flushOfflineMediaQueue();
   });
 
   conn.on('data', async (data: any) => {
@@ -825,6 +1011,44 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     }
   }, [partnerId, allowWakeUp]);
 
+  const sendMedia = useCallback(
+    async ({ mediaId, kind, mime }: { mediaId: string; kind: 'message' | 'memory'; mime: string }) => {
+      // Media is stored locally already; we only queue/send the blob ID
+      const blob = await getMediaBlob(mediaId, kind);
+      if (!blob) {
+        console.warn('🖼️ [MEDIA] No local blob found for mediaId:', mediaId);
+        return;
+      }
+
+      // Pending-until-ACK: enqueue once (deduped), remove on media-ack
+      const alreadyQueued = await isInOfflineMediaQueue(mediaId);
+      if (!alreadyQueued) {
+        await saveToOfflineMediaQueue(mediaId, kind, mime);
+        console.log('🖼️ [MEDIA] Image queued:', mediaId);
+      }
+
+      if (globalMediaConn && globalMediaConn.open) {
+        try {
+          const lastSentAt = inFlightMedia.get(mediaId) || 0;
+          if (Date.now() - lastSentAt >= MEDIA_RESEND_COOLDOWN_MS) {
+            inFlightMedia.set(mediaId, Date.now());
+            await sendMediaInternal({ mediaId, kind, mime, blob });
+          }
+          console.log('🖼️ [MEDIA] Image sent:', mediaId);
+          return;
+        } catch (e) {
+          console.error('🖼️ [MEDIA] Failed to send media, will retry on reconnect:', e);
+        }
+      }
+
+      // Trigger reconnection if offline
+      if (globalPartnerId && (!globalConn || !globalConn.open)) {
+        connectToPartner(globalPartnerId);
+      }
+    },
+    []
+  );
+
   const reconnect = useCallback(() => {
     if (globalPeer && globalPeer.disconnected) {
       globalPeer.reconnect();
@@ -872,5 +1096,5 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     });
   }, [pairingStatus, partnerId]);
 
-  return { state, send, reconnect };
+  return { state, send, sendMedia, reconnect };
 }

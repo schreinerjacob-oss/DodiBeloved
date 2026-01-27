@@ -1,19 +1,40 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getMediaBlob } from '@/lib/storage';
 
 export function MessageMediaImage({ messageId, fileName }: { messageId: string; fileName: string }) {
   const [imageSrc, setImageSrc] = useState<string>('');
+  const currentUrlRef = useRef<string>('');
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+
+    const load = async () => {
       const blob = await getMediaBlob(messageId, 'message');
+      if (cancelled) return;
       if (blob) {
-        setImageSrc(URL.createObjectURL(blob));
+        const url = URL.createObjectURL(blob);
+        // Revoke the previous URL (if any) before swapping
+        if (currentUrlRef.current) URL.revokeObjectURL(currentUrlRef.current);
+        currentUrlRef.current = url;
+        setImageSrc(url);
       }
-    })();
+    };
+
+    const onReady = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { mediaId?: string; kind?: string } | undefined;
+      if (detail?.mediaId === messageId && detail?.kind === 'message') {
+        load();
+      }
+    };
+
+    load();
+    window.addEventListener('dodi-media-ready', onReady);
 
     return () => {
-      if (imageSrc) URL.revokeObjectURL(imageSrc);
+      cancelled = true;
+      window.removeEventListener('dodi-media-ready', onReady);
+      if (currentUrlRef.current) URL.revokeObjectURL(currentUrlRef.current);
+      currentUrlRef.current = '';
     };
   }, [messageId]);
 
@@ -25,6 +46,8 @@ export function MessageMediaImage({ messageId, fileName }: { messageId: string; 
       data-testid="message-image"
     />
   ) : (
-    <div className="w-full h-32 bg-muted animate-pulse rounded-md" />
+    <div className="w-full h-32 bg-muted animate-pulse rounded-md flex items-center justify-center text-xs text-muted-foreground">
+      Loading image…
+    </div>
   );
 }

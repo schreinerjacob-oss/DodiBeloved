@@ -127,6 +127,7 @@ function MainApp() {
 
       <div className="flex-1 overflow-hidden relative z-10 flex flex-col h-full">
         <Switch>
+          <Route path="/pairing" component={PairingPage} />
           <Route path="/chat" component={ChatPage} />
           <Route path="/calls" component={CallsPage} />
           <Route path="/memories" component={MemoriesPage} />

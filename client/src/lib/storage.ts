@@ -2,11 +2,18 @@ import { openDB, type IDBPDatabase } from 'idb';
 import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction } from '@/types';
 
 const DB_NAME = 'dodi-encrypted-storage';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 interface QueuedMessage {
   id: string;
   message: string; // JSON stringified SyncMessage
+  createdAt: number;
+}
+
+interface QueuedMedia {
+  id: string; // mediaId
+  kind: 'message' | 'memory';
+  mime: string;
   createdAt: number;
 }
 
@@ -23,6 +30,7 @@ interface DodiDB {
   messageMedia: { id: string; blob: Blob };
   memoryMedia: { id: string; blob: Blob };
   offlineQueue: QueuedMessage;
+  offlineMediaQueue: QueuedMedia;
 }
 
 let dbInstance: IDBPDatabase<DodiDB> | null = null;
@@ -87,6 +95,11 @@ export async function initDB(): Promise<IDBPDatabase<DodiDB>> {
       if (!db.objectStoreNames.contains('offlineQueue')) {
         const queueStore = db.createObjectStore('offlineQueue', { keyPath: 'id' });
         queueStore.createIndex('createdAt', 'createdAt');
+      }
+
+      if (!db.objectStoreNames.contains('offlineMediaQueue')) {
+        const mediaQueueStore = db.createObjectStore('offlineMediaQueue', { keyPath: 'id' });
+        mediaQueueStore.createIndex('createdAt', 'createdAt');
       }
     },
   });
@@ -289,4 +302,41 @@ export async function getOfflineQueueSize(): Promise<number> {
   } catch (e) {
     return 0;
   }
+}
+
+// Offline MEDIA queue persistence (blobs are stored in messageMedia/memoryMedia stores)
+export async function saveToOfflineMediaQueue(mediaId: string, kind: 'message' | 'memory', mime: string): Promise<void> {
+  const db = await initDB();
+  await db.put('offlineMediaQueue', {
+    id: mediaId,
+    kind,
+    mime,
+    createdAt: Date.now(),
+  });
+}
+
+export async function getOfflineMediaQueue(): Promise<Array<{ id: string; kind: 'message' | 'memory'; mime: string }>> {
+  try {
+    const db = await initDB();
+    const items = await db.getAllFromIndex('offlineMediaQueue', 'createdAt');
+    return items.map((item) => ({ id: item.id, kind: item.kind, mime: item.mime }));
+  } catch (e) {
+    console.warn('Failed to get offline media queue:', e);
+    return [];
+  }
+}
+
+export async function isInOfflineMediaQueue(mediaId: string): Promise<boolean> {
+  try {
+    const db = await initDB();
+    const existing = await db.get('offlineMediaQueue' as any, mediaId);
+    return !!existing;
+  } catch {
+    return false;
+  }
+}
+
+export async function removeFromOfflineMediaQueue(mediaId: string): Promise<void> {
+  const db = await initDB();
+  await db.delete('offlineMediaQueue', mediaId);
 }

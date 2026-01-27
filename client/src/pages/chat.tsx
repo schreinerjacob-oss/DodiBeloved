@@ -30,7 +30,7 @@ const MESSAGES_PER_PAGE = 50;
 export default function ChatPage() {
   const { userId, partnerId, isOnline, isPremium } = useDodi();
   const { toast } = useToast();
-  const { send: sendP2P, state: peerState } = usePeerConnection();
+  const { send: sendP2P, sendMedia, state: peerState } = usePeerConnection();
   const pendingCount = useOfflineQueueSize();
   const [showInvitation, setShowInvitation] = useState(false);
 
@@ -137,31 +137,52 @@ export default function ChatPage() {
             // Handle notification before saving/state update
             notifyNewMessage();
 
-            // Check if we already have this message to avoid duplicates from multiple sync paths
-            setMessages(prev => {
-              if (prev.some(m => m.id === incomingMessage.id)) {
+            // Never mutate incomingMessage after putting it into state.
+            // If media is embedded (legacy), we store the blob and keep mediaUrl null in state/storage.
+            const incomingId = incomingMessage.id;
+            const legacyDataUrl =
+              incomingMessage.mediaUrl &&
+              typeof incomingMessage.mediaUrl === 'string' &&
+              incomingMessage.mediaUrl.startsWith('data:image')
+                ? (incomingMessage.mediaUrl as string)
+                : null;
+
+            const normalizedIncoming: Message = {
+              ...incomingMessage,
+              mediaUrl: null,
+            };
+
+            // Only persist/process if we actually add to UI state (prevents "stored but not shown" duplicates).
+            let shouldPersist = true;
+
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === incomingId)) {
                 console.log('⚠️ [P2P] Message already exists in state, skipping');
+                shouldPersist = false;
                 return prev;
               }
-
-              // Process media if needed
-              (async () => {
-                if (incomingMessage.mediaUrl && typeof incomingMessage.mediaUrl === 'string' && incomingMessage.mediaUrl.startsWith('data:image')) {
-                  try {
-                    const { saveMediaBlob } = await import('@/lib/storage');
-                    const response = await fetch(incomingMessage.mediaUrl);
-                    const blob = await response.blob();
-                    await saveMediaBlob(incomingMessage.id, blob, 'message');
-                    incomingMessage.mediaUrl = null; 
-                  } catch (e) {
-                    console.error('❌ [P2P] Failed to process incoming media:', e);
-                  }
-                }
-                await saveMessage(incomingMessage);
-              })();
-
-              return [...prev, incomingMessage];
+              return [...prev, normalizedIncoming];
             });
+
+            if (shouldPersist) {
+              (async () => {
+                try {
+                  if (legacyDataUrl) {
+                    const { saveMediaBlob } = await import('@/lib/storage');
+                    const response = await fetch(legacyDataUrl);
+                    const blob = await response.blob();
+                    await saveMediaBlob(incomingId, blob, 'message');
+                    window.dispatchEvent(
+                      new CustomEvent('dodi-media-ready', { detail: { mediaId: incomingId, kind: 'message' } })
+                    );
+                  }
+                } catch (e) {
+                  console.error('❌ [P2P] Failed to process incoming media:', e);
+                } finally {
+                  await saveMessage(normalizedIncoming);
+                }
+              })();
+            }
             
             // Update last synced timestamp
             const msgTime = new Date(incomingMessage.timestamp).getTime();
@@ -417,6 +438,7 @@ export default function ChatPage() {
     try {
       const messageId = nanoid();
       const now = new Date();
+      const isOffline = !peerState.connected;
 
       // Compress image to Blob (70-90% size reduction)
       console.log('🖼️ Compressing image...');
@@ -431,6 +453,7 @@ export default function ChatPage() {
         mediaUrl: null,
         isDisappearing,
         timestamp: now,
+        status: isOffline ? 'queued' : 'sending',
       };
 
       // Save compressed blob to IndexedDB media store
@@ -443,21 +466,18 @@ export default function ChatPage() {
       // Add to local state
       setMessages(prev => [...prev, message]);
 
-      // Send via P2P data channel as Base64 (JSON safe)
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64data = reader.result as string;
-        console.log('📤 [P2P] Sending compressed image via P2P:', messageId, `(${base64data.length} chars)`);
-        sendP2P({
-          type: 'message',
-          data: { ...message, mediaUrl: base64data },
-          timestamp: Date.now(),
-        });
-      };
-      reader.readAsDataURL(compressedBlob);
+      // Send message metadata (small, queue-friendly)
+      sendP2P({
+        type: 'message',
+        data: { ...message, mediaUrl: null },
+        timestamp: Date.now(),
+      });
+
+      // Send the actual image as binary chunks over the media channel (queued if offline)
+      await sendMedia({ mediaId: messageId, kind: 'message', mime: compressedBlob.type || file.type || 'image/jpeg' });
 
       toast({
-        title: "Image sent",
+        title: isOffline ? "Image queued" : "Image sending",
       });
 
       if (isDisappearing) {

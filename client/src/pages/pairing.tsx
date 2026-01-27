@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -34,9 +34,11 @@ export default function PairingPage() {
   const [totalBatches, setTotalBatches] = useState(0);
   const [, setLocation] = useLocation();
 
+  // (restore-mode auto room creation effect is declared after handleCreateRoom)
+
   useEffect(() => {
-    if (mode === 'restore-mode' && !roomCode) {
-      handleCreateRoom();
+    if (mode === 'restore-mode' || mode === 'restore-entry') {
+      console.log('♾️ [RESTORE] Restore mode entered:', mode);
     }
   }, [mode]);
   const [inputCode, setInputCode] = useState<string>('');
@@ -190,7 +192,7 @@ export default function PairingPage() {
     }
   };
 
-  const handleCreateRoom = async () => {
+  const handleCreateRoom = useCallback(async () => {
     // Generate code fresh every time for new pairings
     const freshCode = generateRoomCode();
     setRoomCode(freshCode);
@@ -263,7 +265,13 @@ export default function PairingPage() {
       setMode('choose');
       setLoading(false);
     }
-  };
+  }, [mode, toast, userId, completePairingAsCreator, completePairingWithMasterKey, onPeerConnected]);
+
+  useEffect(() => {
+    if (mode === 'restore-mode' && !roomCode) {
+      handleCreateRoom();
+    }
+  }, [mode, roomCode, handleCreateRoom]);
 
   const attemptJoinRoom = async (normalCode: string, isRetry: boolean = false) => {
     try {
@@ -972,6 +980,26 @@ export default function PairingPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Fallback: if restore-mode was entered but room code didn't generate, allow manual entry */}
+                {!roomCode && (
+                  <div className="space-y-3 pt-2">
+                    <p className="text-xs text-muted-foreground text-center">
+                      If you don’t see a code, enter your partner’s restore code instead.
+                    </p>
+                    <Button
+                      variant="outline"
+                      className="w-full h-12 hover-elevate"
+                      onClick={() => {
+                        setInputCode('');
+                        setMode('restore-entry');
+                      }}
+                      data-testid="button-restore-fallback"
+                    >
+                      Enter Restore Code
+                    </Button>
+                  </div>
+                )}
 
                 <p className="text-xs text-center text-muted-foreground italic">
                   Restore mode activated – waiting for partner to join

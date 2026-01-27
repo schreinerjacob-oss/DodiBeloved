@@ -9,6 +9,19 @@ export const initDB = initDBRaw;
 export const getSetting = getSettingRaw;
 export const saveSetting = saveSettingRaw;
 
+function toMillis(value: unknown): number {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    // If it's a numeric string, Number() works; if it's an ISO date string, Date.parse works.
+    const asNum = Number(value);
+    if (Number.isFinite(asNum)) return asNum;
+    const asDate = Date.parse(value);
+    if (Number.isFinite(asDate)) return asDate;
+  }
+  return 0;
+}
+
 // Properly decrypt messages when loading from storage
 export async function getMessages(limit: number = 50, offset: number = 0): Promise<Message[]> {
   const db = await initDBRaw();
@@ -375,10 +388,11 @@ export async function saveMessage(message: Message): Promise<void> {
     }
     
     const encrypted = await encryptMessage(message);
+    const ts = toMillis(message.timestamp);
     const record = {
       ...encrypted,
       id: message.id,
-      timestamp: message.timestamp, // Keep for indexing
+      timestamp: ts, // Keep for indexing (must be numeric for reliable filtering/sorting)
     };
     await db.put('messages', record);
   } catch (error) {
@@ -413,7 +427,7 @@ export async function saveMemory(memory: Memory): Promise<void> {
   try {
     const db = await initDB();
     const encrypted = await encryptMemory(memory);
-    const ts = memory.timestamp instanceof Date ? memory.timestamp.getTime() : Number(memory.timestamp);
+    const ts = toMillis(memory.timestamp);
     const record = {
       id: memory.id,
       ...encrypted,
@@ -432,9 +446,15 @@ export async function saveCalendarEvent(event: CalendarEvent): Promise<void> {
   try {
     const db = await initDB();
     const encrypted = await encryptCalendarEvent(event);
+    const eventDate = toMillis(event.eventDate);
+    const createdAt = toMillis(event.createdAt);
     const record = {
       id: event.id,
       ...encrypted,
+      // Persist top-level timestamps so reconciliation/batch sync can filter without decrypting
+      eventDate,
+      updatedAt: createdAt || eventDate,
+      timestamp: eventDate,
     };
     await db.put('calendarEvents', record);
   } catch (error) {

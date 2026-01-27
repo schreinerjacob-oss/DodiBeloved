@@ -9,6 +9,18 @@ export function GlobalSyncHandler() {
   const { userId, partnerId } = useDodi();
   const { state: peerState } = usePeerConnection();
 
+  const toMillis = (value: unknown): number => {
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const asNum = Number(value);
+      if (Number.isFinite(asNum)) return asNum;
+      const asDate = Date.parse(value);
+      if (Number.isFinite(asDate)) return asDate;
+    }
+    return 0;
+  };
+
   useEffect(() => {
     if (!peerState.connected || !partnerId || !userId) return;
 
@@ -26,21 +38,30 @@ export function GlobalSyncHandler() {
           if (isOurMemory) {
             console.log('📸 [SYNC] Received memory:', incomingMemory.id);
             
-            // If mediaUrl is Base64 string, convert to Blob and save
-            if (incomingMemory.mediaUrl && typeof incomingMemory.mediaUrl === 'string' && incomingMemory.mediaUrl.startsWith('data:image')) {
+            // Backward-compat: older builds may embed media in memory.mediaUrl (dataURL or ArrayBuffer)
+            if (incomingMemory.mediaUrl) {
               try {
                 const { saveMediaBlob } = await import('@/lib/storage');
-                const response = await fetch(incomingMemory.mediaUrl);
-                const blob = await response.blob();
-                await saveMediaBlob(incomingMemory.id, blob, 'memory');
-                incomingMemory.mediaUrl = null;
+                if (typeof incomingMemory.mediaUrl === 'string' && incomingMemory.mediaUrl.startsWith('data:image')) {
+                  const response = await fetch(incomingMemory.mediaUrl);
+                  const blob = await response.blob();
+                  await saveMediaBlob(incomingMemory.id, blob, 'memory');
+                  window.dispatchEvent(new CustomEvent('dodi-media-ready', { detail: { mediaId: incomingMemory.id, kind: 'memory' } }));
+                } else if (incomingMemory.mediaUrl instanceof ArrayBuffer) {
+                  const blob = new Blob([incomingMemory.mediaUrl], { type: 'image/jpeg' });
+                  await saveMediaBlob(incomingMemory.id, blob, 'memory');
+                  window.dispatchEvent(new CustomEvent('dodi-media-ready', { detail: { mediaId: incomingMemory.id, kind: 'memory' } }));
+                }
               } catch (e) {
                 console.error('❌ [SYNC] Failed to process incoming media:', e);
+              } finally {
+                // New path uses separate media channel; memory.mediaUrl should be null in storage
+                (incomingMemory as any).mediaUrl = null;
               }
             }
             
             await saveMemory(incomingMemory);
-            await setLastSynced('memories', Number(incomingMemory.timestamp));
+            await setLastSynced('memories', toMillis(incomingMemory.timestamp));
             console.log('✅ [SYNC] Memory saved:', incomingMemory.id);
             
             // Notify if app in background
@@ -56,6 +77,8 @@ export function GlobalSyncHandler() {
           const event = message.data as CalendarEvent;
           console.log('📅 [SYNC] Received calendar event:', event.id);
           await saveCalendarEvent(event);
+          // Keep reconciliation timestamps accurate so moments backfill works on reconnect
+          await setLastSynced('calendarEvents', toMillis((event as any).eventDate ?? (event as any).createdAt));
           notifyCalendarEvent();
           window.dispatchEvent(new CustomEvent('calendar-synced', { detail: event }));
         }
@@ -109,7 +132,7 @@ export function GlobalSyncHandler() {
            notifyNewMessage();
            
            await saveMessage(chatMsg);
-           await setLastSynced('chat', Number(chatMsg.timestamp));
+           await setLastSynced('chat', toMillis(chatMsg.timestamp));
            window.dispatchEvent(new CustomEvent('chat-message-received', { detail: chatMsg }));
         }
         

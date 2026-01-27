@@ -227,16 +227,43 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-background">
-      <div className="px-6 py-4 border-b bg-card/50">
+    <div className="min-h-[100dvh] w-full flex flex-col bg-background overflow-hidden">
+      <div className="px-4 sm:px-6 py-4 border-b bg-card/50">
         <h2 className="text-xl font-light text-foreground">Settings</h2>
         <p className="text-xs text-muted-foreground mt-1">
           Manage your private sanctuary
         </p>
       </div>
 
-      <ScrollArea className="flex-1 px-4 py-6">
-        <div className="max-w-md mx-auto space-y-6 pb-20">
+      <ScrollArea className="flex-1 w-full">
+        <div className="w-full max-w-md mx-auto space-y-8 pb-24 px-4 sm:px-6 py-6">
+          {/* Quick actions */}
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              variant="outline"
+              className="hover-elevate"
+              onClick={handleSyncNow}
+              disabled={isSyncing}
+              data-testid="button-sync-now-quick"
+            >
+              <Sparkles className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Syncing…' : 'Sync now'}
+            </Button>
+            <Button
+              variant="outline"
+              className="hover-elevate"
+              onClick={() => {
+                console.log('♾️ [RESTORE] Restore mode entered (from Settings)');
+                setLocation('/pairing?mode=restore');
+              }}
+              data-testid="button-restore-partner-quick"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Restore
+            </Button>
+          </div>
+
+          {/* Support */}
           <Card className="p-6 space-y-4 border-accent/20 bg-accent/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -268,85 +295,111 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          <Card className="p-6 space-y-4 border-accent/20 bg-accent/5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="w-5 h-5 text-accent" />
-                <div>
-                  <h3 className="font-medium">Privacy Status</h3>
-                  <p className="text-xs text-muted-foreground">Architectural verification</p>
+          {/* Connection & Sync */}
+          <div className="space-y-3">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">Connection</p>
+
+            <Card className="p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Heart className="w-5 h-5 text-accent" />
+                  <div>
+                    <h3 className="font-medium">Sync & Connection</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {isOnline ? 'Direct P2P – no server involved' : 'Offline — changes saved locally'}
+                    </p>
+                  </div>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSyncNow}
+                  disabled={isSyncing}
+                  className="hover-elevate"
+                  data-testid="button-sync-now"
+                >
+                  <Sparkles className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                  {isSyncing ? 'Syncing…' : 'Sync now'}
+                </Button>
               </div>
-              <Lock className="w-5 h-5 text-muted-foreground" />
-            </div>
-            
-            <div className="pt-3 space-y-3 text-[11px] uppercase tracking-wider text-muted-foreground border-t">
-              <div className="flex justify-between items-center">
-                <span>Content</span>
-                <span className="text-foreground font-medium text-right">100% On-Device (Encrypted)</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>Connection</span>
-                <span className="text-foreground font-medium text-right">Direct P2P (No Server Storage)</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>Wake-ups</span>
-                <span className="text-foreground font-medium text-right">Relay Optional (Encrypted Signaling)</span>
-              </div>
-              <div className="flex justify-between items-center pt-1">
-                <span>Privacy Mode</span>
-                <span className="text-accent font-bold">Absolute (Zero Backend)</span>
-              </div>
-            </div>
-          </Card>
 
-          <PrivacyHealthCheck />
-
-          <Card className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Heart className="w-5 h-5 text-accent" />
-                <div>
-                  <h3 className="font-medium">Data Sync</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Ensure both devices are true mirrors
+              <div className="pt-3 border-t space-y-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Sparkles className="w-5 h-5 text-gold" />
+                    <div>
+                      <h4 className="font-medium">Wake-up Pings</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Allow partner to wake app via signaling relay (faster notifications)
+                      </p>
+                    </div>
+                  </div>
+                  <Switch 
+                    checked={allowWakeUp} 
+                    onCheckedChange={setAllowWakeUp}
+                    className="shrink-0 data-[state=checked]:bg-sage data-[state=unchecked]:bg-muted"
+                    data-testid="switch-wake-up-ping"
+                  />
+                </div>
+                {!allowWakeUp && (
+                  <p className="text-[10px] text-muted-foreground italic px-8">
+                    Fallback: local polling every 30 minutes
                   </p>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          {/* Privacy */}
+          <div className="space-y-3">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">Privacy</p>
+
+            <Card className="p-6 space-y-4 border-accent/20 bg-accent/5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="w-5 h-5 text-accent" />
+                  <div>
+                    <h3 className="font-medium">Privacy Status</h3>
+                    <p className="text-xs text-muted-foreground">Architectural verification</p>
+                  </div>
+                </div>
+                <Lock className="w-5 h-5 text-muted-foreground" />
+              </div>
+              
+              <div className="pt-3 space-y-3 text-[11px] uppercase tracking-wider text-muted-foreground border-t">
+                <div className="flex justify-between items-center">
+                  <span>Content</span>
+                  <span className="text-foreground font-medium text-right">100% On-Device (Encrypted)</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Connection</span>
+                  <span className="text-foreground font-medium text-right">Direct P2P (No Server Storage)</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Wake-ups</span>
+                  <span className="text-foreground font-medium text-right">Relay Optional (Encrypted Signaling)</span>
+                </div>
+                <div className="flex justify-between items-center pt-1">
+                  <span>Privacy Mode</span>
+                  <span className="text-accent font-bold">Absolute (Zero Backend)</span>
                 </div>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleSyncNow}
-                disabled={isSyncing}
-                className="hover-elevate"
-              >
-                <Sparkles className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? 'Syncing...' : 'Sync Now'}
-              </Button>
-            </div>
-          </Card>
 
-          <Card className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Shield className="w-5 h-5 text-primary" />
-                <div>
-                  <h3 className="font-medium">Privacy & Security</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Your whispers stay only between you two — forever
-                  </p>
+              <details className="pt-3 border-t">
+                <summary className="cursor-pointer text-xs text-muted-foreground select-none">
+                  Encryption details
+                </summary>
+                <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                  <p>• AES-GCM 256-bit encryption</p>
+                  <p>• PBKDF2 600k iterations</p>
+                  <p>• Data never leaves your device unencrypted</p>
+                  <p>• No cloud storage, no backups</p>
                 </div>
-              </div>
-              <Lock className="w-5 h-5 text-muted-foreground" />
-            </div>
+              </details>
+            </Card>
 
-            <div className="pt-3 space-y-2 text-sm text-muted-foreground border-t">
-              <p>• AES-GCM 256-bit encryption</p>
-              <p>• PBKDF2 600k iterations</p>
-              <p>• Data never leaves your device unencrypted</p>
-              <p>• No cloud storage, no backups</p>
-            </div>
-          </Card>
+            <PrivacyHealthCheck />
+          </div>
 
           <Card className="p-6 space-y-4">
             <div className="flex items-center justify-between">
@@ -359,6 +412,10 @@ export default function SettingsPage() {
               <ThemeToggle />
             </div>
           </Card>
+
+          {/* Security */}
+          <div className="space-y-3">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">Security</p>
 
           <Card className="p-6 space-y-4">
             <div className="flex items-center gap-3">
@@ -439,110 +496,19 @@ export default function SettingsPage() {
               </DialogContent>
             </Dialog>
           </Card>
+          </div>
 
-          <Card className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-gold" />
-                <div>
-                  <h3 className="font-medium">Wake-up Pings</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Allow partner to wake app via signaling relay (faster notifications)
-                  </p>
-                </div>
-              </div>
-              <Switch 
-                checked={allowWakeUp} 
-                onCheckedChange={setAllowWakeUp}
-                className="data-[state=checked]:bg-sage data-[state=unchecked]:bg-muted"
-                data-testid="switch-wake-up-ping"
-              />
-            </div>
-            {!allowWakeUp && (
-              <p className="text-[10px] text-muted-foreground italic px-8">
-                Fallback: local polling every 30 minutes
-              </p>
-            )}
-          </Card>
-
-          <Card className="p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <Sparkles className="w-5 h-5 text-gold" />
-              <div>
-                <h3 className="font-medium">Connection Status</h3>
-                <p className="text-xs text-muted-foreground">
-                  {isOnline ? 'Direct P2P – no server involved' : 'Offline - changes saved locally'}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Bug className="w-5 h-5 text-blue-400" />
-                <div>
-                  <h3 className="font-medium">Developer Mode</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Show diagnostics panel for testing
-                  </p>
-                </div>
-              </div>
-              <Switch 
-                checked={showDiagnostics} 
-                onCheckedChange={setShowDiagnostics}
-                data-testid="switch-developer-mode"
-              />
-            </div>
-          </Card>
-
-          {showDiagnostics && (
-            <Card className="p-6 space-y-4 border-gold/30 bg-gold/5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Bug className="w-5 h-5 text-gold" />
-                  <h3 className="font-medium">Sanctuary Diagnostics</h3>
-                </div>
-                <Button variant="ghost" size="sm" onClick={handleTestSync}>
-                  Test Full Sync
-                </Button>
-              </div>
-              <div className="space-y-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                <div className="flex justify-between">
-                  <span>Connection</span>
-                  <span className={peerState?.connected ? "text-sage" : "text-destructive"}>
-                    {peerState?.connected ? "Direct WebRTC" : "Disconnected"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Relay Active</span>
-                  <span>{peerState?.isReconnecting ? "YES" : "NO"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Encryption</span>
-                  <span className="text-sage">AES-GCM-256 Verified</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Offline Queue</span>
-                  <span>{peerState?.queueSize || 0} messages</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Device ID</span>
-                  <span className="truncate max-w-[100px]">{userId?.substring(0,8)}...</span>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {showDiagnostics && <DeveloperDiagnostics />}
+          {/* Recovery & Restore */}
+          <div className="space-y-3">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">Recovery</p>
 
           <Card className="p-6 space-y-4">
             <div className="flex items-center gap-3">
               <Heart className="w-5 h-5 text-accent" />
               <div>
-                <h3 className="font-medium">Reconnection Details</h3>
+                <h3 className="font-medium">Recovery Keys</h3>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Share these details if you need to reconnect your devices
+                  Keep these private. They never leave your devices unless you copy/share them.
                 </p>
               </div>
             </div>
@@ -619,6 +585,33 @@ export default function SettingsPage() {
                   </p>
                 </div>
               )}
+
+              {userId && partnerId && passphrase && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">One‑tap Reconnect String</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono flex-1 break-all bg-muted/50 p-3 rounded-lg text-foreground border border-border/50">
+                      {`dodi:${userId}:${partnerId}:${passphrase}`}
+                    </p>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handleCopyReconnect}
+                      data-testid="button-copy-reconnect"
+                      className="hover-elevate h-11 w-11"
+                    >
+                      {copiedReconnect ? (
+                        <Check className="w-4 h-4 text-accent" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground italic">
+                    Use this only if you fully trust where you paste it.
+                  </p>
+                </div>
+              )}
             </div>
           </Card>
 
@@ -626,8 +619,8 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <RefreshCw className="w-5 h-5 text-sage" />
               <div>
-                <h3 className="font-medium text-sage">The Redundant Garden</h3>
-                <p className="text-xs text-muted-foreground">How your devices act as servers for each other</p>
+                <h3 className="font-medium text-sage">Restore & Redundancy</h3>
+                <p className="text-xs text-muted-foreground">Reconnect, restore, and learn how your garden stays serverless</p>
               </div>
             </div>
             <Button 
@@ -641,13 +634,83 @@ export default function SettingsPage() {
               <Button 
                 variant="outline" 
                 className="w-full border-sage/30 text-sage hover:bg-sage/10 hover-elevate"
-                onClick={() => setLocation('/pairing?mode=restore')}
+                onClick={() => {
+                  console.log('♾️ [RESTORE] Restore mode entered (from Settings)');
+                  setLocation('/pairing?mode=restore');
+                }}
                 data-testid="button-restore-partner"
               >
                 Reconnect & Restore Partner Device
               </Button>
             </div>
           </Card>
+          </div>
+
+          {/* Advanced / Diagnostics */}
+          <div className="space-y-3">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">Advanced</p>
+
+            <Card className="p-6 space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Bug className="w-5 h-5 text-blue-400" />
+                  <div>
+                    <h3 className="font-medium">Developer Diagnostics</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Tools for debugging sync, connection, and storage
+                    </p>
+                  </div>
+                </div>
+                <Switch 
+                  checked={showDiagnostics} 
+                  onCheckedChange={setShowDiagnostics}
+                  className="shrink-0"
+                  data-testid="switch-developer-mode"
+                />
+              </div>
+
+              {showDiagnostics && (
+                <div className="pt-4 border-t space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">Live status</p>
+                    <Button variant="ghost" size="sm" onClick={handleTestSync} data-testid="button-test-full-sync">
+                      Test Full Sync
+                    </Button>
+                  </div>
+                  <div className="space-y-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <div className="flex justify-between">
+                      <span>Connection</span>
+                      <span className={peerState?.connected ? "text-sage" : "text-destructive"}>
+                        {peerState?.connected ? "Direct WebRTC" : "Disconnected"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Reconnecting</span>
+                      <span>{peerState?.isReconnecting ? "YES" : "NO"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Encryption</span>
+                      <span className="text-sage">AES-GCM-256 Verified</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Offline Queue</span>
+                      <span>{peerState?.queueSize || 0} messages</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Device ID</span>
+                      <span className="truncate max-w-[100px]">{userId?.substring(0,8)}...</span>
+                    </div>
+                  </div>
+
+                  <DeveloperDiagnostics />
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* Danger zone */}
+          <div className="space-y-3">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">Danger zone</p>
 
           <Card className="p-6 space-y-4">
             <div className="flex items-center gap-3">
@@ -737,6 +800,7 @@ export default function SettingsPage() {
               </AlertDialogContent>
             </AlertDialog>
           </Card>
+          </div>
         </div>
       </ScrollArea>
     </div>
