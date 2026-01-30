@@ -6,10 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Heart, Loader2, Copy, Check, Leaf, RefreshCw, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { normalizeRoomCode, isValidRoomCode, generateRoomCode } from '@/lib/pairing-codes';
+import { normalizeRoomCode, isValidRoomCode, generateRoomCode, formatCodeWithDash } from '@/lib/pairing-codes';
 import { initializePeer, createRoomPeerId, getRemotePeerId, waitForConnection, connectToRoom, closeRoom, type RoomConnection } from '@/hooks/use-peer-connection';
 import { runCreatorTunnel, runJoinerTunnel } from '@/lib/tunnel-handshake';
 import { requestNotificationPermission } from '@/lib/notifications';
@@ -216,7 +215,7 @@ export default function PairingPage() {
     // IMPORTANT: For new pairings (not restore), we need to stay on the code display screen
     // so the partner can see the code and connect.
     if (mode !== 'restore-mode') {
-      // Stay on 'pairing' mode to show the code/QR
+      // Stay on 'pairing' mode to show the code
       setMode('pairing');
     }
     
@@ -377,7 +376,8 @@ export default function PairingPage() {
     setLoading(true);
     setIsCreator(false);
     const normalCode = normalizeRoomCode(inputCode);
-    setRoomCode(normalCode);
+    // Keep roomCode in display format (XXXX-XXXX) for consistency with creator; use normalCode only for connection.
+    setRoomCode(formatCodeWithDash(normalCode));
     setMode('pairing');
     retryCountRef.current = 0;
     setIsRetrying(false);
@@ -386,9 +386,15 @@ export default function PairingPage() {
   };
 
   const handleCopyCode = () => {
+    // roomCode is already display format (XXXX-XXXX) from generateRoomCode()
     navigator.clipboard.writeText(roomCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  /** Format code input: dash auto-inserted after 4 chars; dash is display-only, not part of actual code. */
+  const handleCodeInputChange = (raw: string) => {
+    setInputCode(formatCodeWithDash(raw));
   };
 
   if (loading && mode === 'pairing') {
@@ -429,24 +435,6 @@ export default function PairingPage() {
                 >
                   {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
                 </Button>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground uppercase tracking-widest">
-                <div className="h-px w-8 bg-muted-foreground/20" />
-                <span>Or scan to connect</span>
-                <div className="h-px w-8 bg-muted-foreground/20" />
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl shadow-inner border border-sage/10 inline-block mx-auto">
-                <QRCodeSVG 
-                  value={roomCode} 
-                  size={160}
-                  level="M"
-                  includeMargin={false}
-                  className="dark:invert"
-                />
               </div>
             </div>
 
@@ -747,42 +735,26 @@ export default function PairingPage() {
 
                 <div className="space-y-4">
                   <Input 
-                    placeholder="Enter 8-character code" 
+                    placeholder="e.g. A7K9-P2M4 (dash adds automatically)" 
                     value={inputCode} 
-                    onChange={(e) => setInputCode(e.target.value.toUpperCase())}
+                    onChange={(e) => handleCodeInputChange(e.target.value)}
                     className="h-12 text-center text-lg tracking-widest font-mono uppercase"
                     maxLength={9}
                     data-testid="input-restore-code"
                   />
                   
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button 
-                      onClick={() => {
-                        console.log('Restore mode joined – waiting for partner to send key');
-                        handleJoinRoom();
-                      }}
-                      disabled={loading || !inputCode}
-                      className="h-12 hover-elevate"
-                      data-testid="button-restore-submit"
-                    >
-                      {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-                      Restore
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        toast({
-                          title: "Scan QR coming soon",
-                          description: "Please enter the 8-character code from your partner's device for now.",
-                          variant: "default",
-                        });
-                      }}
-                      variant="outline"
-                      className="h-12 hover-elevate"
-                      data-testid="button-restore-scan"
-                    >
-                      Scan QR
-                    </Button>
-                  </div>
+                  <Button 
+                    onClick={() => {
+                      console.log('Restore mode joined – waiting for partner to send key');
+                      handleJoinRoom();
+                    }}
+                    disabled={loading || !isValidRoomCode(inputCode)}
+                    className="w-full h-12 hover-elevate"
+                    data-testid="button-restore-submit"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                    Restore
+                  </Button>
 
                   <Button 
                     onClick={() => setMode('choose')} 
@@ -829,25 +801,13 @@ export default function PairingPage() {
                   <>
                     <div className="text-center space-y-2">
                       <h2 className="text-xl font-light">Share This Code</h2>
-                      <p className="text-sm text-muted-foreground">Let your partner scan or type it</p>
+                      <p className="text-sm text-muted-foreground">Have your partner enter this code</p>
                     </div>
 
                     <div className="text-center p-6 bg-sage/10 rounded-lg">
                       <p className="text-6xl font-light tracking-widest text-sage font-mono" data-testid="text-room-code">
                         {roomCode}
                       </p>
-                    </div>
-
-                    <div className="flex justify-center">
-                      <div className="p-2 bg-white rounded-lg shadow-sm">
-                        <QRCodeSVG 
-                          value={roomCode} 
-                          size={80} 
-                          level="H" 
-                          includeMargin={false}
-                          data-testid="qr-room-code"
-                        />
-                      </div>
                     </div>
 
                     <Button 
@@ -896,9 +856,9 @@ export default function PairingPage() {
 
                     <Input 
                       type="text" 
-                      placeholder="e.g., A7K9-P2M4" 
+                      placeholder="e.g. A7K9-P2M4 (dash adds automatically)" 
                       value={inputCode} 
-                      onChange={(e) => setInputCode(e.target.value.toUpperCase())} 
+                      onChange={(e) => handleCodeInputChange(e.target.value)} 
                       disabled={loading} 
                       data-testid="input-room-code" 
                       className="text-lg font-mono text-center tracking-widest" 
@@ -966,19 +926,10 @@ export default function PairingPage() {
                   </p>
                 </div>
 
-                <div className="text-center p-6 bg-sage/10 rounded-lg space-y-4">
-                  <p className="text-4xl font-light tracking-widest text-sage font-mono">
+                <div className="text-center p-6 bg-sage/10 rounded-lg">
+                  <p className="text-4xl font-light tracking-widest text-sage font-mono" data-testid="text-restore-code">
                     {roomCode || 'RESTORE'}
                   </p>
-                  <div className="flex justify-center">
-                    <div className="p-2 bg-white rounded-lg shadow-sm">
-                      <QRCodeSVG 
-                        value={roomCode || 'RESTORE'} 
-                        size={120} 
-                        level="H" 
-                      />
-                    </div>
-                  </div>
                 </div>
 
                 {/* Fallback: if restore-mode was entered but room code didn't generate, allow manual entry */}
