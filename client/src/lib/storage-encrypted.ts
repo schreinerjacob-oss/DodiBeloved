@@ -335,10 +335,13 @@ export async function getItemsSince(storeName: StoreName, timestamp: number): Pr
   const tx = db.transaction(storeName, 'readonly');
   const store = tx.objectStore(storeName);
   const items = await store.getAll();
-  // Filter by updatedAt if it exists, otherwise use timestamp, then filter by the provided timestamp
+  const now = Date.now();
   return items.filter(item => {
     const itemTime = Number(item.updatedAt || item.timestamp || 0);
-    return itemTime > timestamp;
+    if (itemTime <= timestamp) return false;
+    // Exclude expired disappearing messages from sync (<= now so exact boundary is excluded)
+    if (storeName === 'messages' && item.disappearsAt != null && Number(item.disappearsAt) <= now) return false;
+    return true;
   });
 }
 
@@ -346,8 +349,13 @@ export async function getEssentials(): Promise<Record<string, any[]>> {
   const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
   const db = await initDBRaw();
   
-  // 1. Last 50 chat messages
-  const messages = await getMessages(50, 0);
+  // 1. Last 50 chat messages (exclude expired disappearing)
+  const allMessages = await getMessages(50, 0);
+  const now = Date.now();
+  const messages = allMessages.filter(m => {
+    if (m.disappearsAt == null) return true;
+    return toMillis(m.disappearsAt) > now;
+  });
   const encryptedMessages = await Promise.all(messages.map(m => encryptMessage(m)));
 
   // 2. Memories from last 30 days
@@ -389,14 +397,32 @@ export async function saveMessage(message: Message): Promise<void> {
     
     const encrypted = await encryptMessage(message);
     const ts = toMillis(message.timestamp);
+    const disappearsAtMs = message.disappearsAt != null ? toMillis(message.disappearsAt) : undefined;
     const record = {
       ...encrypted,
       id: message.id,
       timestamp: ts, // Keep for indexing (must be numeric for reliable filtering/sorting)
+      ...(disappearsAtMs != null && Number.isFinite(disappearsAtMs) ? { disappearsAt: disappearsAtMs } : {}),
     };
     await db.put('messages', record);
   } catch (error) {
     console.error('Failed to save message:', error);
+    throw error;
+  }
+}
+
+/** Delete a message from storage and its media blob (if any). Used for disappearing messages. */
+export async function deleteMessage(messageId: string): Promise<void> {
+  try {
+    const db = await initDB();
+    await db.delete('messages', messageId);
+    try {
+      await deleteMediaBlob(messageId, 'message');
+    } catch {
+      // Media may not exist for text-only messages
+    }
+  } catch (error) {
+    console.error('Failed to delete message:', messageId, error);
     throw error;
   }
 }

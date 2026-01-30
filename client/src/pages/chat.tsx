@@ -6,11 +6,12 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
 import { Badge } from '@/components/ui/badge';
-import { Heart, Send, Image, Mic, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff } from 'lucide-react';
-import { getMessages, saveMessage } from '@/lib/storage-encrypted';
+import { Heart, Send, Image, Mic, MicOff, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff } from 'lucide-react';
+import { getMessages, saveMessage, deleteMessage } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { useOfflineQueueSize } from '@/hooks/use-offline-queue';
 import { MessageMediaImage } from '@/components/message-media-image';
+import { MessageMediaVoice } from '@/components/message-media-voice';
 import { MemoryResurfacing } from '@/components/resurfacing/memory-resurfacing';
 import { SupportInvitation } from '@/components/support-invitation';
 import { notifyNewMessage, notifyMessageQueued } from '@/lib/notifications';
@@ -67,9 +68,34 @@ export default function ChatPage() {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const typingThrottleRef = useRef<NodeJS.Timeout | null>(null);
   const doubleTapRef = useRef<{ messageId: string; time: number } | null>(null);
+  const disappearingTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     loadMessages();
+  }, []);
+
+  // Clean up disappearing-message timers on unmount to avoid setState on unmounted component and memory leaks
+  useEffect(() => {
+    return () => {
+      disappearingTimersRef.current.forEach((id) => clearTimeout(id));
+      disappearingTimersRef.current.clear();
+    };
+  }, []);
+
+  // Clean up voice recording on unmount (stop tracks; avoid setState on unmount)
+  useEffect(() => {
+    return () => {
+      const recorder = mediaRecorderRef.current;
+      const stream = recordingStreamRef.current;
+      if (recorder?.state !== 'inactive') recorder.stop();
+      stream?.getTracks().forEach((t) => t.stop());
+      recordingStreamRef.current = null;
+      mediaRecorderRef.current = null;
+    };
   }, []);
 
   // Listen for incoming P2P messages
@@ -134,8 +160,8 @@ export default function ChatPage() {
           if (incomingMessage.senderId === partnerId) {
             console.log('💾 [P2P] Saving partner message:', incomingMessage.id);
             
-            // Handle notification before saving/state update
-            notifyNewMessage();
+            // Handle notification before saving/state update (generic body for privacy)
+            notifyNewMessage({ type: incomingMessage.type });
 
             // Never mutate incomingMessage after putting it into state.
             // If media is embedded (legacy), we store the blob and keep mediaUrl null in state/storage.
@@ -152,12 +178,25 @@ export default function ChatPage() {
               mediaUrl: null,
             };
 
+            // Check expiration before adding to state (avoids showing/persisting expired disappearing messages and save/delete race).
+            // Use <= so at === now is treated as expired (avoids delay === 0 case where timer would not be scheduled).
+            let isExpiredDisappearing = false;
+            if (normalizedIncoming.isDisappearing && normalizedIncoming.disappearsAt != null) {
+              const raw = normalizedIncoming.disappearsAt;
+              const at = raw instanceof Date ? raw.getTime() : (typeof raw === 'string' ? Date.parse(raw) : Number(raw));
+              if (Number.isFinite(at) && at <= Date.now()) isExpiredDisappearing = true;
+            }
+
             // Only persist/process if we actually add to UI state (prevents "stored but not shown" duplicates).
             let shouldPersist = true;
 
             setMessages((prev) => {
               if (prev.some((m) => m.id === incomingId)) {
                 console.log('⚠️ [P2P] Message already exists in state, skipping');
+                shouldPersist = false;
+                return prev;
+              }
+              if (isExpiredDisappearing) {
                 shouldPersist = false;
                 return prev;
               }
@@ -176,12 +215,40 @@ export default function ChatPage() {
                       new CustomEvent('dodi-media-ready', { detail: { mediaId: incomingId, kind: 'message' } })
                     );
                   }
+                  // Skip persisting disappearing messages with very little time left to avoid save/delete race:
+                  // if we save and then the timer deletes, save can complete after delete and message persists.
+                  const MIN_PERSIST_DISAPPEARING_MS = 1000;
+                  let skipSave = false;
+                  if (normalizedIncoming.isDisappearing && normalizedIncoming.disappearsAt != null) {
+                    const raw = normalizedIncoming.disappearsAt;
+                    const at = raw instanceof Date ? raw.getTime() : (typeof raw === 'string' ? Date.parse(raw) : Number(raw));
+                    if (Number.isFinite(at) && at - Date.now() < MIN_PERSIST_DISAPPEARING_MS) skipSave = true;
+                  }
+                  if (!skipSave) await saveMessage(normalizedIncoming);
                 } catch (e) {
                   console.error('❌ [P2P] Failed to process incoming media:', e);
-                } finally {
-                  await saveMessage(normalizedIncoming);
                 }
               })();
+              // Receiver: schedule local delete when disappearing message expires (only non-expired messages reach here).
+              if (normalizedIncoming.isDisappearing && normalizedIncoming.disappearsAt != null) {
+                const raw = normalizedIncoming.disappearsAt;
+                const at = raw instanceof Date ? raw.getTime() : (typeof raw === 'string' ? Date.parse(raw) : Number(raw));
+                if (Number.isFinite(at)) {
+                  const delay = Math.max(0, at - Date.now());
+                  if (delay > 0) {
+                    const id = setTimeout(() => {
+                      disappearingTimersRef.current.delete(id);
+                      deleteMessage(incomingId).catch(() => {});
+                      setMessages(prev => prev.filter(m => m.id !== incomingId));
+                    }, delay);
+                    disappearingTimersRef.current.add(id);
+                  } else {
+                    // delay === 0 (boundary): delete immediately so message never persists
+                    deleteMessage(incomingId).catch(() => {});
+                    setMessages(prev => prev.filter(m => m.id !== incomingId));
+                  }
+                }
+              }
             }
             
             // Update last synced timestamp
@@ -206,12 +273,21 @@ export default function ChatPage() {
       }
     };
 
+    const handleMessageDeleted = (e: Event) => {
+      const { messageId } = (e as CustomEvent<{ messageId: string }>).detail || {};
+      if (messageId) {
+        setMessages(prev => prev.filter(m => m.id !== messageId));
+      }
+    };
+
     window.addEventListener('p2p-message', handleP2pMessage as unknown as EventListener);
+    window.addEventListener('message-deleted', handleMessageDeleted);
     console.log('✅ [P2P] Chat: P2P message listener attached');
     
     return () => {
       console.log('🧹 [P2P] Chat: Cleaning up P2P message listener');
       window.removeEventListener('p2p-message', handleP2pMessage as unknown as EventListener);
+      window.removeEventListener('message-deleted', handleMessageDeleted);
     };
   }, [peerState.connected, partnerId, lastSyncedTimestamp]);
 
@@ -239,18 +315,40 @@ export default function ChatPage() {
 
   const loadMessages = async () => {
     const msgs = await getMessages(MESSAGES_PER_PAGE, 0);
-    setMessages(msgs);
+    const now = Date.now();
+    const valid: Message[] = [];
+    for (const m of msgs) {
+      if (!m.disappearsAt) {
+        valid.push(m);
+        continue;
+      }
+      const at = m.disappearsAt instanceof Date ? m.disappearsAt.getTime() : Number(m.disappearsAt);
+      if (at > now) valid.push(m);
+      else void deleteMessage(m.id).catch(() => {});
+    }
+    setMessages(valid);
     setMessageOffset(0);
-    setHasMoreMessages(msgs.length === MESSAGES_PER_PAGE);
+    setHasMoreMessages(valid.length === MESSAGES_PER_PAGE);
   };
 
   const loadMoreMessages = async () => {
     setLoadingMore(true);
     const newOffset = messageOffset + MESSAGES_PER_PAGE;
     const msgs = await getMessages(MESSAGES_PER_PAGE, newOffset);
-    setMessages(prev => [...msgs, ...prev]);
+    const now = Date.now();
+    const valid: Message[] = [];
+    for (const m of msgs) {
+      if (!m.disappearsAt) {
+        valid.push(m);
+        continue;
+      }
+      const at = m.disappearsAt instanceof Date ? m.disappearsAt.getTime() : Number(m.disappearsAt);
+      if (at > now) valid.push(m);
+      else void deleteMessage(m.id).catch(() => {});
+    }
+    setMessages(prev => [...valid, ...prev]);
     setMessageOffset(newOffset);
-    setHasMoreMessages(msgs.length === MESSAGES_PER_PAGE);
+    setHasMoreMessages(valid.length === MESSAGES_PER_PAGE);
     setLoadingMore(false);
   };
 
@@ -314,7 +412,9 @@ export default function ChatPage() {
     try {
       const messageId = nanoid();
       const now = new Date();
-      
+      const DISAPPEAR_MS = 30_000;
+      const disappearsAt = isDisappearing ? new Date(Date.now() + DISAPPEAR_MS) : undefined;
+
       // Use 'queued' status when offline, 'sending' when online
       const message: Message = {
         id: messageId,
@@ -323,7 +423,8 @@ export default function ChatPage() {
         content: newMessage,
         type: 'text',
         mediaUrl: null,
-        isDisappearing,
+        isDisappearing: isDisappearing ?? undefined,
+        disappearsAt: disappearsAt ?? undefined,
         timestamp: now,
         status: isOffline ? 'queued' : 'sending',
       };
@@ -356,9 +457,13 @@ export default function ChatPage() {
       }
       
       if (isDisappearing) {
-        setTimeout(() => {
+        const id = setTimeout(() => {
+          disappearingTimersRef.current.delete(id);
           setMessages(prev => prev.filter(m => m.id !== messageId));
-        }, 30000);
+          deleteMessage(messageId).catch(e => console.warn('Delete disappearing message:', e));
+          sendP2P({ type: 'message-delete', data: { messageId }, timestamp: Date.now() });
+        }, DISAPPEAR_MS);
+        disappearingTimersRef.current.add(id);
       }
     } catch (error) {
       console.error('❌ [P2P] Send error:', error);
@@ -402,12 +507,111 @@ export default function ChatPage() {
     fileInputRef.current?.click();
   };
 
-  const handleVoiceClick = () => {
-    console.log('Voice button clicked!');
-    toast({
-      title: "Voice recording",
-      description: "Voice messages coming soon!",
-    });
+  const handleVoiceClick = async () => {
+    if (!userId || !partnerId) {
+      toast({
+        title: "Not paired",
+        description: "Please pair with your beloved first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isRecording) {
+      // Stop recording and send; always release stream so tracks are stopped (avoid leak)
+      const recorder = mediaRecorderRef.current;
+      const stream = recordingStreamRef.current;
+      if (recorder?.state !== 'inactive') recorder.stop();
+      stream?.getTracks().forEach((t) => t.stop());
+      recordingStreamRef.current = null;
+      mediaRecorderRef.current = null;
+      setIsRecording(false);
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      recordingChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordingChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const blob = new Blob(recordingChunksRef.current, { type: mimeType });
+        recordingChunksRef.current = [];
+        if (blob.size === 0) {
+          toast({ title: "No audio", description: "Recording was too short", variant: "destructive" });
+          return;
+        }
+
+        setSending(true);
+        try {
+          const messageId = nanoid();
+          const now = new Date();
+          const isOffline = !peerState.connected;
+          const DISAPPEAR_MS = 30_000;
+          const disappearsAt = isDisappearing ? new Date(Date.now() + DISAPPEAR_MS) : undefined;
+
+          const message: Message = {
+            id: messageId,
+            senderId: userId,
+            recipientId: partnerId,
+            content: 'Voice message',
+            type: 'voice',
+            mediaUrl: null,
+            isDisappearing: isDisappearing ?? undefined,
+            disappearsAt: disappearsAt ?? undefined,
+            timestamp: now,
+            status: isOffline ? 'queued' : 'sending',
+          };
+
+          const { saveMediaBlob } = await import('@/lib/storage');
+          await saveMediaBlob(messageId, blob, 'message');
+          await saveMessage(message);
+          setMessages((prev) => [...prev, message]);
+
+          sendP2P({ type: 'message', data: { ...message, mediaUrl: null }, timestamp: Date.now() });
+          await sendMedia({ mediaId: messageId, kind: 'message', mime: blob.type || mimeType });
+
+          if (isOffline) {
+            toast({ title: "Waiting for partner", description: "Voice message queued" });
+          }
+
+          if (isDisappearing) {
+            const id = setTimeout(() => {
+              disappearingTimersRef.current.delete(id);
+              setMessages((prev) => prev.filter((m) => m.id !== messageId));
+              deleteMessage(messageId).catch((e) => console.warn('Delete disappearing message:', e));
+              sendP2P({ type: 'message-delete', data: { messageId }, timestamp: Date.now() });
+            }, DISAPPEAR_MS);
+            disappearingTimersRef.current.add(id);
+          }
+        } catch (err) {
+          console.error('Voice send error:', err);
+          toast({ title: "Failed to send voice message", variant: "destructive" });
+        } finally {
+          setSending(false);
+        }
+      };
+
+      recorder.start(100);
+      setIsRecording(true);
+      toast({ title: "Recording…", description: "Tap the mic again to send" });
+    } catch (err) {
+      console.error('Microphone error:', err);
+      toast({
+        title: "Microphone access needed",
+        description: "Allow microphone access to send voice messages",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -444,6 +648,8 @@ export default function ChatPage() {
       console.log('🖼️ Compressing image...');
       const compressedBlob = await compressImage(file);
 
+      const DISAPPEAR_MS = 30_000;
+      const disappearsAt = isDisappearing ? new Date(Date.now() + DISAPPEAR_MS) : undefined;
       const message: Message = {
         id: messageId,
         senderId: userId!,
@@ -451,7 +657,8 @@ export default function ChatPage() {
         content: file.name,
         type: 'image',
         mediaUrl: null,
-        isDisappearing,
+        isDisappearing: isDisappearing ?? undefined,
+        disappearsAt: disappearsAt ?? undefined,
         timestamp: now,
         status: isOffline ? 'queued' : 'sending',
       };
@@ -481,9 +688,13 @@ export default function ChatPage() {
       });
 
       if (isDisappearing) {
-        setTimeout(() => {
-          setMessages(prev => prev.filter(m => m.id !== messageId));
-        }, 30000);
+        const id = setTimeout(() => {
+          disappearingTimersRef.current.delete(id);
+          setMessages((prev) => prev.filter((m) => m.id !== messageId));
+          deleteMessage(messageId).catch((e) => console.warn('Delete disappearing message:', e));
+          sendP2P({ type: 'message-delete', data: { messageId }, timestamp: Date.now() });
+        }, DISAPPEAR_MS);
+        disappearingTimersRef.current.add(id);
       }
 
       setSending(false);
@@ -581,6 +792,7 @@ export default function ChatPage() {
           {messages.map((message) => {
             const isSent = message.senderId === userId;
             const isImage = message.type === 'image';
+            const isVoice = message.type === 'voice';
             const hasReactions = message.reactions && Object.keys(message.reactions).length > 0;
             const myReaction = userId ? message.reactions?.[userId] : null;
             const partnerReaction = partnerId ? message.reactions?.[partnerId] : null;
@@ -600,7 +812,7 @@ export default function ChatPage() {
                     }}
                     className={cn(
                       'max-w-[70%] cursor-pointer transition-transform active:scale-[0.98]',
-                      isImage ? 'p-0 overflow-hidden' : 'p-4',
+                      isImage ? 'p-0 overflow-hidden' : isVoice ? 'p-0 overflow-hidden' : 'p-4',
                       isSent ? 'bg-sage/30 border-sage/40' : 'bg-card border-card-border'
                     )}
                   >
@@ -608,6 +820,24 @@ export default function ChatPage() {
                       <div className="space-y-2">
                         <MessageMediaImage messageId={message.id} fileName={message.content} />
                         <div className="flex items-center justify-between px-3 pb-2">
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          {isSent && (
+                            <div className="ml-2">
+                              {message.status === 'queued' && <Clock className="w-3 h-3 text-amber-500" />}
+                              {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+                              {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
+                              {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
+                              {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : isVoice ? (
+                      <div className="space-y-2 p-2">
+                        <MessageMediaVoice messageId={message.id} />
+                        <div className="flex items-center justify-between px-2 pb-1">
                           <p className="text-xs text-muted-foreground">
                             {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </p>
@@ -711,7 +941,7 @@ export default function ChatPage() {
           />
           <button
             onClick={handleImageClick}
-            disabled={sending}
+            disabled={sending || isRecording}
             className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="button-attach-image"
             type="button"
@@ -722,11 +952,19 @@ export default function ChatPage() {
           <button
             onClick={handleVoiceClick}
             disabled={sending}
-            className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={cn(
+              'flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed',
+              isRecording && 'bg-destructive/20 text-destructive'
+            )}
             data-testid="button-voice-note"
             type="button"
+            title={isRecording ? 'Tap to send' : 'Record voice message'}
           >
-            <Mic className="w-5 h-5 text-muted-foreground" />
+            {isRecording ? (
+              <MicOff className="w-5 h-5" />
+            ) : (
+              <Mic className="w-5 h-5 text-muted-foreground" />
+            )}
           </button>
 
           <button
@@ -734,7 +972,7 @@ export default function ChatPage() {
               console.log('Toggle clicked! New state:', !isDisappearing);
               setIsDisappearing(!isDisappearing);
             }}
-            disabled={sending}
+            disabled={sending || isRecording}
             className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="button-disappearing"
             title="Send disappearing message"

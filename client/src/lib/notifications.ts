@@ -96,16 +96,20 @@ export function isAppInBackground(): boolean {
   return document.hidden || document.visibilityState === 'hidden';
 }
 
-export async function notifyNewMessage(): Promise<boolean> {
+export async function notifyNewMessage(options?: { type?: 'text' | 'image' | 'voice' }): Promise<boolean> {
   if (!isAppInBackground()) {
     console.log('📬 App in foreground, skipping notification');
     return false;
   }
 
-  return showLocalNotification(
-    '💌 dodi',
-    'A new message from your partner'
-  );
+  const body =
+    options?.type === 'voice'
+      ? 'Voice message from your partner'
+      : options?.type === 'image'
+        ? 'Photo from your partner'
+        : 'A new message from your partner';
+
+  return showLocalNotification('💌 dodi', body);
 }
 
 export async function notifyNewMemory(): Promise<boolean> {

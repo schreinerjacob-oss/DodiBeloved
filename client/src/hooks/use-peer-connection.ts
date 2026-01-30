@@ -588,6 +588,20 @@ function setupConnection(conn: DataConnection) {
       return;
     }
 
+    if (data.type === 'message-delete') {
+      const { messageId } = data.data || {};
+      if (messageId) {
+        try {
+          const { deleteMessage } = await import('@/lib/storage-encrypted');
+          await deleteMessage(messageId);
+          window.dispatchEvent(new CustomEvent('message-deleted', { detail: { messageId } }));
+        } catch (e) {
+          console.warn('Failed to delete message on message-delete:', e);
+        }
+      }
+      return;
+    }
+
     // Handle Reconciliation Protocol
     if (data.type === 'reconcile-init') {
       await handleReconcileInit(conn, data.timestamps);
