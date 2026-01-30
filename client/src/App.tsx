@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Route, Switch, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -125,21 +124,23 @@ function MainApp() {
         </div>
       )}
 
-      <div className="flex-1 overflow-hidden relative z-10 flex flex-col h-full">
-        <Switch>
-          <Route path="/pairing" component={PairingPage} />
-          <Route path="/chat" component={ChatPage} />
-          <Route path="/calls" component={CallsPage} />
-          <Route path="/memories" component={MemoriesPage} />
-          <Route path="/moments" component={OurMomentsPage} />
-          <Route path="/heart-space" component={HeartSpacePage} />
-          <Route path="/settings" component={SettingsPage} />
-          <Route path="/subscription" component={SubscriptionPage} />
-          <Route path="/setup" component={ProfileSetupPage} />
-          <Route path="/redundancy" component={RedundancyPage} />
-          <Route path="/reset" component={ResetPage} />
-          <Route path="/" component={ChatPage} />
-        </Switch>
+      <div className="flex-1 min-h-0 overflow-hidden relative z-10 flex flex-col">
+        <div className="flex-1 min-h-0 overflow-auto flex flex-col">
+          <Switch>
+            <Route path="/pairing">{() => <PairingPage />}</Route>
+            <Route path="/chat">{() => <ChatPage />}</Route>
+            <Route path="/calls">{() => <CallsPage />}</Route>
+            <Route path="/memories">{() => <MemoriesPage />}</Route>
+            <Route path="/moments">{() => <OurMomentsPage />}</Route>
+            <Route path="/heart-space">{() => <HeartSpacePage />}</Route>
+            <Route path="/settings">{() => <SettingsPage />}</Route>
+            <Route path="/subscription">{() => <SubscriptionPage />}</Route>
+            <Route path="/setup">{() => <ProfileSetupPage />}</Route>
+            <Route path="/redundancy">{() => <RedundancyPage />}</Route>
+            <Route path="/reset">{() => <ResetPage />}</Route>
+            <Route path="/">{() => <ChatPage />}</Route>
+          </Switch>
+        </div>
       </div>
 
       <nav className="border-t bg-card/80 backdrop-blur-sm px-2 py-2 flex-shrink-0 relative z-20" style={{ paddingBottom: 'var(--safe-area-inset-bottom)' }}>
