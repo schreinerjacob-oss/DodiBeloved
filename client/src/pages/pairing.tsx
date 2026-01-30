@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import type { ChangeEvent } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -68,11 +69,12 @@ export default function PairingPage() {
       });
     };
 
-    const handleSyncProgress = (e: any) => {
+    const handleSyncProgress = (e: Event) => {
       setIsSyncingOlder(true);
-      setSyncBatchCount(prev => prev + 1);
-      if (e.detail?.totalBatches) {
-        setTotalBatches(e.detail.totalBatches);
+      setSyncBatchCount((prev: number) => prev + 1);
+      const detail = (e as CustomEvent<{ totalBatches?: number }>).detail;
+      if (detail?.totalBatches) {
+        setTotalBatches(detail.totalBatches);
       }
     };
 
@@ -182,8 +184,8 @@ export default function PairingPage() {
       if (roomRef.current) closeRoom(roomRef.current);
       console.error('❌ [ID AUDIT] Pairing failed:', error);
       toast({
-        title: 'Pairing Failed',
-        description: (error instanceof Error ? error.message : 'Could not complete connection.'),
+        title: 'Pairing failed',
+        description: 'Check the code and try again. Make sure you\'re both on the pairing screen.',
         variant: 'destructive',
       });
       setMode('choose');
@@ -201,8 +203,8 @@ export default function PairingPage() {
     if (!userId) {
       console.error('❌ [ID AUDIT] FAILED: Creator has no userId - cannot start pairing');
       toast({
-        title: 'Pairing Error',
-        description: 'User ID not initialized. Please refresh and try again.',
+        title: 'Something went wrong',
+        description: 'Refresh the page and try again.',
         variant: 'destructive',
       });
       return;
@@ -253,14 +255,14 @@ export default function PairingPage() {
           closeRoom(roomRef.current);
         }
         if (mode === 'pairing') {
-          toast({ title: 'Connection Failed', description: error instanceof Error ? error.message : 'Partner did not connect. Try again.', variant: 'destructive' });
+          toast({ title: 'Partner didn\'t connect', description: 'Have them enter your code and stay on the pairing screen, then try again.', variant: 'destructive' });
           setMode('choose');
           setLoading(false);
         }
       });
     } catch (error) {
       console.error('Create room error:', error);
-      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to create room.', variant: 'destructive' });
+      toast({ title: 'Couldn\'t create room', description: 'Check your connection and try again.', variant: 'destructive' });
       setMode('choose');
       setLoading(false);
     }
@@ -343,7 +345,7 @@ export default function PairingPage() {
           if (roomRef.current) closeRoom(roomRef.current);
           toast({ 
             title: 'Connection took too long', 
-            description: 'Creator may not be ready. Please try again.',
+            description: 'Ask the creator to stay on the code screen, then try again.',
             variant: 'destructive' 
           });
           setMode('choose');
@@ -355,8 +357,8 @@ export default function PairingPage() {
         // Second attempt failed
         if (roomRef.current) closeRoom(roomRef.current);
         toast({ 
-          title: 'Connection Failed', 
-          description: 'Could not connect. Please try again.',
+          title: 'Couldn\'t connect', 
+          description: 'Check the code (e.g. A7K9-P2M4) and try again. Both of you must be on the pairing screen.',
           variant: 'destructive' 
         });
         setMode('choose');
@@ -369,7 +371,7 @@ export default function PairingPage() {
 
   const handleJoinRoom = async () => {
     if (!isValidRoomCode(inputCode)) {
-      toast({ title: 'Invalid code', description: 'Please enter a valid 8-character code (e.g., A7K9-P2M4)', variant: 'destructive' });
+      toast({ title: 'Invalid code', description: 'Enter the 8-character code from your partner (e.g. A7K9-P2M4).', variant: 'destructive' });
       return;
     }
     
@@ -737,7 +739,7 @@ export default function PairingPage() {
                   <Input 
                     placeholder="e.g. A7K9-P2M4 (dash adds automatically)" 
                     value={inputCode} 
-                    onChange={(e) => handleCodeInputChange(e.target.value)}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => handleCodeInputChange(e.target.value)}
                     className="h-12 text-center text-lg tracking-widest font-mono uppercase"
                     maxLength={9}
                     data-testid="input-restore-code"
@@ -764,6 +766,10 @@ export default function PairingPage() {
                   >
                     Back
                   </Button>
+
+                  <p className="text-xs text-muted-foreground text-center pt-2 border-t">
+                    There is no cloud backup. Your partner&apos;s device holds your shared data; this code lets you mirror it here. Save your reconnection details in Settings after restoring.
+                  </p>
                 </div>
               </Card>
             </motion.div>
@@ -858,8 +864,8 @@ export default function PairingPage() {
                       type="text" 
                       placeholder="e.g. A7K9-P2M4 (dash adds automatically)" 
                       value={inputCode} 
-                      onChange={(e) => handleCodeInputChange(e.target.value)} 
-                      disabled={loading} 
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => handleCodeInputChange(e.target.value)}
+                      disabled={loading}
                       data-testid="input-room-code" 
                       className="text-lg font-mono text-center tracking-widest" 
                       maxLength={9}

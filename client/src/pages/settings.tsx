@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug, RefreshCw, ShieldCheck, Trash2, BookOpen } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -347,6 +347,32 @@ export default function SettingsPage() {
                   </p>
                 )}
               </div>
+            </Card>
+          </div>
+
+          {/* Backup & restore education */}
+          <div className="space-y-3">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">Safety</p>
+
+            <Card className="p-6 space-y-4 border-sage/20 bg-sage/5">
+              <div className="flex items-center gap-3">
+                <BookOpen className="w-5 h-5 text-sage" />
+                <div>
+                  <h3 className="font-medium">How backup & restore works</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    There is no cloud backup. Your pairing code and reconnection details are the only way to restore on a new device.
+                  </p>
+                </div>
+              </div>
+              <ul className="text-sm text-muted-foreground space-y-2 list-disc list-inside">
+                <li>Save your reconnection details (Settings → copy) somewhere safe.</li>
+                <li>If you lose this device, use Restore and enter those details to mirror your shared history from your partner&apos;s device.</li>
+                <li>Both of you hold the full data; nothing is stored on our servers.</li>
+              </ul>
+              <Button variant="outline" size="sm" className="w-full border-sage/40 text-sage hover:bg-sage/10" onClick={() => setLocation('/redundancy')}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Learn more: The Redundant Garden
+              </Button>
             </Card>
           </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,8 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
 import { Badge } from '@/components/ui/badge';
-import { Heart, Send, Image, Mic, MicOff, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Heart, Send, Image, Mic, MicOff, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter } from 'lucide-react';
 import { getMessages, saveMessage, deleteMessage } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { useOfflineQueueSize } from '@/hooks/use-offline-queue';
@@ -63,6 +64,19 @@ export default function ChatPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
+  const [messageFilter, setMessageFilter] = useState<'all' | 'media' | 'voice'>('all');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+
+  const displayedMessages = useMemo(() => {
+    let list = messages;
+    if (messageFilter === 'media') {
+      list = list.filter((m) => m.type === 'image');
+    } else if (messageFilter === 'voice') {
+      list = list.filter((m) => m.type === 'voice');
+    }
+    const ts = (m: Message) => new Date(m.timestamp).getTime();
+    return sortOrder === 'oldest' ? [...list].sort((a, b) => ts(a) - ts(b)) : [...list].sort((a, b) => ts(b) - ts(a));
+  }, [messages, messageFilter, sortOrder]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -295,7 +309,7 @@ export default function ChatPage() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, messageFilter, sortOrder]);
 
   // Update queued messages to 'sent' when connection is restored
   useEffect(() => {
@@ -468,8 +482,8 @@ export default function ChatPage() {
     } catch (error) {
       console.error('❌ [P2P] Send error:', error);
       toast({
-        title: "Failed to send",
-        description: "Could not send message. Please try again.",
+        title: "Couldn't send",
+        description: "Try again when you're back online, or check your connection.",
         variant: "destructive",
       });
     } finally {
@@ -595,7 +609,11 @@ export default function ChatPage() {
           }
         } catch (err) {
           console.error('Voice send error:', err);
-          toast({ title: "Failed to send voice message", variant: "destructive" });
+          toast({
+            title: "Voice message didn't send",
+            description: "Try again when you're back online.",
+            variant: "destructive",
+          });
         } finally {
           setSending(false);
         }
@@ -608,7 +626,7 @@ export default function ChatPage() {
       console.error('Microphone error:', err);
       toast({
         title: "Microphone access needed",
-        description: "Allow microphone access to send voice messages",
+        description: "Allow microphone in your browser settings to send voice messages.",
         variant: "destructive",
       });
     }
@@ -621,8 +639,8 @@ export default function ChatPage() {
     // Validate file is an image
     if (!file.type.startsWith('image/')) {
       toast({
-        title: "Invalid file",
-        description: "Please select an image",
+        title: "Not an image",
+        description: "Please choose a photo (JPEG, PNG, etc.).",
         variant: "destructive",
       });
       return;
@@ -631,8 +649,8 @@ export default function ChatPage() {
     // Max 5MB
     if (file.size > 5 * 1024 * 1024) {
       toast({
-        title: "File too large",
-        description: "Image must be under 5MB",
+        title: "Image too large",
+        description: "Please choose an image under 5MB.",
         variant: "destructive",
       });
       return;
@@ -701,7 +719,8 @@ export default function ChatPage() {
     } catch (error) {
       console.error('Image send error:', error);
       toast({
-        title: "Failed to send image",
+        title: "Image didn't send",
+        description: "Try again when you're back online.",
         variant: "destructive",
       });
       setSending(false);
@@ -754,14 +773,59 @@ export default function ChatPage() {
         </div>
       </div>
 
+      {/* Quick find: filter and sort within loaded messages */}
+      {messages.length > 0 && (
+        <div className="flex-shrink-0 px-4 py-2 border-b bg-muted/30 flex flex-wrap items-center gap-2">
+          <Filter className="w-4 h-4 text-muted-foreground" aria-hidden />
+          <ToggleGroup
+            type="single"
+            value={messageFilter}
+            onValueChange={(v) => v && setMessageFilter(v as 'all' | 'media' | 'voice')}
+            className="gap-0"
+            size="sm"
+          >
+            <ToggleGroupItem value="all" aria-label="All messages" className="text-xs px-2 py-1">All</ToggleGroupItem>
+            <ToggleGroupItem value="media" aria-label="Photos only" className="text-xs px-2 py-1">Photos</ToggleGroupItem>
+            <ToggleGroupItem value="voice" aria-label="Voice only" className="text-xs px-2 py-1">Voice</ToggleGroupItem>
+          </ToggleGroup>
+          <span className="text-muted-foreground text-xs">·</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-muted-foreground"
+            onClick={() => setSortOrder((o) => (o === 'newest' ? 'oldest' : 'newest'))}
+          >
+            {sortOrder === 'newest' ? 'Newest first' : 'Oldest first'}
+          </Button>
+        </div>
+      )}
+
+      {/* Offline banner */}
+      {!peerState.connected && (
+        <div className="flex-shrink-0 px-4 py-2 bg-amber-500/15 border-b border-amber-500/30 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm">
+          <CloudOff className="w-4 h-4 shrink-0" />
+          <span>
+            {pendingCount > 0
+              ? `You're offline. ${pendingCount} message${pendingCount === 1 ? '' : 's'} will send when you're back online.`
+              : "You're offline. Messages will send when you're back online."}
+          </span>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto p-6" ref={scrollRef}>
         <div className="space-y-4 max-w-3xl mx-auto">
-          {messages.length === 0 && (
+          {displayedMessages.length === 0 && (
             <div className="text-center py-12 space-y-3">
               <div className="w-16 h-16 mx-auto rounded-full bg-sage/20 flex items-center justify-center">
                 <Heart className="w-8 h-8 text-sage" />
               </div>
-              <p className="text-muted-foreground">Start your first conversation</p>
+              <p className="text-muted-foreground">
+                {messageFilter === 'all'
+                  ? 'Start your first conversation'
+                  : messageFilter === 'media'
+                    ? 'No photos in loaded messages'
+                    : 'No voice messages in loaded messages'}
+              </p>
             </div>
           )}
 
@@ -789,7 +853,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          {messages.map((message) => {
+          {displayedMessages.map((message) => {
             const isSent = message.senderId === userId;
             const isImage = message.type === 'image';
             const isVoice = message.type === 'voice';
