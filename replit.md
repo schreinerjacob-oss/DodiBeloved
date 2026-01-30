@@ -116,12 +116,20 @@ All data stored in encrypted **IndexedDB** object stores:
 - `messages` - Chat messages (with disappearing message support)
 - `memories` - Photo memories with captions
 - `calendarEvents` - Shared calendar events
-- `dailyRituals` - Daily emotional check-ins
+- `dailyRituals` - Daily whispers (mood + optional gratitude, one per day)
 - `loveLetters` - Love letters and notes
 - `futureLetters` - Time-locked future letters
-- `prayers` - Gratitude and prayers log
+- `prayers` - Gratitude / Journey of Blessings
 - `reactions` - Emoji reactions
 - `settings` - User preferences, pairing data, master key
+
+### Heart Space (Daily Rituals)
+
+The **Heart Space** screen (`heart-space.tsx`) has three tabs that match the data above:
+
+- **Whispers**: Quick mood picker (Feeling loved, Happy, Grateful, Peaceful, Thinking of you, Missing you) plus optional gratitude note; one whisper per day; "Recent Whispers" list.
+- **Love Letter Vault**: Write and read love letters; list view with previews.
+- **Journey of Blessings**: "Share Today's Gratitude" (one entry per day); "Today's Shared Blessings" when both have submitted; history list.
 
 ### PWA Features
 
@@ -151,15 +159,11 @@ client/
 │   │   └── queryClient.ts         # TanStack Query setup
 │   ├── pages/
 │   │   ├── profile-setup.tsx      # Initial name entry
-│   │   ├── pairing.tsx            # Ultra-light QR tunnel pairing
+│   │   ├── pairing.tsx            # Code-based tunnel pairing
 │   │   ├── chat.tsx               # Main chat interface
 │   │   ├── memories.tsx           # Photo memories
-│   │   ├── calendar.tsx           # Shared calendar
-│   │   ├── daily-ritual.tsx       # Daily check-ins
-│   │   ├── love-letters.tsx       # Love letters
-│   │   ├── future-letters.tsx     # Time-locked letters
-│   │   ├── prayers.tsx            # Gratitude log
-│   │   ├── reactions.tsx          # Reactions
+│   │   ├── our-moments.tsx        # Shared calendar / moments
+│   │   ├── heart-space.tsx        # Whispers, Love Letter Vault, Journey of Blessings
 │   │   ├── calls.tsx              # Voice/video calls
 │   │   ├── settings.tsx           # App settings
 │   │   └── subscription.tsx       # Trial/subscription

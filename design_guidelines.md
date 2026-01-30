@@ -34,7 +34,7 @@ Dodi is built on one unbreakable promise: total privacy. Every design choice mus
 
 - **Headings**: Soft, slightly rounded sans-serif suggesting warmth
 - **Body**: Clean, highly readable for extended reading of love notes
-- **Accent Text**: Consider handwritten-style font for special moments (Daily Ritual questions, love letters)
+- **Accent Text**: Consider handwritten-style font for special moments (Whispers, love letters)
 
 ## Core Feature Layouts
 
@@ -63,17 +63,14 @@ Dodi is built on one unbreakable promise: total privacy. Every design choice mus
 - Event cards with soft sage borders
 - Gentle reminder notifications (non-intrusive)
 
-### 5. Daily Ritual Screen
-- **Emotion Wheel**: Circular selector with 8-12 emotions, soft color gradients
-- **Three Questions**: 
-  - "What made you feel most loved today?"
-  - "One thing I'm grateful for in you"
-  - "Tomorrow I need..."
-- Large text input areas with warm cream backgrounds
-- Submit button with subtle gold glow when complete
-- History view showing partner's responses side-by-side
+### 5. Heart Space (Daily Rituals)
+Three tabs matching the in-app Heart Space screen:
 
-### 6. Love Letters Vault
+- **Whispers**: Quick mood picker (Feeling loved, Happy, Grateful, Peaceful, Thinking of you, Missing you) with optional gratitude note; one whisper per day; "Recent Whispers" list with partner's responses.
+- **Love Letter Vault**: Write and read love letters; list view with handwritten-style previews; compose view focused on the message; private lock indicator.
+- **Journey of Blessings (Prayers)**: "Share Today's Gratitude" — one gratitude entry per day; "Today's Shared Blessings" when both have submitted; "Journey of Blessings" history.
+
+### 6. Love Letters Vault (detail)
 - Letter list view: handwritten-style preview text
 - Individual letters: parchment-like cream background, generous padding
 - Compose view: minimal interface focusing on the message
@@ -123,4 +120,4 @@ Dodi is built on one unbreakable promise: total privacy. Every design choice mus
 
 ## Images
 
-No hero images needed. This is a functionality-focused intimate app. All visuals are user-generated content (photos, videos in memories) or iconography (emotion wheel, logos, UI elements). Focus on creating a warm, cohesive interface using the color palette and gentle visual treatments.
+No hero images needed. This is a functionality-focused intimate app. All visuals are user-generated content (photos, videos in memories) or iconography (Heart Space mood picker, logos, UI elements). Focus on creating a warm, cohesive interface using the color palette and gentle visual treatments.
