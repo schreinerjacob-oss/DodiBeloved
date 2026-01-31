@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import type { SyncMessage } from '@/types';
 import Peer, { type DataConnection } from 'peerjs';
@@ -35,15 +35,38 @@ let globalState: PeerConnectionState = {
   isReconnecting: false,
 };
 
+// Set of callbacks so every usePeerConnection instance gets notified when peer is destroyed
+const onPeerDestroyedListeners = new Set<() => void>();
+
+// Stored peer event handlers so we can remove them before destroy (avoids duplicate listeners on re-run)
+let currentPeerHandlers: {
+  open: (id: string) => void;
+  error: (err: unknown) => void;
+  disconnected: () => void;
+  connection: (conn: DataConnection) => void;
+} | null = null;
+
+function removePeerListeners(peer: Peer | null): void {
+  if (!peer || !currentPeerHandlers) return;
+  peer.off('open', currentPeerHandlers.open);
+  peer.off('error', currentPeerHandlers.error);
+  peer.off('disconnected', currentPeerHandlers.disconnected);
+  peer.off('connection', currentPeerHandlers.connection);
+  currentPeerHandlers = null;
+}
+
+let disconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
 // Reconnection backoff state
 let reconnectAttempt = 0;
 let reconnectTimeout: NodeJS.Timeout | null = null;
 let healthCheckInterval: NodeJS.Timeout | null = null;
 let lastPongReceived = Date.now();
 let firstMessageSentAfterReconnect: number | null = null;
+let reconnectStartedAt: number | null = null;
 const MAX_BACKOFF = 15000;
-const PING_INTERVAL = 10000;
-const PONG_TIMEOUT = 20000;
+const PING_INTERVAL = 5000;       // Keep-alive ping every 5s (faster dead-connection detection)
+const PONG_TIMEOUT = 15000;       // Trigger reconnect if no pong in 15s
 const AGGRESSIVE_RECONNECT_INTERVAL = 5000;
 
 let aggressiveReconnectInterval: NodeJS.Timeout | null = null;
@@ -110,17 +133,23 @@ function startReconnecting() {
     return;
   }
 
+  if (reconnectStartedAt == null) {
+    reconnectStartedAt = Date.now();
+  }
+
   // Also start aggressive polling
   startAggressiveReconnect();
 
   const backoff = Math.min(Math.pow(2, reconnectAttempt) * 1000, MAX_BACKOFF);
-  console.log(`📡 Reconnecting in ${backoff / 1000} seconds (Attempt ${reconnectAttempt + 1})`);
+  console.log(`📡 Reconnecting in ${backoff / 1000}s (Attempt ${reconnectAttempt + 1}) [backoff: 1s→2s→4s→8s…]`);
   
   firstMessageSentAfterReconnect = null;
   clearReconnectTimeout();
   reconnectTimeout = setTimeout(() => {
     reconnectAttempt++;
-    connectToPartner(globalPartnerId!);
+    // partnerId may have become null since scheduling; skip if no partner
+    if (!globalPartnerId) return;
+    connectToPartner(globalPartnerId);
   }, backoff);
 }
 
@@ -198,9 +227,10 @@ function notifyListeners() {
 
 // Connect to partner - called globally
 function connectToPartner(targetId: string) {
-  if (!globalPeer || globalPeer.destroyed) return;
+  if (!targetId || !globalPeer || globalPeer.destroyed) return;
   if (globalConn && globalConn.open && globalConn.peer === targetId) return;
 
+  globalPartnerId = targetId;
   console.log('🔗 Dialing partner:', targetId);
   const conn = globalPeer.connect(targetId, {
     reliable: true,
@@ -556,6 +586,11 @@ function setupConnection(conn: DataConnection) {
   }
 
   conn.on('open', async () => {
+    if (reconnectStartedAt != null) {
+      const latency = Date.now() - reconnectStartedAt;
+      console.log(`⏱️ [RECONNECT] Tunnel re-established in ${latency}ms`);
+      reconnectStartedAt = null;
+    }
     console.log('✨ Persistent Direct P2P connection established with:', conn.peer);
     reconnectAttempt = 0;
     globalSyncCancelled = false; // Reset cancellation on new connection
@@ -739,7 +774,9 @@ function setupConnection(conn: DataConnection) {
     console.error('Connection Error:', err);
     if (globalConn === conn) globalConn = null;
     globalState.error = err.message;
+    clearHealthCheck();
     notifyListeners();
+    startReconnecting();
   });
 }
 
@@ -883,6 +920,10 @@ export async function sendP2PMessage(message: SyncMessage) {
 export function usePeerConnection(): UsePeerConnectionReturn {
   const { userId, partnerId, pairingStatus, allowWakeUp } = useDodi();
   const [state, setState] = useState<PeerConnectionState>(globalState);
+  const [peerReinitTrigger, setPeerReinitTrigger] = useState(0);
+  // Ref so event handlers always read current partnerId (avoids stale closure when peer is reused)
+  const partnerIdRef = useRef(partnerId);
+  partnerIdRef.current = partnerId;
 
   // Subscribe to global state changes
   useEffect(() => {
@@ -897,14 +938,28 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     loadPersistentQueue();
   }, []);
 
-  // 1. ESTABLISH PEER when userId and pairingStatus change
+  // 1. ESTABLISH PEER when userId, pairingStatus, or reinit trigger change
+  useEffect(() => {
+    const callback = () => setPeerReinitTrigger((t) => t + 1);
+    onPeerDestroyedListeners.add(callback);
+    return () => {
+      onPeerDestroyedListeners.delete(callback);
+    };
+  }, []);
+
   useEffect(() => {
     if (pairingStatus !== 'connected' || !userId) {
       if (globalPeer) {
         console.log('🛑 [P2P] Destroying peer due to disconnection or logout');
+        removePeerListeners(globalPeer);
         globalPeer.destroy();
         globalPeer = null;
         globalConn = null;
+        globalMediaConn = null;
+        reconnectStartedAt = null;
+        clearReconnectTimeout();
+        clearAggressiveReconnect();
+        clearHealthCheck();
         notifyListeners();
       }
       return;
@@ -916,7 +971,13 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       return;
     }
 
-    if (globalPeer) globalPeer.destroy();
+    if (globalPeer) {
+      removePeerListeners(globalPeer);
+      globalPeer.destroy();
+      clearReconnectTimeout();
+      clearAggressiveReconnect();
+      clearHealthCheck();
+    }
 
     console.log('🌐 Starting Private P2P Network Service (No Servers) for:', userId);
     console.log('📡 Direct device-to-device handshake started');
@@ -933,82 +994,90 @@ export function usePeerConnection(): UsePeerConnectionReturn {
           { urls: 'stun:global.stun.twilio.com:3478' }
         ],
         iceTransportPolicy: 'all',
-        iceCandidatePoolSize: 10
+        iceCandidatePoolSize: 10  // Pre-gather ICE candidates for faster connection
       }
     });
 
     globalPeer = peer;
 
-    peer.on('open', (id) => {
+    const handleOpen = (id: string) => {
       console.log('✅ My Peer ID is active:', id);
-      // Immediately notify listeners to update globalState with the active peerId
       notifyListeners();
-      if (partnerId) connectToPartner(partnerId);
-    });
+      const target = globalPartnerId ?? partnerIdRef.current;
+      if (target) connectToPartner(target);
+    };
 
-  peer.on('error', (err) => {
-    console.error('PeerJS Error:', err);
-    
-    // Critical self-healing for ID conflicts or network issues
-    if (err.type === 'unavailable-id' || err.type === 'network' || err.type === 'server-error') {
-      console.log('🔄 Peer error detected, rebuilding peer in 5s...');
-      setTimeout(() => {
-        if (!peer.destroyed) {
-          peer.destroy();
-          // The useEffect dependency on globalPeer state will trigger a rebuild
-          // if we force a re-render or global state change
-          notifyListeners();
-        }
-      }, 5000);
-    }
-    
-    globalState.error = err.type === 'unavailable-id' ? 'Connection conflict' : err.message;
-    notifyListeners();
-  });
+    const handleError = (err: unknown) => {
+      console.error('PeerJS Error:', err);
+      const e = err as { type?: string; message?: string };
+      if (e.type === 'unavailable-id' || e.type === 'network' || e.type === 'server-error') {
+        console.log('🔄 Peer error detected, rebuilding peer in 5s...');
+        setTimeout(() => {
+          if (!peer.destroyed) {
+            peer.destroy();
+            notifyListeners();
+          }
+        }, 5000);
+      }
+      globalState.error = e.type === 'unavailable-id' ? 'Connection conflict' : (e.message ?? '');
+      notifyListeners();
+    };
 
-    peer.on('disconnected', () => {
+    const handleDisconnected = () => {
       console.log('📡 Disconnected from signaling server. Attempting reconnect...');
       notifyListeners();
-      
-      // Attempt reconnection
       peer.reconnect();
-      
-      // If reconnection doesn't happen within 10s, destroy and let the effect rebuild
-      setTimeout(() => {
+      if (disconnectTimeoutId) clearTimeout(disconnectTimeoutId);
+      disconnectTimeoutId = setTimeout(() => {
         if (peer.disconnected && !peer.destroyed) {
           console.log('🔄 Reconnect timed out, rebuilding peer...');
+          removePeerListeners(peer);
           peer.destroy();
+          if (globalPeer === peer) {
+            globalPeer = null;
+            globalConn = null;
+            globalMediaConn = null;
+          }
+          reconnectAttempt = 0;
+          reconnectStartedAt = null;
+          clearReconnectTimeout();
+          clearAggressiveReconnect();
+          clearHealthCheck();
           notifyListeners();
+          onPeerDestroyedListeners.forEach((cb) => cb());
         }
+        disconnectTimeoutId = null;
       }, 10000);
-    });
+    };
 
-    peer.on('connection', (conn) => {
+    const handleConnection = (conn: DataConnection) => {
       const label = (conn as DataConnection & { label?: string }).label;
       console.log('📞 Incoming connection from:', conn.peer, label ? `(label: ${label})` : '');
+      const expectedPartner = globalPartnerId ?? partnerIdRef.current;
 
-      // Handle wake-up ping
       if (conn.metadata?.type === 'wake-up') {
+        if (conn.peer !== expectedPartner) {
+          console.warn('🚫 Ignoring wake-up ping from unknown peer:', conn.peer);
+          conn.close();
+          return;
+        }
         console.log('⚡ Received wake-up ping from partner. Reconnecting...');
         if (!globalConn || !globalConn.open) {
           console.log('🌱 Reconnected direct after ping');
           connectToPartner(conn.peer);
         } else {
-          // Even if we think we are open, partner thinks we aren't.
-          // Send a ping to verify and trigger a pong back to them.
           globalConn.send({ type: 'ping', timestamp: Date.now() });
         }
         conn.close();
         return;
       }
 
-      if (conn.peer !== partnerId) {
+      if (conn.peer !== expectedPartner) {
         console.warn('🚫 Blocked unknown peer:', conn.peer);
         conn.close();
         return;
       }
 
-      // Route by label: media channel vs main data channel
       if (label === 'media') {
         if (globalMediaConn && globalMediaConn.open && globalMediaConn.peer === conn.peer) {
           console.log('♻️ Reusing existing media connection for:', conn.peer);
@@ -1019,25 +1088,36 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         return;
       }
 
-      // Main data channel (default)
       if (globalConn && globalConn.open && globalConn.peer === conn.peer) {
         console.log('♻️ Reusing existing open connection for:', conn.peer);
         conn.close();
         return;
       }
       setupConnection(conn);
-    });
+    };
+
+    currentPeerHandlers = { open: handleOpen, error: handleError, disconnected: handleDisconnected, connection: handleConnection };
+    peer.on('open', handleOpen);
+    peer.on('error', handleError);
+    peer.on('disconnected', handleDisconnected);
+    peer.on('connection', handleConnection);
 
     return () => {
+      if (disconnectTimeoutId) {
+        clearTimeout(disconnectTimeoutId);
+        disconnectTimeoutId = null;
+      }
+      reconnectStartedAt = null;
+      clearReconnectTimeout();
+      clearAggressiveReconnect();
       // Intentionally DO NOT destroy peer on unmount to keep connection alive
     };
-  }, [userId, pairingStatus]);
+  }, [userId, pairingStatus, peerReinitTrigger]);
 
   // 2. CONNECT TO PARTNER whenever partnerId changes + Visibility triggers
   useEffect(() => {
-    if (partnerId) {
-      globalPartnerId = partnerId;
-    }
+    // Only update when truthy; preserve previous ID when partnerId is null (e.g. during reconnect)
+    if (partnerId != null) globalPartnerId = partnerId;
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && partnerId && (!globalConn || !globalConn.open)) {
