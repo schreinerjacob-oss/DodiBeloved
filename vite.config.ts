@@ -50,6 +50,15 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    host: "0.0.0.0",
+    port: 5000,
+    allowedHosts: [
+      "localhost",
+      ".localhost",
+      ".replit.app", // Replit Deployments
+      ".repl.co", // Replit classic dev/live
+      "frontend_web", // Replit internal proxy
+    ],
     fs: {
       strict: true,
       deny: ["**/.*"],
