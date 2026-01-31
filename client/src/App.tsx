@@ -63,9 +63,20 @@ function MainApp() {
 
   const { state: peerState } = usePeerConnection();
 
-  // Reset scroll position on route change to avoid blank screen from stale scroll
+  // Reset scroll position on route change; defer until after new page has painted
+  // (fixes blank screen when navigating from Chat/Settings with nested ScrollArea)
   useEffect(() => {
-    scrollContainerRef.current?.scrollTo({ top: 0, left: 0 });
+    let raf1: number;
+    let raf2: number | undefined;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        scrollContainerRef.current?.scrollTo({ top: 0, left: 0 });
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2 != null) cancelAnimationFrame(raf2);
+    };
   }, [location]);
   const partnerActive = peerState?.connected || false;
 
@@ -135,6 +146,7 @@ function MainApp() {
 
       <div className="flex-1 min-h-0 overflow-hidden relative z-10 flex flex-col">
         <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto flex flex-col">
+          <div className="flex-1 min-h-full flex flex-col">
           <Switch>
             <Route path="/pairing">{() => <PairingPage />}</Route>
             <Route path="/chat">{() => <ChatPage />}</Route>
@@ -149,6 +161,7 @@ function MainApp() {
             <Route path="/reset">{() => <ResetPage />}</Route>
             <Route path="/">{() => <ChatPage />}</Route>
           </Switch>
+          </div>
         </div>
       </div>
 

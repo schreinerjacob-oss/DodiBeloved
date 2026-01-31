@@ -66,7 +66,7 @@ export default function ChatPage() {
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
   const [messageFilter, setMessageFilter] = useState<'all' | 'media' | 'voice' | 'video'>('all');
-  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('oldest');
 
   const displayedMessages = useMemo(() => {
     let list = messages;
