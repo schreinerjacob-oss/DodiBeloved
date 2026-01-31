@@ -7,16 +7,22 @@ export function MessageMediaImage({ messageId, fileName }: { messageId: string; 
 
   useEffect(() => {
     let cancelled = false;
+    let loading = false;
 
     const load = async () => {
-      const blob = await getMediaBlob(messageId, 'message');
-      if (cancelled) return;
-      if (blob) {
-        const url = URL.createObjectURL(blob);
-        // Revoke the previous URL (if any) before swapping
-        if (currentUrlRef.current) URL.revokeObjectURL(currentUrlRef.current);
-        currentUrlRef.current = url;
-        setImageSrc(url);
+      if (loading) return;
+      loading = true;
+      try {
+        const blob = await getMediaBlob(messageId, 'message');
+        if (cancelled) return;
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          if (currentUrlRef.current) URL.revokeObjectURL(currentUrlRef.current);
+          currentUrlRef.current = url;
+          setImageSrc(url);
+        }
+      } finally {
+        loading = false;
       }
     };
 
@@ -30,8 +36,14 @@ export function MessageMediaImage({ messageId, fileName }: { messageId: string; 
     load();
     window.addEventListener('dodi-media-ready', onReady);
 
+    // Retry load after a short delay in case media arrived before we subscribed to dodi-media-ready
+    const retryId = setTimeout(() => {
+      if (!currentUrlRef.current && !loading) load();
+    }, 800);
+
     return () => {
       cancelled = true;
+      clearTimeout(retryId);
       window.removeEventListener('dodi-media-ready', onReady);
       if (currentUrlRef.current) URL.revokeObjectURL(currentUrlRef.current);
       currentUrlRef.current = '';

@@ -950,8 +950,9 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     });
 
     peer.on('connection', (conn) => {
-      console.log('📞 Incoming connection from:', conn.peer);
-      
+      const label = (conn as DataConnection & { label?: string }).label;
+      console.log('📞 Incoming connection from:', conn.peer, label ? `(label: ${label})` : '');
+
       // Handle wake-up ping
       if (conn.metadata?.type === 'wake-up') {
         console.log('⚡ Received wake-up ping from partner. Reconnecting...');
@@ -967,18 +968,30 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         return;
       }
 
-      if (conn.peer === partnerId) {
-        // If we have an existing open connection to this peer, don't replace it unless it's the same object
-        if (globalConn && globalConn.open && globalConn.peer === conn.peer) {
-          console.log('♻️ Reusing existing open connection for:', conn.peer);
+      if (conn.peer !== partnerId) {
+        console.warn('🚫 Blocked unknown peer:', conn.peer);
+        conn.close();
+        return;
+      }
+
+      // Route by label: media channel vs main data channel
+      if (label === 'media') {
+        if (globalMediaConn && globalMediaConn.open && globalMediaConn.peer === conn.peer) {
+          console.log('♻️ Reusing existing media connection for:', conn.peer);
           conn.close();
           return;
         }
-        setupConnection(conn);
-      } else {
-        console.warn('🚫 Blocked unknown peer:', conn.peer);
-        conn.close();
+        setupMediaConnection(conn);
+        return;
       }
+
+      // Main data channel (default)
+      if (globalConn && globalConn.open && globalConn.peer === conn.peer) {
+        console.log('♻️ Reusing existing open connection for:', conn.peer);
+        conn.close();
+        return;
+      }
+      setupConnection(conn);
     });
 
     return () => {

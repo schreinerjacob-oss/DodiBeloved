@@ -18,18 +18,25 @@ export function MessageMediaVideo({ messageId }: { messageId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    let loading = false;
 
     const load = async () => {
-      setError(null);
-      const blob = await getMediaBlob(messageId, 'message');
-      if (cancelled) return;
-      revokeCurrentUrl();
-      if (blob) {
-        const url = URL.createObjectURL(blob);
-        currentUrlRef.current = url;
-        setVideoUrl(url);
-      } else {
-        setVideoUrl(null);
+      if (loading) return;
+      loading = true;
+      try {
+        setError(null);
+        const blob = await getMediaBlob(messageId, 'message');
+        if (cancelled) return;
+        revokeCurrentUrl();
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          currentUrlRef.current = url;
+          setVideoUrl(url);
+        } else {
+          setVideoUrl(null);
+        }
+      } finally {
+        loading = false;
       }
     };
 
@@ -43,8 +50,14 @@ export function MessageMediaVideo({ messageId }: { messageId: string }) {
     load();
     window.addEventListener('dodi-media-ready', onReady);
 
+    // Retry load after a short delay in case media arrived before we subscribed
+    const retryId = setTimeout(() => {
+      if (!currentUrlRef.current && !loading) load();
+    }, 800);
+
     return () => {
       cancelled = true;
+      clearTimeout(retryId);
       window.removeEventListener('dodi-media-ready', onReady);
       revokeCurrentUrl();
       setVideoUrl(null);
