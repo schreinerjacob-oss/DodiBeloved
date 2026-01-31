@@ -11,7 +11,7 @@ export interface Message {
   timestamp: Date;
   disappearsAt?: Date | null;
   isRead?: boolean;
-  type?: 'text' | 'image' | 'voice';
+  type?: 'text' | 'image' | 'voice' | 'video';
   mediaUrl?: string | null;
   isDisappearing?: boolean | null;
   status?: 'sending' | 'sent' | 'delivered' | 'read' | 'queued';

@@ -70,8 +70,8 @@ export default function SubscriptionPage() {
               Support Your Private Sanctuary
             </h1>
             <p className="text-muted-foreground leading-relaxed">
-              Dodi is built on a promise: total privacy with zero servers. 
-              Your support keeps this space safe, ad-free, and alive for you and your beloved.
+              Dodi is 100% free to use. Everything works without supporting. 
+              Your support keeps this space safe, ad-free, and alive for couples everywhere.
             </p>
           </div>
 
@@ -132,6 +132,11 @@ export default function SubscriptionPage() {
           </div>
 
           <div className="space-y-6">
+            <Card className="p-4 border-sage/20 bg-sage/5 text-center">
+              <p className="text-sm text-muted-foreground">
+                <strong className="text-foreground">Dodi is completely free.</strong> No paywall, no premium features behind a gate. Support is optional and appreciated.
+              </p>
+            </Card>
             <div className="text-center space-y-2">
               <h3 className="text-sm font-medium">Why support?</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">

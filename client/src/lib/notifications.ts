@@ -96,7 +96,7 @@ export function isAppInBackground(): boolean {
   return document.hidden || document.visibilityState === 'hidden';
 }
 
-export async function notifyNewMessage(options?: { type?: 'text' | 'image' | 'voice' }): Promise<boolean> {
+export async function notifyNewMessage(options?: { type?: 'text' | 'image' | 'voice' | 'video' }): Promise<boolean> {
   if (!isAppInBackground()) {
     console.log('📬 App in foreground, skipping notification');
     return false;
@@ -105,9 +105,11 @@ export async function notifyNewMessage(options?: { type?: 'text' | 'image' | 'vo
   const body =
     options?.type === 'voice'
       ? 'Voice message from your partner'
-      : options?.type === 'image'
-        ? 'Photo from your partner'
-        : 'A new message from your partner';
+      : options?.type === 'video'
+        ? 'Video message from your partner'
+        : options?.type === 'image'
+          ? 'Photo from your partner'
+          : 'A new message from your partner';
 
   return showLocalNotification('💌 dodi', body);
 }

@@ -74,7 +74,7 @@ export function SupportInvitation({ onDismiss, triggerReason }: SupportInvitatio
           </div>
 
           <h3 className="text-xl font-serif text-foreground leading-tight">
-            This garden is growing beautifully. Help keep it private and ad-free for couples everywhere?
+            Dodi is free. Optional support helps keep it private and ad-free for couples everywhere.
           </h3>
 
           <div className="grid gap-3 pt-2">
@@ -95,6 +95,7 @@ export function SupportInvitation({ onDismiss, triggerReason }: SupportInvitatio
               </Button>
             </div>
 
+            <p className="text-[10px] text-muted-foreground">Everything works without supporting.</p>
             <Button variant="ghost" className="text-muted-foreground text-xs h-8" onClick={onDismiss}>
               Not now
             </Button>

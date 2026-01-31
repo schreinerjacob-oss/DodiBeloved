@@ -7,12 +7,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Heart, Send, Image, Mic, MicOff, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter } from 'lucide-react';
+import { Heart, Send, Image, Mic, MicOff, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter, Video, VideoOff } from 'lucide-react';
 import { getMessages, saveMessage, deleteMessage } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { useOfflineQueueSize } from '@/hooks/use-offline-queue';
 import { MessageMediaImage } from '@/components/message-media-image';
 import { MessageMediaVoice } from '@/components/message-media-voice';
+import { MessageMediaVideo } from '@/components/message-media-video';
 import { MemoryResurfacing } from '@/components/resurfacing/memory-resurfacing';
 import { SupportInvitation } from '@/components/support-invitation';
 import { notifyNewMessage, notifyMessageQueued } from '@/lib/notifications';
@@ -64,7 +65,7 @@ export default function ChatPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
-  const [messageFilter, setMessageFilter] = useState<'all' | 'media' | 'voice'>('all');
+  const [messageFilter, setMessageFilter] = useState<'all' | 'media' | 'voice' | 'video'>('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
   const displayedMessages = useMemo(() => {
@@ -73,6 +74,8 @@ export default function ChatPage() {
       list = list.filter((m) => m.type === 'image');
     } else if (messageFilter === 'voice') {
       list = list.filter((m) => m.type === 'voice');
+    } else if (messageFilter === 'video') {
+      list = list.filter((m) => m.type === 'video');
     }
     const ts = (m: Message) => new Date(m.timestamp).getTime();
     return sortOrder === 'oldest' ? [...list].sort((a, b) => ts(a) - ts(b)) : [...list].sort((a, b) => ts(b) - ts(a));
@@ -83,10 +86,22 @@ export default function ChatPage() {
   const typingThrottleRef = useRef<NodeJS.Timeout | null>(null);
   const doubleTapRef = useRef<{ messageId: string; time: number } | null>(null);
   const disappearingTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const readReceiptsSentRef = useRef<Set<string>>(new Set());
+  const [tabVisible, setTabVisible] = useState(() => typeof document !== 'undefined' ? document.visibilityState === 'visible' : true);
   const [isRecording, setIsRecording] = useState(false);
+  const [isRecordingVideo, setIsRecordingVideo] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setTabVisible(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, []);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
+  const videoRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoStreamRef = useRef<MediaStream | null>(null);
+  const videoChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     loadMessages();
@@ -109,6 +124,18 @@ export default function ChatPage() {
       stream?.getTracks().forEach((t) => t.stop());
       recordingStreamRef.current = null;
       mediaRecorderRef.current = null;
+    };
+  }, []);
+
+  // Clean up video recording on unmount
+  useEffect(() => {
+    return () => {
+      const recorder = videoRecorderRef.current;
+      const stream = videoStreamRef.current;
+      if (recorder?.state !== 'inactive') recorder.stop();
+      stream?.getTracks().forEach((t) => t.stop());
+      videoStreamRef.current = null;
+      videoRecorderRef.current = null;
     };
   }, []);
 
@@ -145,6 +172,20 @@ export default function ChatPage() {
           setMessages(prev => prev.map(m => 
             m.id === messageId ? { ...m, status: 'delivered' } : m
           ));
+          return;
+        }
+
+        // Handle read receipt
+        if (message.type === 'read') {
+          const { messageId } = message.data as { messageId: string };
+          console.log('👀 [P2P] Message read:', messageId);
+          setMessages(prev => {
+            const m = prev.find((x) => x.id === messageId);
+            if (!m || m.senderId !== userId) return prev;
+            const updated = { ...m, status: 'read' as const };
+            queueMicrotask(() => saveMessage(updated).catch(console.error));
+            return prev.map((x) => (x.id === messageId ? updated : x));
+          });
           return;
         }
 
@@ -326,6 +367,22 @@ export default function ChatPage() {
       });
     }
   }, [peerState.connected]);
+
+  // Send read receipts when chat is visible and user sees messages from partner
+  useEffect(() => {
+    if (!peerState.connected || !partnerId || !tabVisible) return;
+    const fromPartner = messages.filter(m => m.senderId === partnerId);
+    const toMark = fromPartner.filter(m => !readReceiptsSentRef.current.has(m.id));
+    if (toMark.length === 0) return;
+    for (const m of toMark) {
+      readReceiptsSentRef.current.add(m.id);
+      sendP2P({
+        type: 'read',
+        data: { messageId: m.id },
+        timestamp: Date.now(),
+      });
+    }
+  }, [messages, partnerId, peerState.connected, sendP2P, tabVisible]);
 
   const loadMessages = async () => {
     const msgs = await getMessages(MESSAGES_PER_PAGE, 0);
@@ -632,6 +689,118 @@ export default function ChatPage() {
     }
   };
 
+  const handleVideoClick = async () => {
+    if (!userId || !partnerId) {
+      toast({
+        title: "Not paired",
+        description: "Please pair with your beloved first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isRecordingVideo) {
+      const recorder = videoRecorderRef.current;
+      const stream = videoStreamRef.current;
+      if (recorder?.state !== 'inactive') recorder.stop();
+      stream?.getTracks().forEach((t) => t.stop());
+      videoStreamRef.current = null;
+      videoRecorderRef.current = null;
+      setIsRecordingVideo(false);
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      videoStreamRef.current = stream;
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+        ? 'video/webm;codecs=vp9,opus'
+        : MediaRecorder.isTypeSupported('video/webm')
+          ? 'video/webm'
+          : 'video/mp4';
+      const recorder = new MediaRecorder(stream);
+      videoRecorderRef.current = recorder;
+      videoChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) videoChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const blob = new Blob(videoChunksRef.current, { type: mimeType });
+        videoChunksRef.current = [];
+        if (blob.size === 0) {
+          toast({ title: "No video", description: "Recording was too short", variant: "destructive" });
+          return;
+        }
+
+        setSending(true);
+        try {
+          const messageId = nanoid();
+          const now = new Date();
+          const isOffline = !peerState.connected;
+          const DISAPPEAR_MS = 30_000;
+          const disappearsAt = isDisappearing ? new Date(Date.now() + DISAPPEAR_MS) : undefined;
+
+          const message: Message = {
+            id: messageId,
+            senderId: userId,
+            recipientId: partnerId,
+            content: 'Video message',
+            type: 'video',
+            mediaUrl: null,
+            isDisappearing: isDisappearing ?? undefined,
+            disappearsAt: disappearsAt ?? undefined,
+            timestamp: now,
+            status: isOffline ? 'queued' : 'sending',
+          };
+
+          const { saveMediaBlob } = await import('@/lib/storage');
+          await saveMediaBlob(messageId, blob, 'message');
+          await saveMessage(message);
+          setMessages((prev) => [...prev, message]);
+
+          sendP2P({ type: 'message', data: { ...message, mediaUrl: null }, timestamp: Date.now() });
+          await sendMedia({ mediaId: messageId, kind: 'message', mime: blob.type || mimeType });
+
+          if (isOffline) {
+            toast({ title: "Waiting for partner", description: "Video message queued" });
+          }
+
+          if (isDisappearing) {
+            const tid = setTimeout(() => {
+              disappearingTimersRef.current.delete(tid);
+              setMessages((prev) => prev.filter((m) => m.id !== messageId));
+              deleteMessage(messageId).catch((e) => console.warn('Delete disappearing message:', e));
+              sendP2P({ type: 'message-delete', data: { messageId }, timestamp: Date.now() });
+            }, DISAPPEAR_MS);
+            disappearingTimersRef.current.add(tid);
+          }
+        } catch (err) {
+          console.error('Video send error:', err);
+          toast({
+            title: "Video didn't send",
+            description: "Try again when you're back online.",
+            variant: "destructive",
+          });
+        } finally {
+          setSending(false);
+        }
+      };
+
+      recorder.start(200);
+      setIsRecordingVideo(true);
+      toast({ title: "Recording video…", description: "Tap again to send" });
+    } catch (err) {
+      console.error('Camera error:', err);
+      toast({
+        title: "Camera access needed",
+        description: "Allow camera and microphone in your browser settings to send video messages.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -780,13 +949,14 @@ export default function ChatPage() {
           <ToggleGroup
             type="single"
             value={messageFilter}
-            onValueChange={(v) => v && setMessageFilter(v as 'all' | 'media' | 'voice')}
+            onValueChange={(v) => v && setMessageFilter(v as 'all' | 'media' | 'voice' | 'video')}
             className="gap-0"
             size="sm"
           >
             <ToggleGroupItem value="all" aria-label="All messages" className="text-xs px-2 py-1">All</ToggleGroupItem>
             <ToggleGroupItem value="media" aria-label="Photos only" className="text-xs px-2 py-1">Photos</ToggleGroupItem>
             <ToggleGroupItem value="voice" aria-label="Voice only" className="text-xs px-2 py-1">Voice</ToggleGroupItem>
+            <ToggleGroupItem value="video" aria-label="Videos only" className="text-xs px-2 py-1">Videos</ToggleGroupItem>
           </ToggleGroup>
           <span className="text-muted-foreground text-xs">·</span>
           <Button
@@ -824,7 +994,11 @@ export default function ChatPage() {
                   ? 'Start your first conversation'
                   : messageFilter === 'media'
                     ? 'No photos in loaded messages'
-                    : 'No voice messages in loaded messages'}
+                    : messageFilter === 'voice'
+                      ? 'No voice messages in loaded messages'
+                      : messageFilter === 'video'
+                        ? 'No video messages in loaded messages'
+                        : 'No messages'}
               </p>
             </div>
           )}
@@ -857,6 +1031,7 @@ export default function ChatPage() {
             const isSent = message.senderId === userId;
             const isImage = message.type === 'image';
             const isVoice = message.type === 'voice';
+            const isVideo = message.type === 'video';
             const hasReactions = message.reactions && Object.keys(message.reactions).length > 0;
             const myReaction = userId ? message.reactions?.[userId] : null;
             const partnerReaction = partnerId ? message.reactions?.[partnerId] : null;
@@ -876,7 +1051,7 @@ export default function ChatPage() {
                     }}
                     className={cn(
                       'max-w-[70%] cursor-pointer transition-transform active:scale-[0.98]',
-                      isImage ? 'p-0 overflow-hidden' : isVoice ? 'p-0 overflow-hidden' : 'p-4',
+                      (isImage || isVoice || isVideo) ? 'p-0 overflow-hidden' : 'p-4',
                       isSent ? 'bg-sage/30 border-sage/40' : 'bg-card border-card-border'
                     )}
                   >
@@ -893,6 +1068,7 @@ export default function ChatPage() {
                               {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
                               {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
                               {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
+                              {message.status === 'read' && <CheckCheck className="w-3 h-3 text-accent" />}
                               {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
                             </div>
                           )}
@@ -911,6 +1087,26 @@ export default function ChatPage() {
                               {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
                               {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
                               {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
+                              {message.status === 'read' && <CheckCheck className="w-3 h-3 text-accent" />}
+                              {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : isVideo ? (
+                      <div className="space-y-2 p-2">
+                        <MessageMediaVideo messageId={message.id} />
+                        <div className="flex items-center justify-between px-2 pb-1">
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          {isSent && (
+                            <div className="ml-2">
+                              {message.status === 'queued' && <Clock className="w-3 h-3 text-amber-500" />}
+                              {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+                              {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
+                              {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
+                              {message.status === 'read' && <CheckCheck className="w-3 h-3 text-accent" />}
                               {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
                             </div>
                           )}
@@ -929,6 +1125,7 @@ export default function ChatPage() {
                               {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
                               {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
                               {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
+                              {message.status === 'read' && <CheckCheck className="w-3 h-3 text-accent" />}
                               {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
                             </div>
                           )}
@@ -1005,7 +1202,7 @@ export default function ChatPage() {
           />
           <button
             onClick={handleImageClick}
-            disabled={sending || isRecording}
+            disabled={sending || isRecording || isRecordingVideo}
             className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="button-attach-image"
             type="button"
@@ -1015,7 +1212,7 @@ export default function ChatPage() {
 
           <button
             onClick={handleVoiceClick}
-            disabled={sending}
+            disabled={sending || isRecordingVideo}
             className={cn(
               'flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed',
               isRecording && 'bg-destructive/20 text-destructive'
@@ -1032,11 +1229,29 @@ export default function ChatPage() {
           </button>
 
           <button
+            onClick={handleVideoClick}
+            disabled={sending || isRecording || isRecordingVideo}
+            className={cn(
+              'flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed',
+              isRecordingVideo && 'bg-destructive/20 text-destructive'
+            )}
+            data-testid="button-video-note"
+            type="button"
+            title={isRecordingVideo ? 'Tap to send' : 'Record video message'}
+          >
+            {isRecordingVideo ? (
+              <VideoOff className="w-5 h-5" />
+            ) : (
+              <Video className="w-5 h-5 text-muted-foreground" />
+            )}
+          </button>
+
+          <button
             onClick={() => {
               console.log('Toggle clicked! New state:', !isDisappearing);
               setIsDisappearing(!isDisappearing);
             }}
-            disabled={sending || isRecording}
+            disabled={sending || isRecording || isRecordingVideo}
             className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="button-disappearing"
             title="Send disappearing message"
