@@ -381,31 +381,65 @@ function setupMediaConnection(conn: DataConnection) {
   });
 }
 
+const WAKE_UP_PING_TIMEOUT_MS = 2000;
+
+function safeClose(conn: DataConnection, label: string): void {
+  try {
+    conn.close();
+    console.log('✅ Wake-up ping:', label);
+  } catch (e) {
+    // close() may throw if already closed or in bad state (e.g. some mobile browsers)
+    console.warn('Wake-up ping close (ignored):', e);
+  }
+}
+
 // Send a tiny wake-up signal via signaling server (Relay)
 function sendWakeUpPing(partnerId: string) {
   if (!globalPeer || globalPeer.destroyed || globalPeer.disconnected) return;
   console.log('📡 Sending wake-up ping to partner via relay:', partnerId);
-  
-  // PeerJS relay (wss://0.peerjs.com) handles signal forwarding
-  // We send a connection request with metadata that acts as a ping
+
   const conn = globalPeer.connect(partnerId, {
     reliable: false,
     label: 'wake-up-ping',
     metadata: { type: 'wake-up', senderId: globalPeer.id }
   });
-  
+
+  let closed = false;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const closeOnce = (reason: string) => {
+    if (closed) return;
+    closed = true;
+    if (timeoutId != null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    safeClose(conn, reason);
+  };
+
   conn.on('open', () => {
-    console.log('✅ Wake-up ping sent via relay');
-    conn.close();
+    closeOnce('sent via relay');
   });
 
-  // Ensure relay connection closes even if open event doesn't fire
-  setTimeout(() => {
-    if (conn.open) {
-      console.log('✅ Wake-up ping sent (timed close)');
-      conn.close();
+  conn.on('close', () => {
+    closed = true;
+    if (timeoutId != null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
     }
-  }, 2000);
+  });
+
+  conn.on('error', () => {
+    closeOnce('closed after error');
+  });
+
+  // Ensure relay connection closes even if open event doesn't fire (e.g. partner offline)
+  timeoutId = setTimeout(() => {
+    timeoutId = null;
+    if (closed) return;
+    closed = true;
+    safeClose(conn, 'timed close');
+  }, WAKE_UP_PING_TIMEOUT_MS);
 }
 
 // Flush queued messages when connection restored

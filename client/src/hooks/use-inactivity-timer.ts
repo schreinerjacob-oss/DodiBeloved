@@ -52,10 +52,10 @@ export function useInactivityTimer({
       document.addEventListener(event, handleActivity);
     });
 
-    // Handle page visibility changes (lock immediately when hidden)
+    // Lock immediately when tab is hidden (privacy: device left with app in background).
+    // When tab becomes visible again, reset the inactivity timer after user returns.
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        console.log('Visibility check: App hidden, locking immediately');
         onInactivity();
       } else if (document.visibilityState === 'visible') {
         resetTimer();

@@ -87,3 +87,35 @@ export async function clearAndGoToPairing(): Promise<void> {
   await clearAllAppData();
   window.location.href = '/pairing';
 }
+
+/**
+ * Clear only caches and service workers, then reload. Keeps IndexedDB and localStorage
+ * so pairing and data stay. Use when the app is broken after an update and you want
+ * to force-fetch the latest JS without unpairing.
+ */
+export async function clearCachesAndReload(): Promise<void> {
+  console.log('🔄 [CLEAR] Clearing caches and service workers (keeping data)...');
+  try {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const registration of registrations) {
+        await registration.unregister();
+        console.log('✅ [CLEAR] Unregistered service worker');
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to unregister service workers:', e);
+  }
+  try {
+    if ('caches' in window) {
+      const cacheNames = await caches.keys();
+      for (const cacheName of cacheNames) {
+        await caches.delete(cacheName);
+        console.log(`✅ [CLEAR] Deleted cache: ${cacheName}`);
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to clear caches:', e);
+  }
+  window.location.reload();
+}

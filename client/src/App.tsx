@@ -26,6 +26,7 @@ import { ConnectionStatus } from "@/components/connection-status";
 import { GlobalSyncHandler } from "@/components/global-sync-handler";
 import { DodiRestoreListener } from "@/components/dodi-restore-listener";
 import { PwaInstallBanner } from "@/components/pwa-install-banner";
+import { ServiceWorkerUpdateNotifier } from "@/components/service-worker-update";
 
 function NavItem({ href, icon: Icon, label, active }: { href: string; icon: any; label: string; active: boolean }) {
   const [, setLocation] = useLocation();
@@ -173,6 +174,7 @@ export default function App() {
       <TooltipProvider>
         <DodiProvider>
           <DodiRestoreListener />
+          <ServiceWorkerUpdateNotifier />
           <OnboardingProvider>
             <MainApp />
             <Toaster />

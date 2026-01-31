@@ -173,10 +173,6 @@ client/
 │   ├── manifest.json              # PWA manifest
 │   └── sw.js                      # Service worker
 └── index.html                     # Entry point
-
-server/
-├── index-dev.ts    # Development: spawns Vite
-└── index-prod.ts   # Production: spawns Vite preview
 ```
 
 ## Development
@@ -187,11 +183,11 @@ server/
 npm run dev
 ```
 
-This spawns Vite which enables external host access for the Replit environment.
+Runs Vite dev server on port 5000 (Replit-friendly). `npm run build` produces static files; `npm run start` serves them with `vite preview`.
 
 ### Key Development Notes
 
-1. **No server folder logic** - The server files only spawn Vite, no actual backend
+1. **Client-only PWA** - No backend; dev and production use Vite only
 2. **Types in client/src/types.ts** - All domain types defined locally, no shared folder
 3. **Encryption is mandatory** - Never store unencrypted sensitive data
 4. **P2P signaling via ultra-light QR** - No server relay, single scan pairing

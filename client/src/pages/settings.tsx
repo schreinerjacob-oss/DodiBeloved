@@ -32,7 +32,7 @@ import {
   DialogTrigger 
 } from "@/components/ui/dialog";
 import { savePIN, verifyPINAndGetPassphrase } from '@/lib/storage-encrypted';
-import { clearAndGoToPairing } from '@/lib/clear-app-data';
+import { clearAndGoToPairing, clearCachesAndReload } from '@/lib/clear-app-data';
 
 export default function SettingsPage() {
   const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp, isPaired, isPremium, hasPIN } = useDodi();
@@ -733,6 +733,29 @@ export default function SettingsPage() {
               )}
             </Card>
           </div>
+
+          {/* Get latest version (soft reset) */}
+          <Card className="p-6 space-y-4 border-muted">
+            <div className="flex items-center gap-3">
+              <RefreshCw className="w-5 h-5 text-muted-foreground" />
+              <div>
+                <h3 className="font-medium">Get latest version</h3>
+                <p className="text-xs text-muted-foreground">Clear caches and reload to fix issues after an update. Your data and pairing stay.</p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                toast({ title: 'Reloading…', description: 'Fetching latest version.' });
+                clearCachesAndReload();
+              }}
+              data-testid="button-get-latest"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh app
+            </Button>
+          </Card>
 
           {/* Danger zone */}
           <div className="space-y-3">

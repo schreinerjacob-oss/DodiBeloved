@@ -1,4 +1,5 @@
-const CACHE_NAME = 'dodi-v2';
+// __CACHE_VERSION__ is replaced at build time so each deploy gets a new cache
+const CACHE_NAME = 'dodi-__CACHE_VERSION__';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -12,6 +13,10 @@ self.addEventListener('install', event => {
       .then(cache => cache.addAll(urlsToCache))
       .then(() => self.skipWaiting())
   );
+});
+
+self.addEventListener('message', event => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
