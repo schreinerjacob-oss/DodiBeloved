@@ -227,7 +227,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-[100dvh] w-full flex flex-col bg-background overflow-hidden">
+    <div className="h-full min-h-0 w-full flex flex-col bg-background overflow-hidden">
       <div className="px-4 sm:px-6 py-4 border-b bg-card/50">
         <h2 className="text-xl font-light text-foreground">Settings</h2>
         <p className="text-xs text-muted-foreground mt-1">

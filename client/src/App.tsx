@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Route, Switch, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -58,8 +59,14 @@ function MainApp() {
   const hasSeenTutorial = onboarding.hasSeenTutorial;
   
   const [location] = useLocation();
-  
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
   const { state: peerState } = usePeerConnection();
+
+  // Reset scroll position on route change to avoid blank screen from stale scroll
+  useEffect(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [location]);
   const partnerActive = peerState?.connected || false;
 
   // Allow reset route before any authentication checks
@@ -127,7 +134,7 @@ function MainApp() {
       )}
 
       <div className="flex-1 min-h-0 overflow-hidden relative z-10 flex flex-col">
-        <div className="flex-1 min-h-0 overflow-auto flex flex-col">
+        <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto flex flex-col">
           <Switch>
             <Route path="/pairing">{() => <PairingPage />}</Route>
             <Route path="/chat">{() => <ChatPage />}</Route>
