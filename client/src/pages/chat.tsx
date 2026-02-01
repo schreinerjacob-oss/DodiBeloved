@@ -970,15 +970,26 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Offline banner */}
+      {/* Offline / Reconnecting banner */}
       {!peerState.connected && (
         <div className="flex-shrink-0 px-4 py-2 bg-amber-500/15 border-b border-amber-500/30 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm">
-          <CloudOff className="w-4 h-4 shrink-0" />
-          <span>
-            {pendingCount > 0
-              ? `You're offline. ${pendingCount} message${pendingCount === 1 ? '' : 's'} will send when you're back online.`
-              : "You're offline. Messages will send when you're back online."}
-          </span>
+          {peerState.isReconnecting ? (
+            <>
+              <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+              <span>
+                Reconnecting to your partner… {pendingCount > 0 ? `${pendingCount} message${pendingCount === 1 ? '' : 's'} will send when connected.` : 'Messages will send when connected.'}
+              </span>
+            </>
+          ) : (
+            <>
+              <CloudOff className="w-4 h-4 shrink-0" />
+              <span>
+                {pendingCount > 0
+                  ? `You're offline. ${pendingCount} message${pendingCount === 1 ? '' : 's'} will send when you're back online.`
+                  : "You're offline. Messages will send when you're back online."}
+              </span>
+            </>
+          )}
         </div>
       )}
 

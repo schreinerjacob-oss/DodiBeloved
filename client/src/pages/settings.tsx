@@ -310,17 +310,32 @@ export default function SettingsPage() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSyncNow}
-                  disabled={isSyncing}
-                  className="hover-elevate"
-                  data-testid="button-sync-now"
-                >
-                  <Sparkles className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-                  {isSyncing ? 'Syncing…' : 'Sync now'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSyncNow}
+                    disabled={isSyncing}
+                    className="hover-elevate"
+                    data-testid="button-sync-now"
+                  >
+                    <Sparkles className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                    {isSyncing ? 'Syncing…' : 'Sync now'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      toast({ title: 'Force reconnecting…', description: 'Rebuilding connection (like refresh).' });
+                      reconnect(true);
+                    }}
+                    className="text-muted-foreground hover:text-foreground"
+                    title="If connection is stuck, force full re-init (like refreshing the page)"
+                    data-testid="button-force-reconnect"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
 
               <div className="pt-3 border-t space-y-3">

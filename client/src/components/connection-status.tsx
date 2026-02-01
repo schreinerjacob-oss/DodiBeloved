@@ -76,7 +76,7 @@ export function ConnectionStatus() {
         color: 'text-amber-500',
         bg: 'bg-amber-500/10',
         label: 'Reconnecting',
-        description: 'Attempting to restore connection...',
+        description: 'Reconnecting to your partner… Messages will send when the connection is back.',
         pulse: false,
       };
     }
@@ -95,7 +95,7 @@ export function ConnectionStatus() {
       color: 'text-muted-foreground',
       bg: 'bg-muted/10',
       label: 'Offline',
-      description: 'Waiting for connection...',
+      description: 'Direct device-to-device—no servers. We\'ll keep trying to connect.',
       pulse: false,
     };
   };
@@ -147,6 +147,11 @@ export function ConnectionStatus() {
           <div className="space-y-1">
             <p className="font-medium">{config.label}</p>
             <p className="text-xs opacity-90">{config.description === 'P2P secure connection active' ? 'Direct P2P – no server involved' : config.description}</p>
+            {!state.connected && (
+              <p className="text-[10px] opacity-70 italic">
+                P2P works differently: connection is only between your two devices. If it drops, we keep trying automatically.
+              </p>
+            )}
             {state.peerId && (
               <p className="text-xs opacity-75 font-mono">
                 ID: {state.peerId.substring(0, 8)}...

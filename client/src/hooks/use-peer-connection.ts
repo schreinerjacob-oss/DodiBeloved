@@ -4,8 +4,8 @@ import type { SyncMessage } from '@/types';
 import Peer, { type DataConnection } from 'peerjs';
 import { initializeBackgroundSync } from '@/lib/background-sync';
 import { notifyConnectionRestored } from '@/lib/notifications';
-import { saveToOfflineQueue, getOfflineQueue, removeFromOfflineQueue, getOfflineQueueSize, getMediaBlob, saveToOfflineMediaQueue, getOfflineMediaQueue, removeFromOfflineMediaQueue, saveMediaBlob, isInOfflineMediaQueue } from '@/lib/storage';
-import { notifyQueueListeners } from '@/hooks/use-offline-queue';
+import { saveToOfflineQueue, getOfflineQueue, removeFromOfflineQueue, getOfflineQueueSize, clearOfflineQueue, getMediaBlob, saveToOfflineMediaQueue, getOfflineMediaQueue, removeFromOfflineMediaQueue, saveMediaBlob, isInOfflineMediaQueue } from '@/lib/storage';
+import { notifyQueueListeners, useOfflineQueueSize } from '@/hooks/use-offline-queue';
 
 interface PeerConnectionState {
   connected: boolean;
@@ -18,7 +18,8 @@ interface UsePeerConnectionReturn {
   state: PeerConnectionState;
   send: (message: SyncMessage) => void;
   sendMedia: (args: { mediaId: string; kind: 'message' | 'memory'; mime: string }) => Promise<void>;
-  reconnect: () => void;
+  /** Normal: reconnect signaling or dial partner. force=true: full re-init (like refresh). */
+  reconnect: (force?: boolean) => void;
 }
 
 // Global singleton variables to persist across renders
@@ -26,6 +27,8 @@ let globalPeer: Peer | null = null;
 let globalConn: DataConnection | null = null;
 let globalMediaConn: DataConnection | null = null;
 let globalPartnerId: string | null = null;
+/** Set by hook so sendP2PMessage can trigger wake-up ping as soon as message is queued. */
+let globalAllowWakeUp = false;
 let globalSyncInProgress = false;
 let globalSyncCancelled = false;
 let globalState: PeerConnectionState = {
@@ -70,24 +73,48 @@ const PONG_TIMEOUT = 15000;       // Trigger reconnect if no pong in 15s
 const AGGRESSIVE_RECONNECT_INTERVAL = 5000;
 
 let aggressiveReconnectInterval: NodeJS.Timeout | null = null;
+let aggressiveReconnectStartedAt: number | null = null;
 
 function clearAggressiveReconnect() {
   if (aggressiveReconnectInterval) {
     clearInterval(aggressiveReconnectInterval);
     aggressiveReconnectInterval = null;
   }
+  aggressiveReconnectStartedAt = null;
 }
 
 function startAggressiveReconnect() {
   if (aggressiveReconnectInterval) return;
+  aggressiveReconnectStartedAt = Date.now();
   console.log('💓 [P2P] Starting aggressive reconnect heartbeat');
   aggressiveReconnectInterval = setInterval(() => {
-    if (globalPartnerId && (!globalConn || !globalConn.open)) {
-      console.log('💓 [P2P] Aggressive reconnect heartbeat...');
-      connectToPartner(globalPartnerId);
-    } else if (globalConn && globalConn.open) {
+    if (globalConn && globalConn.open) {
       clearAggressiveReconnect();
+      return;
     }
+    if (!globalPartnerId) return;
+    // After 30s of failed reconnect, force full peer re-init (like refresh)
+    if (aggressiveReconnectStartedAt != null && Date.now() - aggressiveReconnectStartedAt > 30000) {
+      console.log('🔄 [P2P] Reconnect stuck 30s - forcing full peer re-init (like refresh)');
+      clearAggressiveReconnect();
+      // Always clear reconnecting state and notify so UI does not stay stuck
+      reconnectAttempt = 0;
+      reconnectStartedAt = null;
+      clearReconnectTimeout();
+      clearHealthCheck();
+      if (globalPeer) {
+        removePeerListeners(globalPeer);
+        globalPeer.destroy();
+        globalPeer = null;
+        globalConn = null;
+        globalMediaConn = null;
+        onPeerDestroyedListeners.forEach((cb) => cb());
+      }
+      notifyListeners();
+      return;
+    }
+    console.log('💓 [P2P] Aggressive reconnect heartbeat...');
+    connectToPartner(globalPartnerId);
   }, AGGRESSIVE_RECONNECT_INTERVAL);
 }
 
@@ -126,11 +153,29 @@ function startHealthCheck(conn: DataConnection) {
   }, PING_INTERVAL);
 }
 
+// Treat connection as dead if we haven't received a pong in PONG_TIMEOUT (zombie connection)
+function isConnectionLikelyDead(): boolean {
+  if (!globalConn || !globalConn.open) return false;
+  return Date.now() - lastPongReceived > PONG_TIMEOUT;
+}
+
 function startReconnecting() {
-  if (!globalPartnerId || (globalConn && globalConn.open)) {
+  if (!globalPartnerId) {
     reconnectAttempt = 0;
     clearReconnectTimeout();
     return;
+  }
+  // If we think we're connected but no pong in a long time, treat as dead and proceed
+  if (globalConn && globalConn.open && !isConnectionLikelyDead()) {
+    reconnectAttempt = 0;
+    clearReconnectTimeout();
+    return;
+  }
+  if (globalConn && isConnectionLikelyDead()) {
+    console.warn('⚠️ [P2P] Stale connection (no pong) - closing and reconnecting');
+    globalConn.close();
+    globalConn = null;
+    clearHealthCheck();
   }
 
   if (reconnectStartedAt == null) {
@@ -139,6 +184,7 @@ function startReconnecting() {
 
   // Also start aggressive polling
   startAggressiveReconnect();
+  notifyListeners(); // So UI shows "Reconnecting" immediately
 
   const backoff = Math.min(Math.pow(2, reconnectAttempt) * 1000, MAX_BACKOFF);
   console.log(`📡 Reconnecting in ${backoff / 1000}s (Attempt ${reconnectAttempt + 1}) [backoff: 1s→2s→4s→8s…]`);
@@ -155,6 +201,8 @@ function startReconnecting() {
 
 // Offline queue for P2P messages when disconnected
 let offlineQueue: SyncMessage[] = [];
+/** Partner ID for whom the queue was built; null = unknown (e.g. loaded from persistence). */
+let queueIntendedForPartnerId: string | null = null;
 let queueFlushInProgress = false;
 let persistentQueueLoaded = false;
 
@@ -204,7 +252,8 @@ function notifyListeners() {
     connected: !!globalConn && globalConn.open,
     error: globalState.error,
     peerId: globalPeer?.id || null,
-    isReconnecting: globalPeer ? globalPeer.disconnected : false,
+    // Show "Reconnecting" when signaling is down OR we're actively trying (backoff, aggressive heartbeat)
+    isReconnecting: !!(globalPeer?.disconnected || reconnectStartedAt != null || aggressiveReconnectInterval),
   };
   
   // Expose state globally for diagnostics panel
@@ -228,7 +277,15 @@ function notifyListeners() {
 // Connect to partner - called globally
 function connectToPartner(targetId: string) {
   if (!targetId || !globalPeer || globalPeer.destroyed) return;
-  if (globalConn && globalConn.open && globalConn.peer === targetId) return;
+  // If we think we're connected to this partner and connection is healthy, skip
+  if (globalConn && globalConn.open && globalConn.peer === targetId && !isConnectionLikelyDead()) return;
+  // Stale connection (no pong) - close and replace with fresh attempt
+  if (globalConn && globalConn.peer === targetId && isConnectionLikelyDead()) {
+    console.warn('⚠️ [P2P] Stale connection to partner - closing and re-dialing');
+    globalConn.close();
+    globalConn = null;
+    clearHealthCheck();
+  }
 
   globalPartnerId = targetId;
   console.log('🔗 Dialing partner:', targetId);
@@ -508,6 +565,9 @@ async function flushOfflineQueue(conn: DataConnection) {
   }
   
   notifyQueueListeners(offlineQueue.length);
+  if (offlineQueue.length === 0) {
+    queueIntendedForPartnerId = null;
+  }
   queueFlushInProgress = false;
   console.log(`✅ Offline queue flushed: ${sentIds.length} sent, ${failedCount} failed`);
   
@@ -625,9 +685,15 @@ function setupConnection(conn: DataConnection) {
       console.error('Failed to initiate reconciliation:', e);
     }
     
-    // FLUSH OFFLINE QUEUE when connection established
-    if (offlineQueue.length > 0) {
+    // FLUSH OFFLINE QUEUE when connection established (only if queue was for this partner)
+    if (offlineQueue.length > 0 && (queueIntendedForPartnerId === null || queueIntendedForPartnerId === conn.peer)) {
       flushOfflineQueue(conn);
+    } else if (offlineQueue.length > 0 && queueIntendedForPartnerId != null && queueIntendedForPartnerId !== conn.peer) {
+      console.warn('⚠️ [P2P] Offline queue built for different partner; clearing undeliverable messages');
+      offlineQueue = [];
+      queueIntendedForPartnerId = null;
+      notifyQueueListeners(0);
+      await clearOfflineQueue();
     }
 
     // Also flush any queued media blobs (via binary channel)
@@ -907,8 +973,13 @@ export async function sendP2PMessage(message: SyncMessage) {
   // Check for duplicates in memory queue
   if (!offlineQueue.some(m => (m.data as any)?.id === msgId)) {
     offlineQueue.push(message);
+    queueIntendedForPartnerId = globalPartnerId; // Track who these messages are for
     await saveToOfflineQueue(msgId, message);
     notifyQueueListeners(offlineQueue.length);
+    // Send wake-up ping as soon as there is a pending message (so partner's app can reconnect)
+    if (globalPartnerId && globalAllowWakeUp && (!globalConn || !globalConn.open)) {
+      sendWakeUpPing(globalPartnerId);
+    }
   }
   
   // Trigger reconnection if offline
@@ -921,9 +992,20 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   const { userId, partnerId, pairingStatus, allowWakeUp } = useDodi();
   const [state, setState] = useState<PeerConnectionState>(globalState);
   const [peerReinitTrigger, setPeerReinitTrigger] = useState(0);
+  const pendingCount = useOfflineQueueSize();
   // Ref so event handlers always read current partnerId (avoids stale closure when peer is reused)
   const partnerIdRef = useRef(partnerId);
   partnerIdRef.current = partnerId;
+  // Track which partnerId we last sent a wake-up ping for (to avoid duplicate pings per partner)
+  const lastPendingPingPartnerRef = useRef<string | null>(null);
+
+  // Expose allowWakeUp globally so sendP2PMessage can trigger wake-up as soon as message is queued
+  useEffect(() => {
+    globalAllowWakeUp = allowWakeUp;
+    return () => {
+      globalAllowWakeUp = false;
+    };
+  }, [allowWakeUp]);
 
   // Subscribe to global state changes
   useEffect(() => {
@@ -937,6 +1019,20 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   useEffect(() => {
     loadPersistentQueue();
   }, []);
+
+  // Send wake-up ping when there are pending messages and we're disconnected (e.g. after load from persistence)
+  useEffect(() => {
+    if (state.connected) {
+      lastPendingPingPartnerRef.current = null;
+      return;
+    }
+    // Only ping if queue was built for this partner (or unknown from persistence); never ping new partner for old partner's messages
+    const queueForCurrentPartner = queueIntendedForPartnerId === null || queueIntendedForPartnerId === partnerId;
+    if (pendingCount > 0 && partnerId && allowWakeUp && queueForCurrentPartner && lastPendingPingPartnerRef.current !== partnerId) {
+      lastPendingPingPartnerRef.current = partnerId;
+      sendWakeUpPing(partnerId);
+    }
+  }, [pendingCount, state.connected, partnerId, allowWakeUp]);
 
   // 1. ESTABLISH PEER when userId, pairingStatus, or reinit trigger change
   useEffect(() => {
@@ -1190,7 +1286,27 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     []
   );
 
-  const reconnect = useCallback(() => {
+  const reconnect = useCallback((force?: boolean) => {
+    if (force) {
+      // Full re-init like refresh: destroy peer so effect creates a new one
+      console.log('🔄 [P2P] Force reconnect - full peer re-init');
+      if (globalPeer) {
+        removePeerListeners(globalPeer);
+        globalPeer.destroy();
+      }
+      globalPeer = null;
+      globalConn = null;
+      globalMediaConn = null;
+      reconnectAttempt = 0;
+      reconnectStartedAt = null;
+      aggressiveReconnectStartedAt = null;
+      clearReconnectTimeout();
+      clearAggressiveReconnect();
+      clearHealthCheck();
+      notifyListeners();
+      onPeerDestroyedListeners.forEach((cb) => cb());
+      return;
+    }
     if (globalPeer && globalPeer.disconnected) {
       globalPeer.reconnect();
     } else if (partnerId) {
@@ -1210,11 +1326,19 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     return () => window.removeEventListener('dodi-cancel-sync', handleCancel);
   }, []);
 
-  // Periodic health check - ensure connection is active
+  // Periodic health check - ensure connection is active; treat stale (no pong) as dead
   useEffect(() => {
     const checkInterval = allowWakeUp ? 5000 : 30 * 60 * 1000;
     const interval = setInterval(() => {
       notifyListeners();
+      if (globalConn && globalConn.open && isConnectionLikelyDead()) {
+        console.log('📡 [P2P] Periodic check: stale connection - triggering reconnect');
+        globalConn.close();
+        globalConn = null;
+        clearHealthCheck();
+        startReconnecting();
+        return;
+      }
       if (!globalConn || !globalConn.open) {
         if (partnerId) {
           console.log(`📡 [${allowWakeUp ? 'ACTIVE' : 'POLLING'}] Attempting P2P connection...`);
