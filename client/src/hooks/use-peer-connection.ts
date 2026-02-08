@@ -4,7 +4,7 @@ import type { SyncMessage } from '@/types';
 import Peer, { type DataConnection } from 'peerjs';
 import { initializeBackgroundSync } from '@/lib/background-sync';
 import { notifyConnectionRestored } from '@/lib/notifications';
-import { saveToOfflineQueue, getOfflineQueue, removeFromOfflineQueue, getOfflineQueueSize, clearOfflineQueue, getMediaBlob, saveToOfflineMediaQueue, getOfflineMediaQueue, removeFromOfflineMediaQueue, saveMediaBlob, isInOfflineMediaQueue } from '@/lib/storage';
+import { saveToOfflineQueue, getOfflineQueue, removeFromOfflineQueue, getOfflineQueueSize, clearOfflineQueue, getMediaBlob, saveToOfflineMediaQueue, getOfflineMediaQueue, removeFromOfflineMediaQueue, saveMediaBlob, isInOfflineMediaQueue, type MediaVariant } from '@/lib/storage';
 import { notifyQueueListeners, useOfflineQueueSize } from '@/hooks/use-offline-queue';
 
 interface PeerConnectionState {
@@ -17,7 +17,7 @@ interface PeerConnectionState {
 interface UsePeerConnectionReturn {
   state: PeerConnectionState;
   send: (message: SyncMessage) => void;
-  sendMedia: (args: { mediaId: string; kind: 'message' | 'memory'; mime: string }) => Promise<void>;
+  sendMedia: (args: { mediaId: string; kind: 'message' | 'memory'; mime: string; variant?: MediaVariant; blob?: Blob }) => Promise<void>;
   /** Normal: reconnect signaling or dial partner. force=true: full re-init (like refresh). */
   reconnect: (force?: boolean) => void;
 }
@@ -212,7 +212,7 @@ const MEDIA_RESEND_COOLDOWN_MS = 15_000;
 const inFlightMedia = new Map<string, number>(); // mediaId -> lastSentAt
 const incomingMedia = new Map<
   string,
-  { kind: 'message' | 'memory'; mime: string; totalChunks: number; received: number; chunks: ArrayBuffer[] }
+  { kind: 'message' | 'memory'; mime: string; variant: MediaVariant; totalChunks: number; received: number; chunks: ArrayBuffer[] }
 >();
 
 // Subscription system - track all active hook listeners
@@ -317,23 +317,24 @@ async function flushOfflineMediaQueue() {
     console.log('🖼️ [MEDIA] Flushing offline media queue:', queued.length);
     for (const item of queued) {
       try {
-        const lastSentAt = inFlightMedia.get(item.id) || 0;
+        const cacheKey = `${item.mediaId}-${item.variant}`;
+        const lastSentAt = inFlightMedia.get(cacheKey) || 0;
         if (Date.now() - lastSentAt < MEDIA_RESEND_COOLDOWN_MS) {
           continue;
         }
 
-        const blob = await getMediaBlob(item.id, item.kind);
+        const blob = await getMediaBlob(item.mediaId, item.kind, item.variant);
         if (!blob) {
           // If blob is missing locally, drop queue item to avoid infinite retries
-          console.warn('🖼️ [MEDIA] Missing local blob for queued media, dropping:', item.id);
-          await removeFromOfflineMediaQueue(item.id);
+          console.warn('🖼️ [MEDIA] Missing local blob for queued media, dropping:', item.mediaId, item.variant);
+          await removeFromOfflineMediaQueue(item.mediaId, item.variant);
           continue;
         }
-        inFlightMedia.set(item.id, Date.now());
-        await sendMediaInternal({ mediaId: item.id, kind: item.kind, mime: item.mime, blob });
+        inFlightMedia.set(cacheKey, Date.now());
+        await sendMediaInternal({ mediaId: item.mediaId, kind: item.kind, mime: item.mime, blob, variant: item.variant });
         // Removal happens on ACK for strongest guarantee; keep as backup
       } catch (e) {
-        console.error('🖼️ [MEDIA] Failed to flush queued media:', item.id, e);
+        console.error('🖼️ [MEDIA] Failed to flush queued media:', item.mediaId, item.variant, e);
       }
     }
   } finally {
@@ -341,11 +342,12 @@ async function flushOfflineMediaQueue() {
   }
 }
 
-async function sendMediaInternal(args: { mediaId: string; kind: 'message' | 'memory'; mime: string; blob: Blob }) {
+async function sendMediaInternal(args: { mediaId: string; kind: 'message' | 'memory'; mime: string; blob: Blob; variant?: MediaVariant }) {
   if (!globalMediaConn || !globalMediaConn.open) throw new Error('Media channel not connected');
 
   const buffer = await args.blob.arrayBuffer();
   const totalChunks = Math.ceil(buffer.byteLength / MEDIA_CHUNK_SIZE);
+  const variant = args.variant ?? 'preview';
 
   // Init frame
   globalMediaConn.send({
@@ -353,6 +355,7 @@ async function sendMediaInternal(args: { mediaId: string; kind: 'message' | 'mem
     mediaId: args.mediaId,
     kind: args.kind,
     mime: args.mime,
+    variant,
     byteLength: buffer.byteLength,
     chunkSize: MEDIA_CHUNK_SIZE,
     totalChunks,
@@ -367,6 +370,7 @@ async function sendMediaInternal(args: { mediaId: string; kind: 'message' | 'mem
     globalMediaConn.send({
       type: 'media-chunk',
       mediaId: args.mediaId,
+      variant,
       index: i,
       data: chunk,
       timestamp: Date.now(),
@@ -376,6 +380,7 @@ async function sendMediaInternal(args: { mediaId: string; kind: 'message' | 'mem
   globalMediaConn.send({
     type: 'media-done',
     mediaId: args.mediaId,
+    variant,
     timestamp: Date.now(),
   });
 }
@@ -399,18 +404,22 @@ function setupMediaConnection(conn: DataConnection) {
   conn.on('data', async (data: any) => {
     // ACK from receiver → mark synced
     if (data?.type === 'media-ack' && data.mediaId) {
-      console.log('✅ [MEDIA] Image synced:', data.mediaId);
+      const variant = (data.variant === 'full' ? 'full' : 'preview') as MediaVariant;
+      console.log('✅ [MEDIA] Image synced:', data.mediaId, variant);
       try {
-        await removeFromOfflineMediaQueue(data.mediaId);
+        await removeFromOfflineMediaQueue(data.mediaId, variant);
       } catch {}
-      inFlightMedia.delete(data.mediaId);
+      inFlightMedia.delete(`${data.mediaId}-${variant}`);
       return;
     }
 
     if (data?.type === 'media-init') {
-      incomingMedia.set(data.mediaId, {
+      const variant = (data.variant === 'full' ? 'full' : 'preview') as MediaVariant;
+      const entryKey = `${data.mediaId}-${variant}`;
+      incomingMedia.set(entryKey, {
         kind: data.kind,
         mime: data.mime,
+        variant,
         totalChunks: Number(data.totalChunks),
         received: 0,
         chunks: new Array(Number(data.totalChunks)),
@@ -419,7 +428,9 @@ function setupMediaConnection(conn: DataConnection) {
     }
 
     if (data?.type === 'media-chunk') {
-      const entry = incomingMedia.get(data.mediaId);
+      const variant = (data.variant === 'full' ? 'full' : 'preview') as MediaVariant;
+      const entryKey = `${data.mediaId}-${variant}`;
+      const entry = incomingMedia.get(entryKey);
       if (!entry) return;
       const idx = Number(data.index);
       if (Number.isFinite(idx) && idx >= 0 && idx < entry.totalChunks && !entry.chunks[idx]) {
@@ -430,27 +441,29 @@ function setupMediaConnection(conn: DataConnection) {
     }
 
     if (data?.type === 'media-done') {
-      const entry = incomingMedia.get(data.mediaId);
+      const variant = (data.variant === 'full' ? 'full' : 'preview') as MediaVariant;
+      const entryKey = `${data.mediaId}-${variant}`;
+      const entry = incomingMedia.get(entryKey);
       if (!entry) return;
       if (entry.received !== entry.totalChunks || entry.chunks.some((c) => !c)) {
-        console.warn('🖼️ [MEDIA] media-done received but chunks incomplete:', data.mediaId, entry.received, '/', entry.totalChunks);
+        console.warn('🖼️ [MEDIA] media-done received but chunks incomplete:', data.mediaId, variant, entry.received, '/', entry.totalChunks);
         return;
       }
 
       try {
         const blob = new Blob(entry.chunks, { type: entry.mime });
-        await saveMediaBlob(data.mediaId, blob, entry.kind);
-        console.log('📥 [MEDIA] Image stored locally:', data.mediaId);
-        window.dispatchEvent(new CustomEvent('dodi-media-ready', { detail: { mediaId: data.mediaId, kind: entry.kind } }));
+        await saveMediaBlob(data.mediaId, blob, entry.kind, entry.variant);
+        console.log('📥 [MEDIA] Image stored locally:', data.mediaId, entry.variant);
+        window.dispatchEvent(new CustomEvent('dodi-media-ready', { detail: { mediaId: data.mediaId, kind: entry.kind, variant: entry.variant } }));
 
         // Send ACK to sender
         if (conn.open) {
-          conn.send({ type: 'media-ack', mediaId: data.mediaId, timestamp: Date.now() });
+          conn.send({ type: 'media-ack', mediaId: data.mediaId, variant: entry.variant, timestamp: Date.now() });
         }
       } catch (e) {
         console.error('🖼️ [MEDIA] Failed to store incoming media:', e);
       } finally {
-        incomingMedia.delete(data.mediaId);
+        incomingMedia.delete(entryKey);
       }
       return;
     }
@@ -1249,36 +1262,36 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   }, [partnerId, allowWakeUp]);
 
   const sendMedia = useCallback(
-    async ({ mediaId, kind, mime }: { mediaId: string; kind: 'message' | 'memory'; mime: string }) => {
-      // Media is stored locally already; we only queue/send the blob ID
-      const blob = await getMediaBlob(mediaId, kind);
+    async ({ mediaId, kind, mime, variant = 'preview', blob: blobOverride }: { mediaId: string; kind: 'message' | 'memory'; mime: string; variant?: MediaVariant; blob?: Blob }) => {
+      const blob = blobOverride ?? (await getMediaBlob(mediaId, kind, variant));
       if (!blob) {
-        console.warn('🖼️ [MEDIA] No local blob found for mediaId:', mediaId);
+        console.warn('🖼️ [MEDIA] No local blob found for mediaId:', mediaId, variant);
         return;
       }
 
-      // Pending-until-ACK: enqueue once (deduped), remove on media-ack
-      const alreadyQueued = await isInOfflineMediaQueue(mediaId);
+      // Queue for retry when offline (both preview and full)
+      const alreadyQueued = await isInOfflineMediaQueue(mediaId, variant);
       if (!alreadyQueued) {
-        await saveToOfflineMediaQueue(mediaId, kind, mime);
-        console.log('🖼️ [MEDIA] Image queued:', mediaId);
+        await saveToOfflineMediaQueue(mediaId, kind, mime, variant);
+        console.log('🖼️ [MEDIA] Image queued:', mediaId, variant);
       }
 
       if (globalMediaConn && globalMediaConn.open) {
         try {
-          const lastSentAt = inFlightMedia.get(mediaId) || 0;
+          const cacheKey = `${mediaId}-${variant}`;
+          const lastSentAt = inFlightMedia.get(cacheKey) || 0;
           if (Date.now() - lastSentAt >= MEDIA_RESEND_COOLDOWN_MS) {
-            inFlightMedia.set(mediaId, Date.now());
-            await sendMediaInternal({ mediaId, kind, mime, blob });
+            inFlightMedia.set(cacheKey, Date.now());
+            await sendMediaInternal({ mediaId, kind, mime, blob, variant });
+            console.log('🖼️ [MEDIA] Image sent:', mediaId, variant);
           }
-          console.log('🖼️ [MEDIA] Image sent:', mediaId);
           return;
         } catch (e) {
           console.error('🖼️ [MEDIA] Failed to send media, will retry on reconnect:', e);
         }
       }
 
-      // Trigger reconnection if offline
+      // Trigger reconnection when offline so queued media (preview and full) can flush
       if (globalPartnerId && (!globalConn || !globalConn.open)) {
         connectToPartner(globalPartnerId);
       }

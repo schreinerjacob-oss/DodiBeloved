@@ -23,6 +23,13 @@ export function cn(...inputs: ClassValue[]) {
  * - 5MB JPEG → ~500KB
  * - 3MB PNG → ~300KB
  */
+export type CompressPreset = 'aggressive' | 'balanced' | 'preview';
+const COMPRESS_PRESETS: Record<CompressPreset, { maxWidth: number; quality: number }> = {
+  aggressive: { maxWidth: 960, quality: 0.5 },
+  balanced: { maxWidth: 1280, quality: 0.7 },
+  preview: { maxWidth: 1280, quality: 0.7 },
+};
+
 export async function compressImage(
   file: File,
   maxWidth = 1280,
@@ -79,4 +86,9 @@ export async function compressImage(
     
     reader.onerror = (err) => reject(err);
   });
+}
+
+export function compressImageWithPreset(file: File, preset: CompressPreset): Promise<Blob> {
+  const { maxWidth, quality } = COMPRESS_PRESETS[preset];
+  return compressImage(file, maxWidth, quality);
 }

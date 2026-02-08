@@ -9,11 +9,12 @@ import { Camera, Lock, Calendar, Heart, X, ChevronUp } from 'lucide-react';
 import { getMemories, saveMemory } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { MemoryMediaImage } from '@/components/memory-media-image';
+import { ImageFullscreenViewer } from '@/components/image-fullscreen-viewer';
 import type { Memory } from '@/types';
 import { format } from 'date-fns';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
-import { compressImage } from '@/lib/utils';
+import { compressImage, compressImageWithPreset } from '@/lib/utils';
 
 const MEMORIES_PER_PAGE = 20;
 
@@ -26,6 +27,7 @@ export default function MemoriesPage() {
   const [caption, setCaption] = useState<string>('');
   const [preview, setPreview] = useState<string>('');
   const [saving, setSaving] = useState(false);
+  const [fullscreenMemoryId, setFullscreenMemoryId] = useState<string | null>(null);
   const [memoryOffset, setMemoryOffset] = useState(0);
   const [hasMoreMemories, setHasMoreMemories] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -90,9 +92,13 @@ export default function MemoriesPage() {
       const memoryId = nanoid();
       const isOffline = !peerState.connected;
       
-      // Compress image to Blob (70-90% size reduction)
-      console.log('🖼️ Compressing memory image...');
-      const compressedBlob = await compressImage(previewFile);
+      const { saveMediaBlob } = await import('@/lib/storage');
+      const { getSetting } = await import('@/lib/storage-encrypted');
+      const imageSendMode = (await getSetting('imageSendMode')) || 'balanced';
+      const previewPreset = imageSendMode === 'aggressive' ? 'aggressive' : 'balanced';
+      console.log('🖼️ Compressing memory preview...');
+      const compressedBlob = await compressImageWithPreset(previewFile, previewPreset);
+      await saveMediaBlob(memoryId, compressedBlob, 'memory', 'preview');
       
       const memory: Memory = {
         id: memoryId,
@@ -105,10 +111,6 @@ export default function MemoriesPage() {
         timestamp: new Date(),
         createdAt: new Date(),
       };
-      
-      // Save compressed blob to IndexedDB media store
-      const { saveMediaBlob } = await import('@/lib/storage');
-      await saveMediaBlob(memoryId, compressedBlob, 'memory');
       
       // Save memory metadata to IndexedDB
       await saveMemory(memory);
@@ -123,8 +125,26 @@ export default function MemoriesPage() {
         timestamp: Date.now(),
       });
 
-      // Then send the actual media as binary chunks (queued if offline)
+      // Send preview first (chat/list)
       await sendMedia({ mediaId: memoryId, kind: 'memory', mime: compressedBlob.type || previewFile.type || 'image/jpeg' });
+
+      // Send full in background (balanced/full mode)
+      if ((imageSendMode === 'balanced' || imageSendMode === 'full') && previewFile.size !== compressedBlob.size) {
+        const trySendFull = async () => {
+          try {
+            await saveMediaBlob(memoryId, previewFile, 'memory', 'full');
+            await sendMedia({ mediaId: memoryId, kind: 'memory', mime: previewFile.type || 'image/jpeg', variant: 'full', blob: previewFile });
+          } catch {
+            const fallback = await compressImage(previewFile, 960, 0.5);
+            await saveMediaBlob(memoryId, fallback, 'memory', 'full');
+            await sendMedia({ mediaId: memoryId, kind: 'memory', mime: 'image/jpeg', variant: 'full', blob: fallback });
+          }
+        };
+        void trySendFull().catch((err) => {
+          console.warn('🖼️ [MEDIA] Full-quality send failed, will retry when online:', err);
+          toast({ title: 'Full-quality sync delayed', description: 'Will send when connection is stable.', variant: 'default' });
+        });
+      }
       
       setCaption('');
       setPreview('');
@@ -256,6 +276,7 @@ export default function MemoriesPage() {
                 key={memory.id}
                 className="group relative overflow-hidden aspect-square border-sage/30 hover-elevate cursor-pointer"
                 data-testid={`memory-${memory.id}`}
+                onClick={() => setFullscreenMemoryId(memory.id)}
               >
                 <MemoryMediaImage memoryId={memory.id} />
                 <div className="absolute inset-0 bg-gradient-to-br from-sage/20 to-blush/20" />
@@ -274,6 +295,15 @@ export default function MemoriesPage() {
           </div>
         )}
       </ScrollArea>
+
+      {fullscreenMemoryId && (
+        <ImageFullscreenViewer
+          mediaId={fullscreenMemoryId}
+          kind="memory"
+          alt="Memory"
+          onClose={() => setFullscreenMemoryId(null)}
+        />
+      )}
     </div>
   );
 }

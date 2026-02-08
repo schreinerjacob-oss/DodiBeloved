@@ -12,6 +12,7 @@ import { getMessages, saveMessage, deleteMessage } from '@/lib/storage-encrypted
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { useOfflineQueueSize } from '@/hooks/use-offline-queue';
 import { MessageMediaImage } from '@/components/message-media-image';
+import { ImageFullscreenViewer } from '@/components/image-fullscreen-viewer';
 import { MessageMediaVoice } from '@/components/message-media-voice';
 import { MessageMediaVideo } from '@/components/message-media-video';
 import { MemoryResurfacing } from '@/components/resurfacing/memory-resurfacing';
@@ -20,7 +21,7 @@ import { notifyNewMessage, notifyMessageQueued } from '@/lib/notifications';
 import type { Message, SyncMessage } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
-import { compressImage, cn } from '@/lib/utils';
+import { compressImage, compressImageWithPreset, cn } from '@/lib/utils';
 
 const QUICK_REACTIONS = [
   { id: 'heart', icon: Heart, color: 'text-accent' },
@@ -87,6 +88,7 @@ export default function ChatPage() {
   const doubleTapRef = useRef<{ messageId: string; time: number } | null>(null);
   const disappearingTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const readReceiptsSentRef = useRef<Set<string>>(new Set());
+  const [fullscreenImageMessageId, setFullscreenImageMessageId] = useState<string | null>(null);
   const [tabVisible, setTabVisible] = useState(() => typeof document !== 'undefined' ? document.visibilityState === 'visible' : true);
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
@@ -452,11 +454,13 @@ export default function ChatPage() {
     setShowReactionPicker(null);
   }, [userId, sendP2P]);
 
-  const handleMessageTap = useCallback((messageId: string) => {
+  const handleMessageTap = useCallback((messageId: string, isImage?: boolean) => {
     const now = Date.now();
     if (doubleTapRef.current?.messageId === messageId && now - doubleTapRef.current.time < 300) {
       handleReaction(messageId, 'heart');
       doubleTapRef.current = null;
+    } else if (isImage) {
+      setFullscreenImageMessageId(messageId);
     } else {
       doubleTapRef.current = { messageId, time: now };
     }
@@ -815,11 +819,11 @@ export default function ChatPage() {
       return;
     }
 
-    // Max 5MB
-    if (file.size > 5 * 1024 * 1024) {
+    // Max 25MB - compression handles most sizes
+    if (file.size > 25 * 1024 * 1024) {
       toast({
         title: "Image too large",
-        description: "Please choose an image under 5MB.",
+        description: "Please choose an image under 25MB.",
         variant: "destructive",
       });
       return;
@@ -831,9 +835,15 @@ export default function ChatPage() {
       const now = new Date();
       const isOffline = !peerState.connected;
 
-      // Compress image to Blob (70-90% size reduction)
-      console.log('🖼️ Compressing image...');
-      const compressedBlob = await compressImage(file);
+      const { saveMediaBlob } = await import('@/lib/storage');
+      const { getSetting } = await import('@/lib/storage-encrypted');
+      const imageSendMode = (await getSetting('imageSendMode')) || 'balanced';
+
+      // Preview for chat list (always compressed)
+      const previewPreset = imageSendMode === 'aggressive' ? 'aggressive' : 'balanced';
+      console.log('🖼️ Compressing preview...');
+      const compressedBlob = await compressImageWithPreset(file, previewPreset);
+      await saveMediaBlob(messageId, compressedBlob, 'message', 'preview');
 
       const DISAPPEAR_MS = 30_000;
       const disappearsAt = isDisappearing ? new Date(Date.now() + DISAPPEAR_MS) : undefined;
@@ -850,11 +860,6 @@ export default function ChatPage() {
         status: isOffline ? 'queued' : 'sending',
       };
 
-      // Save compressed blob to IndexedDB media store
-      const { saveMediaBlob } = await import('@/lib/storage');
-      await saveMediaBlob(messageId, compressedBlob, 'message');
-
-      // Save message metadata to IndexedDB
       await saveMessage(message);
 
       // Add to local state
@@ -867,8 +872,26 @@ export default function ChatPage() {
         timestamp: Date.now(),
       });
 
-      // Send the actual image as binary chunks over the media channel (queued if offline)
+      // Send preview first (chat list)
       await sendMedia({ mediaId: messageId, kind: 'message', mime: compressedBlob.type || file.type || 'image/jpeg' });
+
+      // Send full in background (balanced/full mode)
+      if ((imageSendMode === 'balanced' || imageSendMode === 'full') && file.size !== compressedBlob.size) {
+        const trySendFull = async () => {
+          try {
+            await saveMediaBlob(messageId, file, 'message', 'full');
+            await sendMedia({ mediaId: messageId, kind: 'message', mime: file.type || 'image/jpeg', variant: 'full', blob: file });
+          } catch {
+            const fallback = await compressImage(file, 960, 0.5);
+            await saveMediaBlob(messageId, fallback, 'message', 'full');
+            await sendMedia({ mediaId: messageId, kind: 'message', mime: 'image/jpeg', variant: 'full', blob: fallback });
+          }
+        };
+        void trySendFull().catch((err) => {
+          console.warn('🖼️ [MEDIA] Full-quality send failed, will retry when online:', err);
+          toast({ title: 'Full-quality sync delayed', description: 'Will send when connection is stable.', variant: 'default' });
+        });
+      }
 
       toast({
         title: isOffline ? "Image queued" : "Image sending",
@@ -1055,7 +1078,7 @@ export default function ChatPage() {
               >
                 <div className="relative">
                   <Card
-                    onClick={() => handleMessageTap(message.id)}
+                    onClick={() => handleMessageTap(message.id, isImage)}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       setShowReactionPicker(showReactionPicker === message.id ? null : message.id);
@@ -1300,6 +1323,15 @@ export default function ChatPage() {
           </Button>
         </div>
       </div>
+
+      {fullscreenImageMessageId && (
+        <ImageFullscreenViewer
+          mediaId={fullscreenImageMessageId}
+          kind="message"
+          alt="Message"
+          onClose={() => setFullscreenImageMessageId(null)}
+        />
+      )}
     </div>
   );
 }

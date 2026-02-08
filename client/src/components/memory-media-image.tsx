@@ -9,7 +9,7 @@ export function MemoryMediaImage({ memoryId }: { memoryId: string }) {
     let cancelled = false;
 
     const load = async () => {
-      const blob = await getMediaBlob(memoryId, 'memory');
+      const blob = await getMediaBlob(memoryId, 'memory', 'preview');
       if (cancelled) return;
       if (blob) {
         const url = URL.createObjectURL(blob);

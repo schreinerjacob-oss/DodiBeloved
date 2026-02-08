@@ -13,7 +13,7 @@ export function MessageMediaImage({ messageId, fileName }: { messageId: string; 
       if (loading) return;
       loading = true;
       try {
-        const blob = await getMediaBlob(messageId, 'message');
+        const blob = await getMediaBlob(messageId, 'message', 'preview');
         if (cancelled) return;
         if (blob) {
           const url = URL.createObjectURL(blob);
@@ -27,7 +27,7 @@ export function MessageMediaImage({ messageId, fileName }: { messageId: string; 
     };
 
     const onReady = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { mediaId?: string; kind?: string } | undefined;
+      const detail = (e as CustomEvent).detail as { mediaId?: string; kind?: string; variant?: string } | undefined;
       if (detail?.mediaId === messageId && detail?.kind === 'message') {
         load();
       }

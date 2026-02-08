@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug, RefreshCw, ShieldCheck, Trash2, BookOpen } from 'lucide-react';
+import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug, RefreshCw, ShieldCheck, Trash2, BookOpen, Image } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -31,7 +31,7 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog";
-import { savePIN, verifyPINAndGetPassphrase } from '@/lib/storage-encrypted';
+import { savePIN, verifyPINAndGetPassphrase, getSetting, saveSetting } from '@/lib/storage-encrypted';
 import { clearAndGoToPairing, clearCachesAndReload } from '@/lib/clear-app-data';
 
 export default function SettingsPage() {
@@ -51,6 +51,19 @@ export default function SettingsPage() {
   const [pinSaving, setPinSaving] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [peerState, setPeerState] = useState<any>(null);
+  const [imageSendMode, setImageSendModeState] = useState<'aggressive' | 'balanced' | 'full'>('balanced');
+
+  useEffect(() => {
+    getSetting('imageSendMode').then((v) => {
+      if (v === 'aggressive' || v === 'balanced' || v === 'full') setImageSendModeState(v);
+    });
+  }, []);
+
+  const setImageSendMode = async (mode: 'aggressive' | 'balanced' | 'full') => {
+    setImageSendModeState(mode);
+    await saveSetting('imageSendMode', mode);
+    toast({ title: 'Image send mode updated', description: mode === 'aggressive' ? 'Smallest files, fastest sending' : mode === 'balanced' ? 'Preview first, then full quality' : 'Original quality when possible' });
+  };
 
   useEffect(() => {
     if (showDiagnostics) {
@@ -361,6 +374,36 @@ export default function SettingsPage() {
                     Fallback: local polling every 30 minutes
                   </p>
                 )}
+
+                <div className="pt-3 border-t space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Image className="w-5 h-5 text-gold mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium">Image send mode</h4>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        How photos are sent: aggressive (smallest), balanced (preview + full), or full (original quality)
+                      </p>
+                      <div className="flex flex-col gap-2 mt-3">
+                        {(['aggressive', 'balanced', 'full'] as const).map((mode) => (
+                          <label key={mode} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="imageSendMode"
+                              checked={imageSendMode === mode}
+                              onChange={() => setImageSendMode(mode)}
+                              className="accent-sage"
+                            />
+                            <span className="text-sm">
+                              {mode === 'aggressive' && 'Aggressive – smallest files, fastest'}
+                              {mode === 'balanced' && 'Balanced – preview first, then full quality'}
+                              {mode === 'full' && 'Full – original quality when possible'}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </Card>
           </div>

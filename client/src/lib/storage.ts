@@ -4,6 +4,8 @@ import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLet
 const DB_NAME = 'dodi-encrypted-storage';
 const DB_VERSION = 3;
 
+export type MediaVariant = 'preview' | 'full';
+
 interface QueuedMessage {
   id: string;
   message: string; // JSON stringified SyncMessage
@@ -11,9 +13,11 @@ interface QueuedMessage {
 }
 
 interface QueuedMedia {
-  id: string; // mediaId
+  id: string; // `${mediaId}-${variant}` for uniqueness
+  mediaId: string;
   kind: 'message' | 'memory';
   mime: string;
+  variant: MediaVariant;
   createdAt: number;
 }
 
@@ -169,23 +173,51 @@ export async function getAllLoveLetters(): Promise<LoveLetter[]> {
   return db.getAllFromIndex('loveLetters', 'createdAt');
 }
 
-// Blob storage helpers
-export async function saveMediaBlob(mediaId: string, blob: Blob, type: 'message' | 'memory'): Promise<void> {
-  const db = await initDB();
-  const storeName = type === 'message' ? 'messageMedia' : 'memoryMedia';
-  await db.put(storeName as any, { id: mediaId, blob });
+// Blob storage helpers - Option B: two variants per media (preview for chat list, full for full-screen)
+function mediaKey(mediaId: string, variant: MediaVariant): string {
+  return `${mediaId}-${variant}`;
 }
 
-export async function getMediaBlob(mediaId: string, type: 'message' | 'memory'): Promise<Blob | undefined> {
+export async function saveMediaBlob(
+  mediaId: string,
+  blob: Blob,
+  type: 'message' | 'memory',
+  variant: MediaVariant = 'preview'
+): Promise<void> {
   const db = await initDB();
   const storeName = type === 'message' ? 'messageMedia' : 'memoryMedia';
-  const result = await db.get(storeName as any, mediaId);
-  return result?.blob;
+  const key = mediaKey(mediaId, variant);
+  await db.put(storeName as any, { id: key, blob });
+}
+
+export async function getMediaBlob(
+  mediaId: string,
+  type: 'message' | 'memory',
+  variant?: MediaVariant
+): Promise<Blob | undefined> {
+  const db = await initDB();
+  const storeName = type === 'message' ? 'messageMedia' : 'memoryMedia';
+  if (variant === 'full') {
+    const full = await db.get(storeName as any, mediaKey(mediaId, 'full'));
+    if (full?.blob) return full.blob;
+    const preview = await db.get(storeName as any, mediaKey(mediaId, 'preview'));
+    if (preview?.blob) return preview.blob;
+    const legacy = await db.get(storeName as any, mediaId);
+    return legacy?.blob;
+  }
+  const preview = await db.get(storeName as any, mediaKey(mediaId, 'preview'));
+  if (preview?.blob) return preview.blob;
+  const full = await db.get(storeName as any, mediaKey(mediaId, 'full'));
+  if (full?.blob) return full.blob;
+  const legacy = await db.get(storeName as any, mediaId);
+  return legacy?.blob;
 }
 
 export async function deleteMediaBlob(mediaId: string, type: 'message' | 'memory'): Promise<void> {
   const db = await initDB();
   const storeName = type === 'message' ? 'messageMedia' : 'memoryMedia';
+  await db.delete(storeName as any, mediaKey(mediaId, 'preview'));
+  await db.delete(storeName as any, mediaKey(mediaId, 'full'));
   await db.delete(storeName as any, mediaId);
 }
 
@@ -305,38 +337,63 @@ export async function getOfflineQueueSize(): Promise<number> {
 }
 
 // Offline MEDIA queue persistence (blobs are stored in messageMedia/memoryMedia stores)
-export async function saveToOfflineMediaQueue(mediaId: string, kind: 'message' | 'memory', mime: string): Promise<void> {
+const offlineMediaQueueId = (mediaId: string, variant: MediaVariant) => `${mediaId}-${variant}`;
+
+export async function saveToOfflineMediaQueue(
+  mediaId: string,
+  kind: 'message' | 'memory',
+  mime: string,
+  variant: MediaVariant = 'preview'
+): Promise<void> {
   const db = await initDB();
+  const id = offlineMediaQueueId(mediaId, variant);
   await db.put('offlineMediaQueue', {
-    id: mediaId,
+    id,
+    mediaId,
     kind,
     mime,
+    variant,
     createdAt: Date.now(),
   });
 }
 
-export async function getOfflineMediaQueue(): Promise<Array<{ id: string; kind: 'message' | 'memory'; mime: string }>> {
+export type OfflineMediaQueueItem = { mediaId: string; kind: 'message' | 'memory'; mime: string; variant: MediaVariant };
+
+export async function getOfflineMediaQueue(): Promise<OfflineMediaQueueItem[]> {
   try {
     const db = await initDB();
     const items = await db.getAllFromIndex('offlineMediaQueue', 'createdAt');
-    return items.map((item) => ({ id: item.id, kind: item.kind, mime: item.mime }));
+    return items.map((item: any) => ({
+      mediaId: item.mediaId ?? item.id,
+      kind: item.kind,
+      mime: item.mime,
+      variant: (item.variant === 'full' ? 'full' : 'preview') as MediaVariant,
+    }));
   } catch (e) {
     console.warn('Failed to get offline media queue:', e);
     return [];
   }
 }
 
-export async function isInOfflineMediaQueue(mediaId: string): Promise<boolean> {
+export async function isInOfflineMediaQueue(mediaId: string, variant: MediaVariant = 'preview'): Promise<boolean> {
   try {
     const db = await initDB();
-    const existing = await db.get('offlineMediaQueue' as any, mediaId);
-    return !!existing;
+    const id = offlineMediaQueueId(mediaId, variant);
+    const existing = await db.get('offlineMediaQueue' as any, id);
+    if (existing) return true;
+    // Legacy: queue used to key by mediaId only (preview)
+    if (variant === 'preview') {
+      const legacy = await db.get('offlineMediaQueue' as any, mediaId);
+      return !!legacy;
+    }
+    return false;
   } catch {
     return false;
   }
 }
 
-export async function removeFromOfflineMediaQueue(mediaId: string): Promise<void> {
+export async function removeFromOfflineMediaQueue(mediaId: string, variant: MediaVariant = 'preview'): Promise<void> {
   const db = await initDB();
-  await db.delete('offlineMediaQueue', mediaId);
+  await db.delete('offlineMediaQueue', offlineMediaQueueId(mediaId, variant));
+  if (variant === 'preview') await db.delete('offlineMediaQueue', mediaId); // legacy key
 }
