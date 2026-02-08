@@ -87,28 +87,39 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') {
     return;
   }
+  // Never cache sw.js - reg.update() must fetch fresh script to detect new deploys
+  if (event.request.url.includes('/sw.js')) {
+    return;
+  }
+
+  const isNavigation = event.request.mode === 'navigate' || event.request.destination === 'document';
 
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request)
+    isNavigation
+      ? // Network-first for app shell - fresh HTML on each open, fallback to cache when offline
+        fetch(event.request)
           .then(response => {
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
+            if (response && response.status === 200 && response.type === 'basic') {
+              const responseToCache = response.clone();
+              caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
             }
-            const responseToCache = response.clone();
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                cache.put(event.request, responseToCache);
-              });
             return response;
           })
-          .catch(() => {
-            return caches.match('/index.html');
-          });
-      })
+          .catch(() => caches.match('/index.html').then(r => r || caches.match('/')))
+      : // Cache-first for assets (JS, CSS, images)
+        caches.match(event.request)
+          .then(response => {
+            if (response) return response;
+            return fetch(event.request)
+              .then(response => {
+                if (!response || response.status !== 200 || response.type !== 'basic') {
+                  return response;
+                }
+                const responseToCache = response.clone();
+                caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
+                return response;
+              })
+              .catch(() => caches.match('/index.html'));
+          })
   );
 });
