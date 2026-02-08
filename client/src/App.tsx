@@ -63,14 +63,18 @@ function MainApp() {
 
   const { state: peerState } = usePeerConnection();
 
-  // Reset scroll position on route change; defer until after new page has painted
-  // (fixes blank screen when navigating from Chat/Settings with nested ScrollArea)
+  // Reset scroll position on route change and force layout so new page content (and nested ScrollArea) get correct height and don’t render blank
   useEffect(() => {
     let raf1: number;
     let raf2: number | undefined;
     raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
-        scrollContainerRef.current?.scrollTo({ top: 0, left: 0 });
+        const el = scrollContainerRef.current;
+        if (el) {
+          el.scrollTo({ top: 0, left: 0 });
+          // Force reflow so flex/ScrollArea children get correct dimensions (fixes blank tab content when switching)
+          void el.offsetHeight;
+        }
       });
     });
     return () => {
@@ -146,21 +150,22 @@ function MainApp() {
 
       <div className="flex-1 min-h-0 overflow-hidden relative z-10 flex flex-col">
         <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto flex flex-col">
-          <div className="flex-1 min-h-full flex flex-col">
-          <Switch>
-            <Route path="/pairing">{() => <PairingPage />}</Route>
-            <Route path="/chat">{() => <ChatPage />}</Route>
-            <Route path="/calls">{() => <CallsPage />}</Route>
-            <Route path="/memories">{() => <MemoriesPage />}</Route>
-            <Route path="/moments">{() => <OurMomentsPage />}</Route>
-            <Route path="/heart-space">{() => <HeartSpacePage />}</Route>
-            <Route path="/settings">{() => <SettingsPage />}</Route>
-            <Route path="/subscription">{() => <SubscriptionPage />}</Route>
-            <Route path="/setup">{() => <ProfileSetupPage />}</Route>
-            <Route path="/redundancy">{() => <RedundancyPage />}</Route>
-            <Route path="/reset">{() => <ResetPage />}</Route>
-            <Route path="/">{() => <ChatPage />}</Route>
-          </Switch>
+          {/* Key by location so route content remounts and gets correct layout; flex-1 min-h-0 gives the page a definite height so it and any nested ScrollArea paint correctly when switching tabs */}
+          <div key={location} className="flex-1 min-h-0 flex flex-col" style={{ minHeight: '100%' }}>
+            <Switch>
+              <Route path="/pairing">{() => <PairingPage />}</Route>
+              <Route path="/chat">{() => <ChatPage />}</Route>
+              <Route path="/calls">{() => <CallsPage />}</Route>
+              <Route path="/memories">{() => <MemoriesPage />}</Route>
+              <Route path="/moments">{() => <OurMomentsPage />}</Route>
+              <Route path="/heart-space">{() => <HeartSpacePage />}</Route>
+              <Route path="/settings">{() => <SettingsPage />}</Route>
+              <Route path="/subscription">{() => <SubscriptionPage />}</Route>
+              <Route path="/setup">{() => <ProfileSetupPage />}</Route>
+              <Route path="/redundancy">{() => <RedundancyPage />}</Route>
+              <Route path="/reset">{() => <ResetPage />}</Route>
+              <Route path="/">{() => <ChatPage />}</Route>
+            </Switch>
           </div>
         </div>
       </div>
