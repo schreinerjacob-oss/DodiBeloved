@@ -28,6 +28,7 @@ export default function MemoriesPage() {
   const [preview, setPreview] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [fullscreenMemoryId, setFullscreenMemoryId] = useState<string | null>(null);
+  const [fullscreenMediaType, setFullscreenMediaType] = useState<Memory['mediaType'] | undefined>(undefined);
   const [memoryOffset, setMemoryOffset] = useState(0);
   const [hasMoreMemories, setHasMoreMemories] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -36,6 +37,16 @@ export default function MemoriesPage() {
   useEffect(() => {
     loadMemories();
   }, []);
+
+  // Clear dialog form state when dialog closes so reopening starts fresh
+  useEffect(() => {
+    if (!dialogOpen) {
+      if (preview) URL.revokeObjectURL(preview);
+      setCaption('');
+      setPreview('');
+      setPreviewFile(null);
+    }
+  }, [dialogOpen]);
 
   // Listen for memories synced by the global sync handler
   useEffect(() => {
@@ -78,88 +89,110 @@ export default function MemoriesPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (preview) URL.revokeObjectURL(preview);
       setPreviewFile(file);
-      // Create preview URL for UI (no base64)
-      const previewUrl = URL.createObjectURL(file);
-      setPreview(previewUrl);
+      setPreview(URL.createObjectURL(file));
     }
+    e.target.value = '';
   };
 
   const handleSaveMemory = async () => {
     if (!previewFile || !userId || !partnerId) return;
+    const isVideo = previewFile.type.startsWith('video/');
+    const MAX_VIDEO_MB = 100;
+    if (isVideo && previewFile.size > MAX_VIDEO_MB * 1024 * 1024) {
+      toast({
+        title: 'Video too large',
+        description: `Please choose a video under ${MAX_VIDEO_MB}MB.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     setSaving(true);
     try {
       const memoryId = nanoid();
       const isOffline = !peerState.connected;
-      
       const { saveMediaBlob } = await import('@/lib/storage');
       const { getSetting } = await import('@/lib/storage-encrypted');
-      const imageSendMode = (await getSetting('imageSendMode')) || 'balanced';
-      const previewPreset = imageSendMode === 'aggressive' ? 'aggressive' : 'balanced';
-      console.log('🖼️ Compressing memory preview...');
-      const compressedBlob = await compressImageWithPreset(previewFile, previewPreset);
-      await saveMediaBlob(memoryId, compressedBlob, 'memory', 'preview');
-      
-      const memory: Memory = {
-        id: memoryId,
-        userId,
-        partnerId,
-        imageData: '',
-        mediaUrl: null,
-        caption: caption.trim() || null,
-        mediaType: 'photo',
-        timestamp: new Date(),
-        createdAt: new Date(),
-      };
-      
-      // Save memory metadata to IndexedDB
-      await saveMemory(memory);
-      
-      // Add to local state immediately
-      setMemories(prev => [...prev, memory]);
-      
-      // Send metadata first (small + queue-friendly)
-      sendP2P({
-        type: 'memory',
-        data: { ...memory, mediaUrl: null, imageData: '' },
-        timestamp: Date.now(),
-      });
 
-      // Send preview first (chat/list)
-      await sendMedia({ mediaId: memoryId, kind: 'memory', mime: compressedBlob.type || previewFile.type || 'image/jpeg' });
-
-      // Send full in background (balanced/full mode)
-      if ((imageSendMode === 'balanced' || imageSendMode === 'full') && previewFile.size !== compressedBlob.size) {
-        const trySendFull = async () => {
-          try {
-            await saveMediaBlob(memoryId, previewFile, 'memory', 'full');
-            await sendMedia({ mediaId: memoryId, kind: 'memory', mime: previewFile.type || 'image/jpeg', variant: 'full', blob: previewFile });
-          } catch {
-            const fallback = await compressImage(previewFile, 960, 0.5);
-            await saveMediaBlob(memoryId, fallback, 'memory', 'full');
-            await sendMedia({ mediaId: memoryId, kind: 'memory', mime: 'image/jpeg', variant: 'full', blob: fallback });
-          }
+      if (isVideo) {
+        await saveMediaBlob(memoryId, previewFile, 'memory', 'preview');
+        const memory: Memory = {
+          id: memoryId,
+          userId,
+          partnerId,
+          imageData: '',
+          mediaUrl: null,
+          caption: caption.trim() || null,
+          mediaType: 'video',
+          timestamp: new Date(),
+          createdAt: new Date(),
         };
-        void trySendFull().catch((err) => {
-          console.warn('🖼️ [MEDIA] Full-quality send failed, will retry when online:', err);
-          toast({ title: 'Full-quality sync delayed', description: 'Will send when connection is stable.', variant: 'default' });
+        await saveMemory(memory);
+        setMemories(prev => [...prev, memory]);
+        sendP2P({
+          type: 'memory',
+          data: { ...memory, mediaUrl: null, imageData: '' },
+          timestamp: Date.now(),
         });
+        await sendMedia({ mediaId: memoryId, kind: 'memory', mime: previewFile.type || 'video/mp4' });
+      } else {
+        const imageSendMode = (await getSetting('imageSendMode')) || 'balanced';
+        const previewPreset = imageSendMode === 'aggressive' ? 'aggressive' : 'balanced';
+        const compressedBlob = await compressImageWithPreset(previewFile, previewPreset);
+        await saveMediaBlob(memoryId, compressedBlob, 'memory', 'preview');
+        const memory: Memory = {
+          id: memoryId,
+          userId,
+          partnerId,
+          imageData: '',
+          mediaUrl: null,
+          caption: caption.trim() || null,
+          mediaType: 'photo',
+          timestamp: new Date(),
+          createdAt: new Date(),
+        };
+        await saveMemory(memory);
+        setMemories(prev => [...prev, memory]);
+        sendP2P({
+          type: 'memory',
+          data: { ...memory, mediaUrl: null, imageData: '' },
+          timestamp: Date.now(),
+        });
+        await sendMedia({ mediaId: memoryId, kind: 'memory', mime: compressedBlob.type || previewFile.type || 'image/jpeg' });
+        if ((imageSendMode === 'balanced' || imageSendMode === 'full') && previewFile.size !== compressedBlob.size) {
+          const trySendFull = async () => {
+            try {
+              await saveMediaBlob(memoryId, previewFile, 'memory', 'full');
+              await sendMedia({ mediaId: memoryId, kind: 'memory', mime: previewFile.type || 'image/jpeg', variant: 'full', blob: previewFile });
+            } catch {
+              const fallback = await compressImage(previewFile, 960, 0.5);
+              await saveMediaBlob(memoryId, fallback, 'memory', 'full');
+              await sendMedia({ mediaId: memoryId, kind: 'memory', mime: 'image/jpeg', variant: 'full', blob: fallback });
+            }
+          };
+          void trySendFull().catch((err) => {
+            console.warn('🖼️ [MEDIA] Full-quality send failed, will retry when online:', err);
+            toast({ title: 'Full-quality sync delayed', description: 'Will send when connection is stable.', variant: 'default' });
+          });
+        }
       }
-      
+
+      if (preview) URL.revokeObjectURL(preview);
       setCaption('');
       setPreview('');
       setPreviewFile(null);
       setDialogOpen(false);
       toast({
-        title: "Memory saved 📸",
-        description: "Your precious moment is preserved and shared.",
+        title: isVideo ? 'Memory saved 🎬' : 'Memory saved 📸',
+        description: 'Your precious moment is preserved and shared.',
       });
     } catch (error) {
       console.error('Save memory error:', error);
       toast({
-        title: "Failed to save",
-        description: "Could not save memory. Please try again.",
-        variant: "destructive",
+        title: 'Failed to save',
+        description: 'Could not save memory. Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setSaving(false);
@@ -201,11 +234,15 @@ export default function MemoriesPage() {
                 />
                 {preview ? (
                   <div className="relative">
-                    <img src={preview} alt="Preview" className="max-h-64 mx-auto rounded-lg" />
+                    {previewFile?.type?.startsWith('video/') ? (
+                      <video src={preview} controls className="max-h-64 mx-auto rounded-lg w-full object-contain" />
+                    ) : (
+                      <img src={preview} alt="Preview" className="max-h-64 mx-auto rounded-lg" />
+                    )}
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={(e) => { e.stopPropagation(); setPreview(''); }}
+                      onClick={(e) => { e.stopPropagation(); if (preview) URL.revokeObjectURL(preview); setPreview(''); setPreviewFile(null); }}
                       className="absolute top-2 right-2"
                     >
                       <X className="w-4 h-4" />
@@ -276,9 +313,12 @@ export default function MemoriesPage() {
                 key={memory.id}
                 className="group relative overflow-hidden aspect-square border-sage/30 hover-elevate cursor-pointer"
                 data-testid={`memory-${memory.id}`}
-                onClick={() => setFullscreenMemoryId(memory.id)}
+                onClick={() => {
+                  setFullscreenMemoryId(memory.id);
+                  setFullscreenMediaType(memory.mediaType);
+                }}
               >
-                <MemoryMediaImage memoryId={memory.id} />
+                <MemoryMediaImage memoryId={memory.id} mediaType={memory.mediaType} />
                 <div className="absolute inset-0 bg-gradient-to-br from-sage/20 to-blush/20" />
                 <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent">
                   <div className="flex items-center gap-1 text-white text-xs">
@@ -301,7 +341,11 @@ export default function MemoriesPage() {
           mediaId={fullscreenMemoryId}
           kind="memory"
           alt="Memory"
-          onClose={() => setFullscreenMemoryId(null)}
+          mediaType={fullscreenMediaType}
+          onClose={() => {
+            setFullscreenMemoryId(null);
+            setFullscreenMediaType(undefined);
+          }}
         />
       )}
     </div>

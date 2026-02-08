@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Heart, Send, Image, Mic, MicOff, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter, Video, VideoOff } from 'lucide-react';
+import { Heart, Send, Image, Mic, MicOff, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter, Video, VideoOff, Circle, Square } from 'lucide-react';
 import { getMessages, saveMessage, deleteMessage } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { useOfflineQueueSize } from '@/hooks/use-offline-queue';
@@ -22,6 +22,7 @@ import type { Message, SyncMessage } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage, compressImageWithPreset, cn } from '@/lib/utils';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 const QUICK_REACTIONS = [
   { id: 'heart', icon: Heart, color: 'text-accent' },
@@ -91,7 +92,17 @@ export default function ChatPage() {
   const [fullscreenImageMessageId, setFullscreenImageMessageId] = useState<string | null>(null);
   const [tabVisible, setTabVisible] = useState(() => typeof document !== 'undefined' ? document.visibilityState === 'visible' : true);
   const [isRecording, setIsRecording] = useState(false);
-  const [isRecordingVideo, setIsRecordingVideo] = useState(false);
+  const [videoDialogOpen, setVideoDialogOpen] = useState(false);
+  const [videoDevices, setVideoDevices] = useState<{ deviceId: string; label: string }[]>([]);
+  const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState('');
+  const [videoStage, setVideoStage] = useState<'preview' | 'recording' | 'review'>('preview');
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [recordedBlobUrl, setRecordedBlobUrl] = useState<string | null>(null);
+  const [streamForPreview, setStreamForPreview] = useState<MediaStream | null>(null);
+  const [videoRecordingError, setVideoRecordingError] = useState<string | null>(null);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const handler = () => setTabVisible(document.visibilityState === 'visible');
@@ -138,8 +149,63 @@ export default function ChatPage() {
       stream?.getTracks().forEach((t) => t.stop());
       videoStreamRef.current = null;
       videoRecorderRef.current = null;
+      recordingTimerRef.current && clearInterval(recordingTimerRef.current);
     };
   }, []);
+
+  // When video dialog opens: request camera/mic and enumerate devices
+  useEffect(() => {
+    if (!videoDialogOpen) return;
+    setVideoStage('preview');
+    setRecordedBlob(null);
+    setRecordedBlobUrl(null);
+    setVideoRecordingError(null);
+    let cancelled = false;
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        videoStreamRef.current = stream;
+        setStreamForPreview(stream);
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (cancelled) return;
+        const videoInputs = devices
+          .filter((d) => d.kind === 'videoinput')
+          .map((d) => ({ deviceId: d.deviceId, label: d.label || `Camera ${d.deviceId.slice(0, 8)}` }));
+        setVideoDevices(videoInputs);
+        if (videoInputs.length > 0) {
+          const currentId = stream.getVideoTracks()[0]?.getSettings().deviceId ?? videoInputs[0].deviceId;
+          setSelectedVideoDeviceId(currentId);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setVideoRecordingError('Camera and microphone access are needed to record video.');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+      videoStreamRef.current = null;
+      setStreamForPreview(null);
+      recordingTimerRef.current && clearInterval(recordingTimerRef.current);
+    };
+  }, [videoDialogOpen]);
+
+  // Keep preview video element in sync with stream
+  useEffect(() => {
+    const video = previewVideoRef.current;
+    const stream = streamForPreview;
+    if (video && stream) {
+      video.srcObject = stream;
+      return () => {
+        video.srcObject = null;
+      };
+    }
+  }, [streamForPreview]);
 
   // Listen for incoming P2P messages
   useEffect(() => {
@@ -693,7 +759,7 @@ export default function ChatPage() {
     }
   };
 
-  const handleVideoClick = async () => {
+  const handleVideoClick = () => {
     if (!userId || !partnerId) {
       toast({
         title: "Not paired",
@@ -702,108 +768,164 @@ export default function ChatPage() {
       });
       return;
     }
-
-    if (isRecordingVideo) {
-      const recorder = videoRecorderRef.current;
-      const stream = videoStreamRef.current;
-      if (recorder?.state !== 'inactive') recorder.stop();
-      stream?.getTracks().forEach((t) => t.stop());
-      videoStreamRef.current = null;
-      videoRecorderRef.current = null;
-      setIsRecordingVideo(false);
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      videoStreamRef.current = stream;
-      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-        ? 'video/webm;codecs=vp9,opus'
-        : MediaRecorder.isTypeSupported('video/webm')
-          ? 'video/webm'
-          : 'video/mp4';
-      const recorder = new MediaRecorder(stream);
-      videoRecorderRef.current = recorder;
-      videoChunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) videoChunksRef.current.push(e.data);
-      };
-
-      recorder.onstop = async () => {
-        const blob = new Blob(videoChunksRef.current, { type: mimeType });
-        videoChunksRef.current = [];
-        if (blob.size === 0) {
-          toast({ title: "No video", description: "Recording was too short", variant: "destructive" });
-          return;
-        }
-
-        setSending(true);
-        try {
-          const messageId = nanoid();
-          const now = new Date();
-          const isOffline = !peerState.connected;
-          const DISAPPEAR_MS = 30_000;
-          const disappearsAt = isDisappearing ? new Date(Date.now() + DISAPPEAR_MS) : undefined;
-
-          const message: Message = {
-            id: messageId,
-            senderId: userId,
-            recipientId: partnerId,
-            content: 'Video message',
-            type: 'video',
-            mediaUrl: null,
-            isDisappearing: isDisappearing ?? undefined,
-            disappearsAt: disappearsAt ?? undefined,
-            timestamp: now,
-            status: isOffline ? 'queued' : 'sending',
-          };
-
-          const { saveMediaBlob } = await import('@/lib/storage');
-          await saveMediaBlob(messageId, blob, 'message');
-          await saveMessage(message);
-          setMessages((prev) => [...prev, message]);
-
-          sendP2P({ type: 'message', data: { ...message, mediaUrl: null }, timestamp: Date.now() });
-          await sendMedia({ mediaId: messageId, kind: 'message', mime: blob.type || mimeType });
-
-          if (isOffline) {
-            toast({ title: "Waiting for partner", description: "Video message queued" });
-          }
-
-          if (isDisappearing) {
-            const tid = setTimeout(() => {
-              disappearingTimersRef.current.delete(tid);
-              setMessages((prev) => prev.filter((m) => m.id !== messageId));
-              deleteMessage(messageId).catch((e) => console.warn('Delete disappearing message:', e));
-              sendP2P({ type: 'message-delete', data: { messageId }, timestamp: Date.now() });
-            }, DISAPPEAR_MS);
-            disappearingTimersRef.current.add(tid);
-          }
-        } catch (err) {
-          console.error('Video send error:', err);
-          toast({
-            title: "Video didn't send",
-            description: "Try again when you're back online.",
-            variant: "destructive",
-          });
-        } finally {
-          setSending(false);
-        }
-      };
-
-      recorder.start(200);
-      setIsRecordingVideo(true);
-      toast({ title: "Recording video…", description: "Tap again to send" });
-    } catch (err) {
-      console.error('Camera error:', err);
-      toast({
-        title: "Camera access needed",
-        description: "Allow camera and microphone in your browser settings to send video messages.",
-        variant: "destructive",
-      });
-    }
+    setVideoDialogOpen(true);
   };
+
+  const handleVideoDialogClose = () => {
+    if (videoRecorderRef.current?.state !== 'inactive') videoRecorderRef.current.stop();
+    videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+    videoStreamRef.current = null;
+    setStreamForPreview(null);
+    if (recordedBlobUrl) URL.revokeObjectURL(recordedBlobUrl);
+    setVideoDialogOpen(false);
+    setVideoStage('preview');
+    setRecordedBlob(null);
+    setRecordedBlobUrl(null);
+    setVideoDevices([]);
+    setSelectedVideoDeviceId('');
+    setVideoRecordingError(null);
+    setRecordingSeconds(0);
+    recordingTimerRef.current && clearInterval(recordingTimerRef.current);
+  };
+
+  const handleVideoCameraChange = useCallback(async (deviceId: string) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: deviceId ? { deviceId: { exact: deviceId } } : true,
+        audio: true,
+      });
+      videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+      videoStreamRef.current = stream;
+      setStreamForPreview(stream);
+      setSelectedVideoDeviceId(deviceId);
+    } catch (e) {
+      console.error('Switch camera error:', e);
+      toast({ title: 'Could not switch camera', description: 'Try another camera or allow access.', variant: 'destructive' });
+    }
+  }, [toast]);
+
+  const handleStartVideoRecording = useCallback(() => {
+    const stream = videoStreamRef.current;
+    if (!stream) return;
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+      ? 'video/webm;codecs=vp9,opus'
+      : MediaRecorder.isTypeSupported('video/webm')
+        ? 'video/webm'
+        : 'video/mp4';
+    const recorder = new MediaRecorder(stream);
+    videoRecorderRef.current = recorder;
+    videoChunksRef.current = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) videoChunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => {
+      const blob = new Blob(videoChunksRef.current, { type: mimeType });
+      videoChunksRef.current = [];
+      recordingTimerRef.current && clearInterval(recordingTimerRef.current);
+      setRecordingSeconds(0);
+      if (blob.size === 0) {
+        setVideoRecordingError('Recording too short. Try again.');
+        setVideoStage('preview');
+        videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+        videoStreamRef.current = null;
+        setStreamForPreview(null);
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      setRecordedBlob(blob);
+      setRecordedBlobUrl(url);
+      setVideoStage('review');
+      setVideoRecordingError(null);
+      videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+      videoStreamRef.current = null;
+      setStreamForPreview(null);
+    };
+    recorder.start(200);
+    setVideoStage('recording');
+    setVideoRecordingError(null);
+    setRecordingSeconds(0);
+    recordingTimerRef.current = setInterval(() => {
+      setRecordingSeconds((s) => s + 1);
+    }, 1000);
+  }, []);
+
+  const handleStopVideoRecording = useCallback(() => {
+    if (videoRecorderRef.current?.state !== 'inactive') videoRecorderRef.current.stop();
+  }, []);
+
+  const handleVideoRetry = useCallback(async () => {
+    if (recordedBlobUrl) URL.revokeObjectURL(recordedBlobUrl);
+    setRecordedBlob(null);
+    setRecordedBlobUrl(null);
+    setVideoStage('preview');
+    setVideoRecordingError(null);
+    videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+    videoStreamRef.current = null;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: selectedVideoDeviceId ? { deviceId: { exact: selectedVideoDeviceId } } : true,
+        audio: true,
+      });
+      videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+      videoStreamRef.current = stream;
+      setStreamForPreview(stream);
+    } catch (e) {
+      setVideoRecordingError('Could not reopen camera. Close and try again.');
+    }
+  }, [recordedBlobUrl, selectedVideoDeviceId]);
+
+  const handleVideoSend = useCallback(async () => {
+    if (!recordedBlob || !userId || !partnerId) return;
+    setSending(true);
+    try {
+      const messageId = nanoid();
+      const now = new Date();
+      const isOffline = !peerState.connected;
+      const DISAPPEAR_MS = 30_000;
+      const disappearsAt = isDisappearing ? new Date(Date.now() + DISAPPEAR_MS) : undefined;
+      const message: Message = {
+        id: messageId,
+        senderId: userId,
+        recipientId: partnerId,
+        content: 'Video message',
+        type: 'video',
+        mediaUrl: null,
+        isDisappearing: isDisappearing ?? undefined,
+        disappearsAt: disappearsAt ?? undefined,
+        timestamp: now,
+        status: isOffline ? 'queued' : 'sending',
+      };
+      const { saveMediaBlob } = await import('@/lib/storage');
+      await saveMediaBlob(messageId, recordedBlob, 'message');
+      await saveMessage(message);
+      setMessages((prev) => [...prev, message]);
+      sendP2P({ type: 'message', data: { ...message, mediaUrl: null }, timestamp: Date.now() });
+      await sendMedia({ mediaId: messageId, kind: 'message', mime: recordedBlob.type || 'video/webm' });
+      if (isOffline) toast({ title: 'Waiting for partner', description: 'Video message queued' });
+      if (isDisappearing) {
+        const tid = setTimeout(() => {
+          disappearingTimersRef.current.delete(tid);
+          setMessages((prev) => prev.filter((m) => m.id !== messageId));
+          deleteMessage(messageId).catch((e) => console.warn('Delete disappearing message:', e));
+          sendP2P({ type: 'message-delete', data: { messageId }, timestamp: Date.now() });
+        }, DISAPPEAR_MS);
+        disappearingTimersRef.current.add(tid);
+      }
+      if (recordedBlobUrl) URL.revokeObjectURL(recordedBlobUrl);
+      setVideoDialogOpen(false);
+      setRecordedBlob(null);
+      setRecordedBlobUrl(null);
+      setVideoStage('preview');
+      setStreamForPreview(null);
+      videoStreamRef.current = null;
+      toast({ title: 'Video sent' });
+    } catch (err) {
+      console.error('Video send error:', err);
+      toast({ title: "Video didn't send", description: "Try again when you're back online.", variant: 'destructive' });
+    } finally {
+      setSending(false);
+    }
+  }, [recordedBlob, recordedBlobUrl, userId, partnerId, peerState.connected, isDisappearing, sendP2P, sendMedia, toast]);
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -923,6 +1045,8 @@ export default function ChatPage() {
       fileInputRef.current.value = '';
     }
   };
+
+  const isVideoRecordingActive = videoDialogOpen && videoStage === 'recording';
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -1236,7 +1360,7 @@ export default function ChatPage() {
           />
           <button
             onClick={handleImageClick}
-            disabled={sending || isRecording || isRecordingVideo}
+            disabled={sending || isRecording || isVideoRecordingActive}
             className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="button-attach-image"
             type="button"
@@ -1246,7 +1370,7 @@ export default function ChatPage() {
 
           <button
             onClick={handleVoiceClick}
-            disabled={sending || isRecordingVideo}
+            disabled={sending || isVideoRecordingActive}
             className={cn(
               'flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed',
               isRecording && 'bg-destructive/20 text-destructive'
@@ -1264,20 +1388,13 @@ export default function ChatPage() {
 
           <button
             onClick={handleVideoClick}
-            disabled={sending || isRecording || isRecordingVideo}
-            className={cn(
-              'flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed',
-              isRecordingVideo && 'bg-destructive/20 text-destructive'
-            )}
+            disabled={sending || isRecording || isVideoRecordingActive}
+            className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="button-video-note"
             type="button"
-            title={isRecordingVideo ? 'Tap to send' : 'Record video message'}
+            title="Record video message"
           >
-            {isRecordingVideo ? (
-              <VideoOff className="w-5 h-5" />
-            ) : (
-              <Video className="w-5 h-5 text-muted-foreground" />
-            )}
+            <Video className="w-5 h-5 text-muted-foreground" />
           </button>
 
           <button
@@ -1285,7 +1402,7 @@ export default function ChatPage() {
               console.log('Toggle clicked! New state:', !isDisappearing);
               setIsDisappearing(!isDisappearing);
             }}
-            disabled={sending || isRecording || isRecordingVideo}
+            disabled={sending || isRecording || isVideoRecordingActive}
             className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="button-disappearing"
             title="Send disappearing message"
@@ -1332,6 +1449,90 @@ export default function ChatPage() {
           onClose={() => setFullscreenImageMessageId(null)}
         />
       )}
+
+      <Dialog open={videoDialogOpen} onOpenChange={(open) => !open && handleVideoDialogClose()}>
+        <DialogContent className="max-w-md overflow-hidden p-0 gap-0" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={() => handleVideoDialogClose()}>
+          <DialogHeader className="p-4 pb-2">
+            <DialogTitle className="text-lg font-light">Video message</DialogTitle>
+          </DialogHeader>
+          {videoRecordingError && (
+            <div className="px-4 py-2 text-sm text-destructive bg-destructive/10 mx-4 rounded-md">
+              {videoRecordingError}
+            </div>
+          )}
+          <div className="aspect-video w-full bg-black relative">
+            {videoStage === 'review' && recordedBlobUrl ? (
+              <video src={recordedBlobUrl} className="w-full h-full object-contain" playsInline controls />
+            ) : (
+              <video
+                ref={previewVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+            )}
+            {videoStage === 'recording' && (
+              <div className="absolute top-2 left-2 flex items-center gap-2 px-2 py-1 rounded bg-black/60 text-white text-sm">
+                <Circle className="w-3 h-3 fill-red-500 text-red-500" />
+                <span>{Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')}</span>
+              </div>
+            )}
+          </div>
+          <div className="p-4 space-y-3">
+            {videoStage === 'preview' && (
+              <>
+                {videoDevices.length > 1 && (
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Camera</label>
+                    <select
+                      value={selectedVideoDeviceId}
+                      onChange={(e) => handleVideoCameraChange(e.target.value)}
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      data-testid="select-video-camera"
+                    >
+                      {videoDevices.map((d) => (
+                        <option key={d.deviceId} value={d.deviceId}>
+                          {d.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button type="button" onClick={handleStartVideoRecording} disabled={!!videoRecordingError || !streamForPreview} className="flex-1 gap-2" data-testid="button-video-start">
+                    <Circle className="w-4 h-4 fill-current" />
+                    Start recording
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handleVideoDialogClose}>
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            )}
+            {videoStage === 'recording' && (
+              <Button type="button" variant="destructive" className="w-full gap-2" onClick={handleStopVideoRecording} data-testid="button-video-stop">
+                <Square className="w-4 h-4 fill-current" />
+                Stop recording
+              </Button>
+            )}
+            {videoStage === 'review' && (
+              <div className="flex gap-2">
+                <Button type="button" onClick={handleVideoSend} disabled={sending} className="flex-1 gap-2" data-testid="button-video-send">
+                  {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Send
+                </Button>
+                <Button type="button" variant="outline" onClick={handleVideoRetry} disabled={sending} data-testid="button-video-retry">
+                  Retry
+                </Button>
+                <Button type="button" variant="ghost" onClick={handleVideoDialogClose} disabled={sending}>
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

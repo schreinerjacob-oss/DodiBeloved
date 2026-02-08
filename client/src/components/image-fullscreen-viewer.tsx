@@ -8,26 +8,39 @@ interface ImageFullscreenViewerProps {
   kind: 'message' | 'memory';
   alt?: string;
   onClose: () => void;
+  /** When known (e.g. from memory.mediaType), avoids loading blob to detect type. */
+  mediaType?: 'image' | 'video' | 'photo';
 }
 
 /**
- * Full-screen image viewer. Loads full variant if available, falls back to preview.
+ * Full-screen image or video viewer. Loads full variant if available, falls back to preview.
  */
-export function ImageFullscreenViewer({ mediaId, kind, alt = 'Image', onClose }: ImageFullscreenViewerProps) {
-  const [imageSrc, setImageSrc] = useState<string>('');
+export function ImageFullscreenViewer({ mediaId, kind, alt = 'Image', onClose, mediaType }: ImageFullscreenViewerProps) {
+  const [mediaSrc, setMediaSrc] = useState<string>('');
+  const [isVideo, setIsVideo] = useState<boolean>(mediaType === 'video');
   const currentUrlRef = useRef<string>('');
 
   useEffect(() => {
     let cancelled = false;
+    setMediaSrc('');
+    setIsVideo(mediaType === 'video');
 
     const load = async () => {
-      const blob = await getMediaBlob(mediaId, kind, 'full');
+      let blob = await getMediaBlob(mediaId, kind, 'full');
+      if (!blob) {
+        blob = await getMediaBlob(mediaId, kind, 'preview');
+      }
       if (cancelled) return;
       if (blob) {
         const url = URL.createObjectURL(blob);
         if (currentUrlRef.current) URL.revokeObjectURL(currentUrlRef.current);
         currentUrlRef.current = url;
-        setImageSrc(url);
+        setMediaSrc(url);
+        // Only infer from blob when mediaType is unknown; otherwise respect explicit type
+        if (mediaType === undefined) {
+          const video = typeof blob.type === 'string' && blob.type.startsWith('video/');
+          setIsVideo(video);
+        }
       }
     };
 
@@ -47,7 +60,7 @@ export function ImageFullscreenViewer({ mediaId, kind, alt = 'Image', onClose }:
       if (currentUrlRef.current) URL.revokeObjectURL(currentUrlRef.current);
       currentUrlRef.current = '';
     };
-  }, [mediaId, kind]);
+  }, [mediaId, kind, mediaType]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -72,12 +85,23 @@ export function ImageFullscreenViewer({ mediaId, kind, alt = 'Image', onClose }:
         <X className="w-6 h-6" />
       </Button>
       <div className="max-w-full max-h-full p-4" onClick={(e) => e.stopPropagation()}>
-        {imageSrc ? (
-          <img
-            src={imageSrc}
-            alt={alt}
-            className="max-w-full max-h-[90vh] object-contain rounded-md"
-          />
+        {mediaSrc ? (
+          isVideo ? (
+            <video
+              src={mediaSrc}
+              className="max-w-full max-h-[90vh] object-contain rounded-md"
+              controls
+              playsInline
+              muted
+              autoPlay
+            />
+          ) : (
+            <img
+              src={mediaSrc}
+              alt={alt}
+              className="max-w-full max-h-[90vh] object-contain rounded-md"
+            />
+          )
         ) : (
           <div className="w-64 h-64 bg-muted animate-pulse rounded-md flex items-center justify-center text-muted-foreground">
             Loading…
