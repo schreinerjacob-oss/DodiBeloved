@@ -29,6 +29,8 @@ export function ConnectionStatus() {
     const granted = await requestNotificationPermission();
     await updatePermissionStatus();
     if (granted) {
+      const { registerPushWithNotifyServer } = await import('@/lib/push-register');
+      await registerPushWithNotifyServer();
       toast({
         title: "Notifications Enabled",
         description: "You will now receive alerts for new messages.",

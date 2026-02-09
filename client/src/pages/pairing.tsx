@@ -53,9 +53,13 @@ export default function PairingPage() {
   useEffect(() => {
     if (pairingStatus === 'connected') {
       setShowSuccess(true);
-      // Request notification permission after successful pairing
-      requestNotificationPermission().then(granted => {
+      // Request notification permission after successful pairing, then register push with notify server
+      requestNotificationPermission().then(async granted => {
         console.log('📬 Notification permission:', granted ? 'granted' : 'denied');
+        if (granted) {
+          const { registerPushWithNotifyServer } = await import('@/lib/push-register');
+          await registerPushWithNotifyServer();
+        }
       });
     }
   }, [pairingStatus]);
@@ -134,6 +138,10 @@ export default function PairingPage() {
         console.log('💾 [ID AUDIT] Creator calling completePairingAsCreator:', { myId: userId, remotePartnerId: payload.joinerId });
         console.log('🔑 [STORE] Creator will store: { userId:', userId, 'partnerId:', payload.joinerId, '}');
         await completePairingAsCreator(payload.masterKey, payload.salt, payload.joinerId);
+        if (payload.joinerPushToken) {
+          const { setPartnerPushToken } = await import('@/lib/push-token');
+          await setPartnerPushToken(payload.joinerPushToken);
+        }
       } else {
         // Joiner: store masterKey and creator's ID
         if (!payload.creatorId) {
@@ -148,6 +156,10 @@ export default function PairingPage() {
         console.log('💾 [ID AUDIT] Joiner calling completePairingWithMasterKey:', { myId: userId, remotePartnerId: payload.creatorId });
         console.log('🔑 [STORE] Joiner will store: { userId:', userId, 'partnerId:', payload.creatorId, '}');
         await completePairingWithMasterKey(payload.masterKey, payload.salt, payload.creatorId);
+        if (payload.creatorPushToken) {
+          const { setPartnerPushToken } = await import('@/lib/push-token');
+          await setPartnerPushToken(payload.creatorPushToken);
+        }
       }
       
       console.log('✅ [PAIRING] Storage updated, updating global state...');
@@ -163,6 +175,8 @@ export default function PairingPage() {
           await saveSetting('salt', payload.salt);
           await saveSetting('partnerId', isCreatorRole ? payload.joinerId : payload.creatorId);
           await saveSetting('pairingStatus', 'connected');
+          if (isCreatorRole && payload.joinerPushToken) await saveSetting('partnerPushToken', payload.joinerPushToken);
+          if (!isCreatorRole && payload.creatorPushToken) await saveSetting('partnerPushToken', payload.creatorPushToken);
           // Also save to localStorage for redundancy and health checks
           localStorage.setItem('dodi-passphrase', payload.masterKey);
           localStorage.setItem('dodi-salt', payload.salt);

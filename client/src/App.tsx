@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { DodiProvider, useDodi } from "@/contexts/DodiContext";
 import { OnboardingProvider, useOnboarding } from "@/contexts/OnboardingContext";
 import { usePeerConnection } from "@/hooks/use-peer-connection";
+import { useWakeLock } from "@/hooks/use-wake-lock";
 import ProfileSetupPage from "@/pages/profile-setup";
 import PairingPage from "@/pages/pairing";
 import RedundancyPage from "@/pages/redundancy";
@@ -28,6 +29,8 @@ import { GlobalSyncHandler } from "@/components/global-sync-handler";
 import { DodiRestoreListener } from "@/components/dodi-restore-listener";
 import { PwaInstallBanner } from "@/components/pwa-install-banner";
 import { ServiceWorkerUpdateNotifier } from "@/components/service-worker-update";
+import { getNotifyServerUrl, registerPushWithNotifyServer } from "@/lib/push-register";
+import { getNotificationPermission } from "@/lib/notifications";
 
 function NavItem({ href, icon: Icon, label, active }: { href: string; icon: any; label: string; active: boolean }) {
   const [, setLocation] = useLocation();
@@ -62,6 +65,17 @@ function MainApp() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const { state: peerState } = usePeerConnection();
+
+  // Screen Wake Lock: keep device from dimming/sleeping while app is in foreground and unlocked
+  useWakeLock(!isLocked && pairingStatus === 'connected');
+
+  // Register push subscription with notify server when paired and permission granted (and on load when already paired)
+  useEffect(() => {
+    if (pairingStatus !== 'connected' || !getNotifyServerUrl()) return;
+    getNotificationPermission().then((p) => {
+      if (p === 'granted') void registerPushWithNotifyServer();
+    });
+  }, [pairingStatus]);
 
   // Reset scroll position on route change and force layout so new page content (and nested ScrollArea) get correct height and don’t render blank
   useEffect(() => {

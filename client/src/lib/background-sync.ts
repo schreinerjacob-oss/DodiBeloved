@@ -3,6 +3,8 @@ const PERIODIC_SYNC_TAG = 'dodi-reconnect';
 
 let backgroundIntervalId: number | null = null;
 let reconnectCallback: (() => void) | null = null;
+let visibilityPollingSetup = false;
+let swMessageListenerSetup = false;
 
 export function setReconnectCallback(callback: () => void): void {
   reconnectCallback = callback;
@@ -67,24 +69,36 @@ export function stopBackgroundPolling(): void {
 }
 
 export function setupVisibilityBasedPolling(): void {
+  if (visibilityPollingSetup) return;
+  visibilityPollingSetup = true;
+
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
+      // Start background polling when tab is hidden, but don't immediately disconnect
+      // Connection stays alive for grace period (handled by inactivity timer)
       startBackgroundPolling();
     } else {
       stopBackgroundPolling();
+      // Only trigger reconnect if callback exists and connection is actually down
+      // The reconnect callback should check connection status before reconnecting
       if (reconnectCallback) {
-        console.log('👁️ App visible - triggering immediate reconnect check');
-        reconnectCallback();
+        console.log('👁️ App visible - checking connection status');
+        // Small delay to allow connection state to stabilize after tab becomes visible
+        setTimeout(() => {
+          reconnectCallback();
+        }, 500);
       }
     }
   });
-  
+
   console.log('✅ Visibility-based background polling initialized');
 }
 
 function setupServiceWorkerMessageListener(): void {
   if (!('serviceWorker' in navigator)) return;
-  
+  if (swMessageListenerSetup) return;
+  swMessageListenerSetup = true;
+
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type === 'background-reconnect') {
       console.log('⏰ Received background-reconnect from SW');
@@ -93,7 +107,7 @@ function setupServiceWorkerMessageListener(): void {
       }
     }
   });
-  
+
   console.log('✅ Service Worker message listener initialized');
 }
 

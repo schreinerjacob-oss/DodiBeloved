@@ -68,18 +68,32 @@ self.addEventListener('periodicsync', event => {
 });
 
 self.addEventListener('push', event => {
-  console.log('📩 [SW] Push signal received:', event.data?.text());
-  
-  // Try to wake up app and trigger reconnect
+  const dataPromise = event.data
+    ? event.data.json().catch(() => ({}))
+    : Promise.resolve({});
+  const defaultTitle = 'dodi';
+  const defaultBody = 'New message from your partner';
+
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then(windowClients => {
-        if (windowClients.length > 0) {
-          for (const client of windowClients) {
-            client.postMessage({ type: 'background-reconnect' });
-          }
-        }
-      })
+    dataPromise.then((payload) => {
+      const title = (payload && payload.title) || defaultTitle;
+      const body = (payload && payload.body) || defaultBody;
+      const options = {
+        body,
+        icon: '/favicon.png',
+        badge: '/favicon.png',
+        tag: 'dodi-message',
+        renotify: true,
+        data: { url: '/' }
+      };
+      return self.registration.showNotification(title, options);
+    }).then(() =>
+      clients.matchAll({ type: 'window', includeUncontrolled: true })
+    ).then((windowClients) => {
+      for (const client of windowClients) {
+        client.postMessage({ type: 'background-reconnect' });
+      }
+    })
   );
 });
 

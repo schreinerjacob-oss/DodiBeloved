@@ -6,6 +6,8 @@ import { initializeBackgroundSync } from '@/lib/background-sync';
 import { notifyConnectionRestored } from '@/lib/notifications';
 import { saveToOfflineQueue, getOfflineQueue, removeFromOfflineQueue, getOfflineQueueSize, clearOfflineQueue, getMediaBlob, saveToOfflineMediaQueue, getOfflineMediaQueue, removeFromOfflineMediaQueue, saveMediaBlob, isInOfflineMediaQueue, type MediaVariant } from '@/lib/storage';
 import { notifyQueueListeners, useOfflineQueueSize } from '@/hooks/use-offline-queue';
+import { getNotifyServerUrl } from '@/lib/push-register';
+import { getPartnerPushToken } from '@/lib/push-token';
 
 interface PeerConnectionState {
   connected: boolean;
@@ -29,6 +31,9 @@ let globalMediaConn: DataConnection | null = null;
 let globalPartnerId: string | null = null;
 /** Set by hook so sendP2PMessage can trigger wake-up ping as soon as message is queued. */
 let globalAllowWakeUp = false;
+/** Throttle: at most one notify per partner per 45s. */
+const NOTIFY_THROTTLE_MS = 45 * 1000;
+let lastNotifyAt = 0;
 let globalSyncInProgress = false;
 let globalSyncCancelled = false;
 let globalState: PeerConnectionState = {
@@ -967,12 +972,33 @@ export function closeRoom(room: RoomConnection) {
   room.peer.destroy();
 }
 
+/** Call notify server to wake partner's device (push). Throttled; gated by allowWakeUp. */
+async function tryNotifyPartner(): Promise<void> {
+  if (!globalAllowWakeUp) return;
+  const baseUrl = getNotifyServerUrl();
+  if (!baseUrl) return;
+  const partnerToken = await getPartnerPushToken();
+  if (!partnerToken) return;
+  if (Date.now() - lastNotifyAt < NOTIFY_THROTTLE_MS) return;
+  try {
+    const res = await fetch(`${baseUrl.replace(/\/$/, '')}/notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: partnerToken }),
+    });
+    if (res.ok) lastNotifyAt = Date.now();
+  } catch {
+    // No log to avoid noise
+  }
+}
+
 // Send a message or queue it if offline
 export async function sendP2PMessage(message: SyncMessage) {
   if (globalConn && globalConn.open) {
     try {
       globalConn.send(message);
       console.log('📤 Message sent via P2P:', message.type);
+      tryNotifyPartner().catch(() => {});
       return;
     } catch (e) {
       console.error('Failed to send message, queuing instead:', e);
@@ -993,6 +1019,7 @@ export async function sendP2PMessage(message: SyncMessage) {
     if (globalPartnerId && globalAllowWakeUp && (!globalConn || !globalConn.open)) {
       sendWakeUpPing(globalPartnerId);
     }
+    tryNotifyPartner().catch(() => {});
   }
   
   // Trigger reconnection if offline
@@ -1229,11 +1256,21 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     if (partnerId != null) globalPartnerId = partnerId;
 
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && partnerId && (!globalConn || !globalConn.open)) {
-        console.log('👀 [P2P] App visible - triggering immediate reconnect');
-        reconnectAttempt = 0;
-        connectToPartner(partnerId);
+      if (document.visibilityState === 'visible' && partnerId) {
+        // Only reconnect if connection is actually down
+        // Add small delay to allow connection state to stabilize after tab becomes visible
+        setTimeout(() => {
+          if (!globalConn || !globalConn.open) {
+            console.log('👀 [P2P] App visible - connection down, triggering reconnect');
+            reconnectAttempt = 0;
+            connectToPartner(partnerId);
+          } else {
+            console.log('👀 [P2P] App visible - connection still active, no reconnect needed');
+          }
+        }, 500);
       }
+      // When tab becomes hidden, don't immediately disconnect - let grace period handle it
+      // Connection stays alive for at least 5 minutes (handled by inactivity timer)
     };
     document.addEventListener('visibilitychange', handleVisibility);
 

@@ -14,6 +14,10 @@ export interface MasterKeyPayload {
   salt: string;
   creatorId: string;
   joinerId?: string;
+  /** Creator's push token (this device when creator). */
+  creatorPushToken?: string;
+  /** Joiner's push token (this device when joiner). */
+  joinerPushToken?: string;
 }
 
 export async function generateEphemeralKeyPair(): Promise<EphemeralKeyPair> {
@@ -215,6 +219,7 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
         if (data.type === 'tunnel-ack') {
           console.log('📥 [TUNNEL] Received tunnel-ack, preparing key payload');
           const { getSetting, saveSetting } = await import('./storage');
+          const { getOrCreatePushToken } = await import('./push-token');
           let masterKey = await getSetting('passphrase');
           let salt = await getSetting('salt');
           
@@ -252,11 +257,15 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
             throw new Error('Shared key not established');
           }
 
+          const creatorPushToken = await getOrCreatePushToken();
+          const joinerPushToken = data.joinerPushToken as string | undefined;
           const payload: MasterKeyPayload = {
             masterKey,
             salt,
             creatorId: creatorId,
-            joinerId: joinerId
+            joinerId: joinerId,
+            ...(creatorPushToken ? { creatorPushToken } : {}),
+            ...(joinerPushToken ? { joinerPushToken } : {}),
           };
           
           if (isRestore) {
@@ -304,11 +313,14 @@ export async function runJoinerTunnel(conn: any, joinerId: string): Promise<Mast
             console.log('📬 [TUNNEL] Processing tunnel-init from creator');
             sharedKey = await deriveSharedSecret(ephemeralKeys.privateKey, data.publicKey);
             
-            // Send ACK with joiner's ID so Creator can proceed to send the key
+            // Send ACK with joiner's ID and push token so Creator can proceed to send the key
+            const { getOrCreatePushToken } = await import('./push-token');
+            const joinerPushToken = await getOrCreatePushToken();
             console.log('📤 [TUNNEL] Sending tunnel-ack with joinerId:', joinerId);
             conn.send({ 
               type: 'tunnel-ack', 
               joinerId: joinerId,
+              joinerPushToken,
               publicKey: ephemeralKeys.publicKey,
               fingerprint: ephemeralKeys.fingerprint,
               creatorId: data.creatorId // Echo back the creatorId if received
