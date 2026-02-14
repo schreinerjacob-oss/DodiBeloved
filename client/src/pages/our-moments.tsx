@@ -139,7 +139,7 @@ export default function OurMomentsPage() {
   const timeTogether = formatTimeTogether();
 
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div className="flex-1 min-h-0 flex flex-col bg-background">
       <div className="flex items-center justify-between px-6 py-4 border-b bg-card/50">
         <div>
           <h2 className="text-xl font-light text-foreground">Our Moments</h2>
@@ -198,7 +198,7 @@ export default function OurMomentsPage() {
         </Dialog>
       </div>
 
-      <ScrollArea className="flex-1 p-6">
+      <ScrollArea className="flex-1 min-h-0 p-6">
         <div className="max-w-md mx-auto space-y-6">
           {anniversary && timeTogether && (
             <Card className="p-6 bg-gradient-to-br from-primary/10 via-accent/5 to-blush/10 border-gold/30">

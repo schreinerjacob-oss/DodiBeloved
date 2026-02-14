@@ -608,7 +608,7 @@ export default function CallsPage() {
 
   if (incomingCall) {
     return (
-      <div className="h-full flex flex-col items-center justify-center bg-background gap-6">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-background gap-6">
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-light">Incoming {incomingCallType} call</h2>
           <p className="text-muted-foreground">Your beloved is calling...</p>
@@ -640,7 +640,7 @@ export default function CallsPage() {
 
   if (callActive) {
     return (
-      <div className="h-full flex flex-col bg-background">
+      <div className="flex-1 min-h-0 flex flex-col bg-background">
         <div className="flex-1 flex items-center justify-center gap-4 p-4 relative">
           {/* Prominent Call Timer Overlay */}
           <div className="absolute top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
@@ -749,12 +749,12 @@ export default function CallsPage() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-background">
-      <div className="px-6 py-4 border-b bg-card/50">
+    <div className="flex-1 min-h-0 flex flex-col bg-background">
+      <div className="flex-shrink-0 px-6 py-4 border-b bg-card/50">
         <h2 className="text-xl font-light text-foreground">Voice & Video</h2>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 min-h-0 overflow-y-auto p-6">
         <div className="max-w-3xl mx-auto space-y-6">
           <Card className="bg-blush/5 border-blush/20 p-4">
             <div className="flex items-start gap-3">

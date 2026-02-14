@@ -80,6 +80,10 @@ const AGGRESSIVE_RECONNECT_INTERVAL = 5000;
 let aggressiveReconnectInterval: NodeJS.Timeout | null = null;
 let aggressiveReconnectStartedAt: number | null = null;
 
+/** After tab becomes visible, suppress "Reconnecting" for this long so we don't flash it if signaling reconnects quickly. */
+const VISIBILITY_RECONNECT_GRACE_MS = 2000;
+let visibilityGraceUntil = 0;
+
 function clearAggressiveReconnect() {
   if (aggressiveReconnectInterval) {
     clearInterval(aggressiveReconnectInterval);
@@ -253,12 +257,17 @@ async function loadPersistentQueue() {
 
 // Notify all listeners of state changes
 function notifyListeners() {
+  const rawReconnecting = !!(globalPeer?.disconnected || reconnectStartedAt != null || aggressiveReconnectInterval);
+  // Right after tab becomes visible, only show "Reconnecting" if we're actively trying (backoff/aggressive), not just signaling disconnected—avoids flash when connection recovers quickly.
+  const inGracePeriod = Date.now() < visibilityGraceUntil;
+  const onlySignalingDown = rawReconnecting && !reconnectStartedAt && !aggressiveReconnectInterval;
+  const isReconnecting = rawReconnecting && (!inGracePeriod || !onlySignalingDown);
+
   const newState: PeerConnectionState = {
     connected: !!globalConn && globalConn.open,
     error: globalState.error,
     peerId: globalPeer?.id || null,
-    // Show "Reconnecting" when signaling is down OR we're actively trying (backoff, aggressive heartbeat)
-    isReconnecting: !!(globalPeer?.disconnected || reconnectStartedAt != null || aggressiveReconnectInterval),
+    isReconnecting,
   };
   
   // Expose state globally for diagnostics panel
@@ -1257,8 +1266,9 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && partnerId) {
-        // Only reconnect if connection is actually down
-        // Add small delay to allow connection state to stabilize after tab becomes visible
+        visibilityGraceUntil = Date.now() + VISIBILITY_RECONNECT_GRACE_MS;
+        notifyListeners();
+        // Only reconnect if connection is actually down; delay to let connection state stabilize after tab becomes visible
         setTimeout(() => {
           if (!globalConn || !globalConn.open) {
             console.log('👀 [P2P] App visible - connection down, triggering reconnect');

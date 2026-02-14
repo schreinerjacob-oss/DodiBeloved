@@ -188,7 +188,7 @@ export default function HeartSpacePage() {
   const revealedPrayers = prayers.filter(p => (p.isRevealed || bothSubmittedToday) && format(new Date(p.prayerDate), 'yyyy-MM-dd') !== todayStr);
 
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div className="flex-1 min-h-0 flex flex-col bg-background">
       {showInvitation && <SupportInvitation onDismiss={() => setShowInvitation(false)} triggerReason={triggerReason} />}
       <div className="px-6 py-4 border-b bg-card/50">
         <h2 className="text-xl font-light text-foreground flex items-center gap-2">
@@ -216,7 +216,7 @@ export default function HeartSpacePage() {
           </TabsList>
         </div>
 
-        <ScrollArea className="flex-1 p-6">
+        <ScrollArea className="flex-1 min-h-0 p-6">
           <div className="max-w-2xl mx-auto">
             <TabsContent value="whispers" className="mt-0 space-y-6 animate-in fade-in slide-in-from-bottom-2">
               {!todayWhisperSent ? (

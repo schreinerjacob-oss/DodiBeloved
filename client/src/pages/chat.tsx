@@ -1049,7 +1049,7 @@ export default function ChatPage() {
   const isVideoRecordingActive = videoDialogOpen && videoStage === 'recording';
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex-1 min-h-0 flex flex-col bg-background">
       <MemoryResurfacing />
       {showInvitation && <SupportInvitation onDismiss={() => setShowInvitation(false)} triggerReason="A growing connection..." />}
       <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b bg-card/50">

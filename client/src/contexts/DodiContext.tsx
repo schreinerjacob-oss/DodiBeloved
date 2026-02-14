@@ -71,8 +71,15 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const isPaired = pairingStatus === 'connected';
 
   useEffect(() => {
+    const VALID_PAIRING_STATUSES: PairingStatus[] = ['unpaired', 'waiting', 'connected'];
+    const LOAD_TIMEOUT_MS = 12_000;
+    let loadTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
     const loadPairingData = async () => {
       setIsLoading(true);
+      loadTimeoutId = setTimeout(() => {
+        setIsLoading(false);
+      }, LOAD_TIMEOUT_MS);
       try {
         const [
           storedUserId,
@@ -102,7 +109,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         if (storedDisplayName) setDisplayName(storedDisplayName);
         if (storedPartnerId) setPartnerId(storedPartnerId);
         
-        if (storedPairingStatus) {
+        if (storedPairingStatus && VALID_PAIRING_STATUSES.includes(storedPairingStatus as PairingStatus)) {
           setPairingStatus(storedPairingStatus as PairingStatus);
         }
 
@@ -132,18 +139,27 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error('Failed to load pairing data:', error);
       } finally {
+        if (loadTimeoutId != null) {
+          clearTimeout(loadTimeoutId);
+          loadTimeoutId = null;
+        }
         setIsLoading(false);
       }
     };
 
     loadPairingData();
 
-    window.addEventListener('online', () => setIsOnline(true));
-    window.addEventListener('offline', () => setIsOnline(false));
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     return () => {
-      window.removeEventListener('online', () => setIsOnline(true));
-      window.removeEventListener('offline', () => setIsOnline(false));
+      if (loadTimeoutId != null) {
+        clearTimeout(loadTimeoutId);
+      }
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 

@@ -200,7 +200,7 @@ export default function MemoriesPage() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div className="flex-1 min-h-0 flex flex-col bg-background">
       <div className="flex items-center justify-between px-6 py-4 border-b bg-card/50">
         <div>
           <h2 className="text-xl font-light text-foreground">Our Memories</h2>
@@ -274,7 +274,7 @@ export default function MemoriesPage() {
         </Dialog>
       </div>
 
-      <ScrollArea className="flex-1 p-6">
+      <ScrollArea className="flex-1 min-h-0 p-6">
         {memories.length === 0 ? (
           <div className="max-w-md mx-auto text-center py-16 space-y-4">
             <div className="w-20 h-20 mx-auto rounded-full bg-accent/20 flex items-center justify-center">

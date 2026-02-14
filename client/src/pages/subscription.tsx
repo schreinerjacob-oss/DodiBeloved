@@ -47,7 +47,7 @@ export default function SubscriptionPage() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div className="flex-1 min-h-0 flex flex-col bg-background">
       <div className="px-6 py-4 border-b bg-card/50 flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => setLocation('/settings')} className="hover-elevate">
           <ArrowLeft className="w-5 h-5" />
@@ -60,7 +60,7 @@ export default function SubscriptionPage() {
         </div>
       </div>
 
-      <ScrollArea className="flex-1 p-6">
+      <ScrollArea className="flex-1 min-h-0 p-6">
         <div className="max-w-md mx-auto space-y-8 pb-8">
           <div className="text-center space-y-4">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-accent/10 mb-2">

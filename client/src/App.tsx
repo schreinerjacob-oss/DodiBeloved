@@ -81,19 +81,23 @@ function MainApp() {
   useEffect(() => {
     let raf1: number;
     let raf2: number | undefined;
+    let raf3: number | undefined;
     raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         const el = scrollContainerRef.current;
         if (el) {
           el.scrollTo({ top: 0, left: 0 });
-          // Force reflow so flex/ScrollArea children get correct dimensions (fixes blank tab content when switching)
           void el.offsetHeight;
         }
+        raf3 = requestAnimationFrame(() => {
+          if (el) void el.offsetHeight;
+        });
       });
     });
     return () => {
       cancelAnimationFrame(raf1);
       if (raf2 != null) cancelAnimationFrame(raf2);
+      if (raf3 != null) cancelAnimationFrame(raf3);
     };
   }, [location]);
   const partnerActive = peerState?.connected || false;
@@ -163,9 +167,9 @@ function MainApp() {
       )}
 
       <div className="flex-1 min-h-0 overflow-hidden relative z-10 flex flex-col">
-        <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto flex flex-col">
-          {/* Key by location so route content remounts and gets correct layout; flex-1 min-h-0 gives the page a definite height so it and any nested ScrollArea paint correctly when switching tabs */}
-          <div key={location} className="flex-1 min-h-0 flex flex-col" style={{ minHeight: '100%' }}>
+        <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto flex flex-col" style={{ minHeight: 0 }}>
+          {/* Key by location so route content remounts and gets correct layout. Route content must use flex-1 min-h-0 so nested ScrollArea gets a definite height. */}
+          <div key={location} className="flex-1 min-h-0 flex flex-col" style={{ minHeight: '100%', flex: '1 1 0%' }}>
             <Switch>
               <Route path="/pairing">{() => <PairingPage />}</Route>
               <Route path="/chat">{() => <ChatPage />}</Route>

@@ -240,15 +240,15 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="h-full min-h-0 w-full flex flex-col bg-background overflow-hidden">
-      <div className="px-4 sm:px-6 py-4 border-b bg-card/50">
+    <div className="flex-1 min-h-0 w-full flex flex-col bg-background overflow-hidden">
+      <div className="flex-shrink-0 px-4 sm:px-6 py-4 border-b bg-card/50">
         <h2 className="text-xl font-light text-foreground">Settings</h2>
         <p className="text-xs text-muted-foreground mt-1">
           Manage your private sanctuary
         </p>
       </div>
 
-      <ScrollArea className="flex-1 w-full">
+      <ScrollArea className="flex-1 min-h-0 w-full">
         <div className="w-full max-w-md mx-auto space-y-8 pb-24 px-4 sm:px-6 py-6">
           {/* Quick actions */}
           <div className="grid grid-cols-2 gap-3">
