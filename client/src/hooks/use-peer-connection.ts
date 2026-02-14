@@ -511,6 +511,7 @@ function safeClose(conn: DataConnection, label: string): void {
 // Send a tiny wake-up signal via signaling server (Relay)
 function sendWakeUpPing(partnerId: string) {
   if (!globalPeer || globalPeer.destroyed || globalPeer.disconnected) return;
+  console.log('Wake-up ping sent');
   console.log('📡 Sending wake-up ping to partner via relay:', partnerId);
 
   const conn = globalPeer.connect(partnerId, {
@@ -1236,7 +1237,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
           conn.close();
           return;
         }
-        console.log('⚡ Received wake-up ping from partner. Reconnecting...');
+        console.log('Wake-up ping received – reconnecting');
         if (!globalConn || !globalConn.open) {
           console.log('🌱 Reconnected direct after ping');
           connectToPartner(conn.peer);
