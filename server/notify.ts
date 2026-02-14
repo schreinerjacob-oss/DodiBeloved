@@ -57,7 +57,7 @@ app.post('/register', (req: Request, res: Response) => {
 
 // POST /notify — send push to token's subscription(s). No log, no persist.
 app.post('/notify', (req: Request, res: Response) => {
-  const { token } = req.body as { token?: string };
+  const { token, type } = req.body as { token?: string; type?: 'call' | 'message' };
   if (!token || typeof token !== 'string') {
     res.status(400).json({ error: 'token required' });
     return;
@@ -67,7 +67,12 @@ app.post('/notify', (req: Request, res: Response) => {
     res.status(404).json({ error: 'unknown token' });
     return;
   }
-  const payload = JSON.stringify({ type: 'notify' });
+  const title = 'dodi';
+  const body = type === 'call'
+    ? 'Dodi is calling'
+    : 'New message from your partner';
+  const tag = type === 'call' ? 'dodi-call' : 'dodi-message';
+  const payload = JSON.stringify({ type: 'notify', title, body, tag });
   Promise.all(
     subs.map(sub =>
       webpush.sendNotification(sub, payload).catch(err => {

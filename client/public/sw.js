@@ -78,11 +78,12 @@ self.addEventListener('push', event => {
     dataPromise.then((payload) => {
       const title = (payload && payload.title) || defaultTitle;
       const body = (payload && payload.body) || defaultBody;
+      const tag = (payload && payload.tag) || 'dodi-message';
       const options = {
         body,
         icon: '/favicon.png',
         badge: '/favicon.png',
-        tag: 'dodi-message',
+        tag,
         renotify: true,
         data: { url: '/' }
       };

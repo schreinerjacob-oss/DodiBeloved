@@ -76,6 +76,7 @@ const MAX_BACKOFF = 15000;
 const PING_INTERVAL = 5000;       // Keep-alive ping every 5s (faster dead-connection detection)
 const PONG_TIMEOUT = 15000;       // Trigger reconnect if no pong in 15s
 const AGGRESSIVE_RECONNECT_INTERVAL = 5000;
+const CONNECTION_ATTEMPT_TIMEOUT_MS = 20000; // If connection doesn't open in 20s, fail and reconnect
 
 let aggressiveReconnectInterval: NodeJS.Timeout | null = null;
 let aggressiveReconnectStartedAt: number | null = null;
@@ -617,6 +618,22 @@ function setupConnection(conn: DataConnection) {
   // Update globalConn BEFORE adding listeners to ensure 'open' event can use it
   globalConn = conn;
 
+  // Timeout: if connection doesn't open in time, close it so we enter reconnecting (avoids stuck "offline")
+  let openTimeoutId: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+    openTimeoutId = null;
+    if (!conn.open) {
+      console.warn('⚠️ [P2P] Connection attempt timed out after 20s – triggering reconnect');
+      conn.close();
+    }
+  }, CONNECTION_ATTEMPT_TIMEOUT_MS);
+
+  const clearOpenTimeout = () => {
+    if (openTimeoutId != null) {
+      clearTimeout(openTimeoutId);
+      openTimeoutId = null;
+    }
+  };
+
   async function handleReconcileInit(conn: DataConnection, partnerTimestamps: any) {
     try {
       const { getItemsSince } = await import('@/lib/storage-encrypted');
@@ -673,6 +690,7 @@ function setupConnection(conn: DataConnection) {
   }
 
   conn.on('open', async () => {
+    clearOpenTimeout();
     if (reconnectStartedAt != null) {
       const latency = Date.now() - reconnectStartedAt;
       console.log(`⏱️ [RECONNECT] Tunnel re-established in ${latency}ms`);
@@ -855,6 +873,7 @@ function setupConnection(conn: DataConnection) {
   });
 
   conn.on('close', () => {
+    clearOpenTimeout();
     console.log('XY Connection lost');
     if (globalConn === conn) globalConn = null;
     clearHealthCheck();
@@ -864,6 +883,7 @@ function setupConnection(conn: DataConnection) {
   });
 
   conn.on('error', (err) => {
+    clearOpenTimeout();
     console.error('Connection Error:', err);
     if (globalConn === conn) globalConn = null;
     globalState.error = err.message;
@@ -981,21 +1001,25 @@ export function closeRoom(room: RoomConnection) {
   room.peer.destroy();
 }
 
-/** Call notify server to wake partner's device (push). Throttled; gated by allowWakeUp. */
-async function tryNotifyPartner(): Promise<void> {
+/** Call notify server to wake partner's device (push). Throttled; gated by allowWakeUp. Calls bypass throttle. */
+async function tryNotifyPartner(opts?: { type?: 'call' | 'message'; callType?: 'audio' | 'video' }): Promise<void> {
   if (!globalAllowWakeUp) return;
   const baseUrl = getNotifyServerUrl();
   if (!baseUrl) return;
   const partnerToken = await getPartnerPushToken();
   if (!partnerToken) return;
-  if (Date.now() - lastNotifyAt < NOTIFY_THROTTLE_MS) return;
+  const isCall = opts?.type === 'call';
+  if (!isCall && Date.now() - lastNotifyAt < NOTIFY_THROTTLE_MS) return;
   try {
     const res = await fetch(`${baseUrl.replace(/\/$/, '')}/notify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: partnerToken }),
+      body: JSON.stringify({
+        token: partnerToken,
+        ...(isCall ? { type: 'call' as const, callType: opts?.callType ?? 'audio' } : { type: 'message' as const }),
+      }),
     });
-    if (res.ok) lastNotifyAt = Date.now();
+    if (res.ok && !isCall) lastNotifyAt = Date.now();
   } catch {
     // No log to avoid noise
   }
@@ -1007,7 +1031,10 @@ export async function sendP2PMessage(message: SyncMessage) {
     try {
       globalConn.send(message);
       console.log('📤 Message sent via P2P:', message.type);
-      tryNotifyPartner().catch(() => {});
+      const notifyOpts = message.type === 'call-offer'
+        ? { type: 'call' as const, callType: (message.data as { callType?: 'audio' | 'video' })?.callType ?? 'audio' }
+        : undefined;
+      tryNotifyPartner(notifyOpts).catch(() => {});
       return;
     } catch (e) {
       console.error('Failed to send message, queuing instead:', e);
@@ -1028,7 +1055,10 @@ export async function sendP2PMessage(message: SyncMessage) {
     if (globalPartnerId && globalAllowWakeUp && (!globalConn || !globalConn.open)) {
       sendWakeUpPing(globalPartnerId);
     }
-    tryNotifyPartner().catch(() => {});
+    const notifyOpts = message.type === 'call-offer'
+      ? { type: 'call' as const, callType: (message.data as { callType?: 'audio' | 'video' })?.callType ?? 'audio' }
+      : undefined;
+    tryNotifyPartner(notifyOpts).catch(() => {});
   }
   
   // Trigger reconnection if offline

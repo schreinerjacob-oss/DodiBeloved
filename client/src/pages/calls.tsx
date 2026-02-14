@@ -3,7 +3,7 @@ import { useDodi } from '@/contexts/DodiContext';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Phone, Video, PhoneOff, Mic, MicOff, Camera, CameraOff, SignalHigh, SignalMedium, SignalLow, SignalZero, Wifi, WifiOff } from 'lucide-react';
+import { Phone, Video, PhoneOff, Mic, MicOff, Camera, CameraOff, SignalHigh, SignalMedium, SignalLow, SignalZero, Wifi, WifiOff, Volume2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import SimplePeer from 'simple-peer';
 import { AudioEncoder, AudioDecoder, arrayBufferToBase64, base64ToArrayBuffer } from '@/lib/audio-codec';
@@ -16,6 +16,7 @@ export default function CallsPage() {
   const [callType, setCallType] = useState<'audio' | 'video' | null>(null);
   const [incomingCall, setIncomingCall] = useState(false);
   const [incomingCallType, setIncomingCallType] = useState<'audio' | 'video' | null>(null);
+  const [hasOfferSignal, setHasOfferSignal] = useState(false);
   const [micEnabled, setMicEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [callDuration, setCallDuration] = useState(0);
@@ -28,7 +29,11 @@ export default function CallsPage() {
   const mediaCallRef = useRef<SimplePeer.Instance | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const [speakerOn, setSpeakerOn] = useState(true);
+  const speakerOnRef = useRef(true);
+  const audioOutputDevicesRef = useRef<MediaDeviceInfo[]>([]);
   const audioEncoderRef = useRef<AudioEncoder | null>(null);
   const audioDecoderRef = useRef<AudioDecoder | null>(null);
   const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -134,13 +139,20 @@ export default function CallsPage() {
         console.log('Incoming call offer:', message.data);
         setIncomingCall(true);
         setIncomingCallType(message.data.callType);
-        // Store the offer signal for when we accept
-        sessionStorage.setItem('call-offer-signal', JSON.stringify(message.data.signal));
-        
+        // Signal may have arrived first (out-of-order); preserve if already stored
+        setHasOfferSignal(!!sessionStorage.getItem('call-offer-signal'));
         playGentleRingtone();
       } else if (message.type === 'call-signal') {
-        if (mediaCallRef.current && message.data.signal) {
-          mediaCallRef.current.signal(message.data.signal);
+        const sig = message.data?.signal;
+        if (mediaCallRef.current && sig) {
+          mediaCallRef.current.signal(sig);
+          if (sig.type === 'offer') {
+            sessionStorage.setItem('call-offer-signal', JSON.stringify(sig));
+            setHasOfferSignal(true);
+          }
+        } else if (sig && sig.type === 'offer') {
+          sessionStorage.setItem('call-offer-signal', JSON.stringify(sig));
+          setHasOfferSignal(true);
         }
       } else if (message.type === 'call-end') {
         endCall();
@@ -347,7 +359,11 @@ export default function CallsPage() {
 
     reconnectTimeoutRef.current = setTimeout(async () => {
       try {
-        await initiatePeerConnection(callType!, true);
+        const peer = await initiatePeerConnection(callType!, true);
+        if (!peer) {
+          attemptReconnect();
+          return;
+        }
         setIsReconnecting(false);
         toast({
           title: 'Reconnected',
@@ -413,8 +429,23 @@ export default function CallsPage() {
 
       peer.on('stream', (remoteStream: MediaStream) => {
         console.log('Remote stream received');
-        if (remoteVideoRef.current) {
+        if (type === 'video' && remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStream;
+          remoteVideoRef.current.muted = true;
+        }
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = remoteStream;
+          const el = remoteAudioRef.current;
+          const setSink = (el as HTMLMediaElement & { setSinkId?(id: string): Promise<void> }).setSinkId?.bind(el);
+          if (typeof setSink === 'function') {
+            const on = speakerOnRef.current;
+            if (on) {
+              setSink('').catch(() => {});
+            } else {
+              const earpiece = audioOutputDevicesRef.current.find(d => /earpiece|receiver/i.test(d.label));
+              if (earpiece) setSink(earpiece.deviceId).catch(() => {});
+            }
+          }
         }
       });
 
@@ -506,14 +537,23 @@ export default function CallsPage() {
     setCallActive(true);
     setCallType(type);
 
-    // Send call offer through P2P data channel
-    await initiatePeerConnection(type, true);
-    
-    // Notify partner of call offer
+    const peer = await initiatePeerConnection(type, true);
+    if (!peer) {
+      setCallActive(false);
+      setCallType(null);
+      return;
+    }
+
     sendP2P({
       type: 'call-offer',
       data: { callType: type, fromUserId: userId },
       timestamp: Date.now(),
+    });
+
+    toast({
+      title: 'Calling your partner',
+      description: 'Please be patient while we reach them. Reconnecting if needed.',
+      duration: 4000,
     });
   };
 
@@ -524,15 +564,22 @@ export default function CallsPage() {
     setCallActive(true);
     setCallType(incomingCallType);
     setIncomingCall(false);
+    setHasOfferSignal(false);
 
-    // Get the stored offer signal
     const offerSignalStr = sessionStorage.getItem('call-offer-signal');
     const offerSignal = offerSignalStr ? JSON.parse(offerSignalStr) : null;
     sessionStorage.removeItem('call-offer-signal');
 
-    await initiatePeerConnection(incomingCallType, false, offerSignal);
+    const peer = await initiatePeerConnection(incomingCallType, false, offerSignal);
+    if (!peer) {
+      sendP2P({
+        type: 'call-end',
+        data: {},
+        timestamp: Date.now(),
+      });
+      return;
+    }
 
-    // Send call accept through P2P data channel
     sendP2P({
       type: 'call-accept',
       data: { callType: incomingCallType },
@@ -543,6 +590,7 @@ export default function CallsPage() {
   const rejectCall = () => {
     stopRingtone();
     setIncomingCall(false);
+    setHasOfferSignal(false);
     sessionStorage.removeItem('call-offer-signal');
     sendP2P({
       type: 'call-reject',
@@ -554,7 +602,10 @@ export default function CallsPage() {
   const endCall = () => {
     stopRingtone();
     stopFallbackAudio();
-    
+    setIncomingCall(false);
+    setHasOfferSignal(false);
+    sessionStorage.removeItem('call-offer-signal');
+
     if (fallbackTimeoutRef.current) {
       clearTimeout(fallbackTimeoutRef.current);
       fallbackTimeoutRef.current = null;
@@ -566,7 +617,8 @@ export default function CallsPage() {
     
     setIsReconnecting(false);
     setReconnectAttempts(0);
-    
+    setSpeakerOn(true);
+
     if (mediaCallRef.current) {
       mediaCallRef.current.destroy();
       mediaCallRef.current = null;
@@ -606,23 +658,59 @@ export default function CallsPage() {
     }
   };
 
+  const applySpeakerSink = useCallback((on: boolean) => {
+    const el = remoteAudioRef.current;
+    if (!el || typeof (el as HTMLMediaElement & { setSinkId?(id: string): Promise<void> }).setSinkId !== 'function') return;
+    const setSink = (el as HTMLMediaElement & { setSinkId?(id: string): Promise<void> }).setSinkId?.bind(el);
+    if (!setSink) return;
+    if (on) {
+      setSink('').catch(() => {});
+    } else {
+      const devices = audioOutputDevicesRef.current;
+      const earpiece = devices.find(d => /earpiece|receiver/i.test(d.label));
+      if (earpiece) setSink(earpiece.deviceId).catch(() => {});
+    }
+  }, []);
+
+  const toggleSpeaker = () => {
+    const next = !speakerOn;
+    setSpeakerOn(next);
+    applySpeakerSink(next);
+  };
+
+  useEffect(() => {
+    if (!callActive || !navigator.mediaDevices?.enumerateDevices) return;
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+      audioOutputDevicesRef.current = devices.filter(d => d.kind === 'audiooutput');
+    });
+  }, [callActive]);
+
+  speakerOnRef.current = speakerOn;
+  useEffect(() => {
+    if (callActive) applySpeakerSink(speakerOn);
+  }, [callActive, speakerOn, applySpeakerSink]);
+
   if (incomingCall) {
     return (
-      <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-background gap-6">
+      <div
+        className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black text-white gap-6"
+        style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-light">Incoming {incomingCallType} call</h2>
-          <p className="text-muted-foreground">Your beloved is calling...</p>
+          <p className="text-white/70">Your beloved is calling...</p>
         </div>
 
         <div className="flex gap-4">
           <Button
             size="lg"
             onClick={acceptCall}
-            className="bg-green-600 hover:bg-green-700"
+            disabled={!hasOfferSignal}
+            className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
             data-testid="button-accept-call"
           >
             <Phone className="w-5 h-5 mr-2" />
-            Accept
+            {hasOfferSignal ? 'Accept' : 'Connecting…'}
           </Button>
           <Button
             size="lg"
@@ -640,11 +728,15 @@ export default function CallsPage() {
 
   if (callActive) {
     return (
-      <div className="flex-1 min-h-0 flex flex-col bg-background">
+      <div
+        className="fixed inset-0 z-[100] flex flex-col bg-black text-white"
+        style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <audio ref={remoteAudioRef} autoPlay playsInline className="sr-only" aria-hidden />
         <div className="flex-1 flex items-center justify-center gap-4 p-4 relative">
           {/* Prominent Call Timer Overlay */}
           <div className="absolute top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
-            <div className="bg-black/40 backdrop-blur-xl px-8 py-3 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center gap-1 transition-all animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="bg-white/10 backdrop-blur-xl px-8 py-3 rounded-2xl border border-white/20 shadow-2xl flex flex-col items-center gap-1 transition-all animate-in fade-in slide-in-from-top-4 duration-500">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_12px_rgba(239,68,68,0.8)]" />
                 <span className="text-white/70 text-[10px] uppercase tracking-[0.2em] font-medium">Live</span>
@@ -681,25 +773,25 @@ export default function CallsPage() {
 
           {callType === 'audio' && (
             <div className="text-center space-y-4">
-              <div className="w-20 h-20 mx-auto rounded-full bg-sage/20 flex items-center justify-center">
+              <div className="w-20 h-20 mx-auto rounded-full bg-white/10 flex items-center justify-center">
                 {isReconnecting ? (
-                  <WifiOff className="w-10 h-10 text-yellow-500 animate-pulse" />
+                  <WifiOff className="w-10 h-10 text-yellow-400 animate-pulse" />
                 ) : (
-                  <Phone className="w-10 h-10 text-sage animate-pulse" />
+                  <Phone className="w-10 h-10 text-white/80 animate-pulse" />
                 )}
               </div>
               <div className="space-y-1">
                 <div className="flex items-center justify-center gap-2">
                   {isReconnecting ? (
-                    <p className="text-yellow-500 font-medium animate-pulse">Reconnecting... ({reconnectAttempts}/{MAX_RECONNECT_ATTEMPTS})</p>
+                    <p className="text-yellow-400 font-medium animate-pulse">Reconnecting... ({reconnectAttempts}/{MAX_RECONNECT_ATTEMPTS})</p>
                   ) : isFallbackMode ? (
                     <>
-                      <Wifi className="w-4 h-4 text-blue-500" />
-                      <p className="text-blue-500">Using backup connection</p>
+                      <Wifi className="w-4 h-4 text-blue-400" />
+                      <p className="text-blue-400">Using backup connection</p>
                     </>
                   ) : (
                     <>
-                      <p className="text-muted-foreground">Audio call active</p>
+                      <p className="text-white/70">Audio call active</p>
                       <ConnectionIcon />
                     </>
                   )}
@@ -709,25 +801,38 @@ export default function CallsPage() {
           )}
         </div>
 
-        <div className="border-t bg-card/50 p-4 flex-shrink-0">
+        <div className="border-t border-white/10 bg-white/5 p-4 flex-shrink-0">
           <div className="flex flex-col items-center gap-4">
-            <div className="flex items-center justify-center gap-4">
+            <div className="flex items-center justify-center gap-3">
               <ConnectionIcon />
               <Button
                 size="icon"
-                variant={micEnabled ? 'default' : 'destructive'}
+                variant={micEnabled ? 'secondary' : 'destructive'}
                 onClick={toggleMic}
                 data-testid="button-toggle-mic"
+                className="rounded-full"
               >
                 {micEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+              </Button>
+
+              <Button
+                size="icon"
+                variant={speakerOn ? 'default' : 'secondary'}
+                onClick={toggleSpeaker}
+                data-testid="button-speaker"
+                title={speakerOn ? 'Speaker on' : 'Speaker off'}
+                className="rounded-full"
+              >
+                <Volume2 className="w-5 h-5" />
               </Button>
 
               {callType === 'video' && (
                 <Button
                   size="icon"
-                  variant={cameraEnabled ? 'default' : 'destructive'}
+                  variant={cameraEnabled ? 'secondary' : 'destructive'}
                   onClick={toggleCamera}
                   data-testid="button-toggle-camera"
+                  className="rounded-full"
                 >
                   {cameraEnabled ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
                 </Button>
@@ -738,6 +843,7 @@ export default function CallsPage() {
                 variant="destructive"
                 onClick={endCall}
                 data-testid="button-end-call"
+                className="rounded-full"
               >
                 <PhoneOff className="w-5 h-5" />
               </Button>
