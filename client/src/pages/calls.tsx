@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useDodi } from '@/contexts/DodiContext';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,8 @@ export default function CallsPage() {
   const audioDecoderRef = useRef<AudioDecoder | null>(null);
   const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const acceptFromPendingInProgressRef = useRef(false);
+  const acceptCallFromPendingRef = useRef<(callType: 'audio' | 'video') => Promise<void>>(() => Promise.resolve());
   const MAX_RECONNECT_ATTEMPTS = 3;
 
   // Call quality monitoring
@@ -176,6 +179,71 @@ export default function CallsPage() {
       stopRingtone();
     };
   }, []);
+
+  // Accept call when navigated here from IncomingCallOverlay on another tab (handler uses ref to avoid stale sendP2P/initiatePeerConnection)
+  useEffect(() => {
+    const handler = (e: CustomEvent<{ callType: 'audio' | 'video' }>) => {
+      const callType = e.detail?.callType;
+      if (!callType) return;
+      sessionStorage.removeItem('dodi-pending-accept');
+      acceptCallFromPendingRef.current(callType);
+    };
+    window.addEventListener('dodi-accept-call', handler as EventListener);
+
+    // In case we mounted before the event fired, check sessionStorage
+    const pending = sessionStorage.getItem('dodi-pending-accept') as 'audio' | 'video' | null;
+    if (pending && (pending === 'audio' || pending === 'video')) {
+      sessionStorage.removeItem('dodi-pending-accept');
+      acceptCallFromPendingRef.current(pending);
+    }
+
+    return () => window.removeEventListener('dodi-accept-call', handler as EventListener);
+  }, []);
+
+  const acceptCallFromPending = async (callType: 'audio' | 'video') => {
+    if (acceptFromPendingInProgressRef.current) return;
+    acceptFromPendingInProgressRef.current = true;
+
+    try {
+      stopRingtone();
+      setCallActive(true);
+      setCallType(callType);
+      setIncomingCall(false);
+      setHasOfferSignal(false);
+
+      const offerSignalStr = sessionStorage.getItem('call-offer-signal');
+      const offerSignal = offerSignalStr ? JSON.parse(offerSignalStr) : null;
+      sessionStorage.removeItem('call-offer-signal');
+
+      if (!offerSignal) {
+        setCallActive(false);
+        setCallType(null);
+        sendP2P({ type: 'call-end', data: {}, timestamp: Date.now() });
+        return;
+      }
+
+      const peer = await initiatePeerConnection(callType, false, offerSignal);
+      if (!peer) {
+        setCallActive(false);
+        setCallType(null);
+        sendP2P({
+          type: 'call-end',
+          data: {},
+          timestamp: Date.now(),
+        });
+        return;
+      }
+
+      sendP2P({
+        type: 'call-accept',
+        data: { callType },
+        timestamp: Date.now(),
+      });
+    } finally {
+      acceptFromPendingInProgressRef.current = false;
+    }
+  };
+  acceptCallFromPendingRef.current = acceptCallFromPending;
 
   const stopRingtone = () => {
     if (audioContextRef.current) {
@@ -690,48 +758,45 @@ export default function CallsPage() {
     if (callActive) applySpeakerSink(speakerOn);
   }, [callActive, speakerOn, applySpeakerSink]);
 
-  if (incomingCall) {
-    return (
-      <div
-        className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black text-white gap-6"
-        style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
-      >
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-light">Incoming {incomingCallType} call</h2>
-          <p className="text-white/70">Your beloved is calling...</p>
-        </div>
-
-        <div className="flex gap-4">
-          <Button
-            size="lg"
-            onClick={acceptCall}
-            disabled={!hasOfferSignal}
-            className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
-            data-testid="button-accept-call"
-          >
-            <Phone className="w-5 h-5 mr-2" />
-            {hasOfferSignal ? 'Accept' : 'Connecting…'}
-          </Button>
-          <Button
-            size="lg"
-            variant="destructive"
-            onClick={rejectCall}
-            data-testid="button-reject-call"
-          >
-            <PhoneOff className="w-5 h-5 mr-2" />
-            Decline
-          </Button>
-        </div>
+  const incomingCallOverlay = incomingCall ? (
+    <div
+      className="fixed inset-0 z-[150] flex flex-col items-center justify-center bg-black text-white gap-6"
+      style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      <div className="text-center space-y-2">
+        <h2 className="text-2xl font-light">Incoming {incomingCallType} call</h2>
+        <p className="text-white/70">Your beloved is calling...</p>
       </div>
-    );
-  }
 
-  if (callActive) {
-    return (
-      <div
-        className="fixed inset-0 z-[100] flex flex-col bg-black text-white"
-        style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
-      >
+      <div className="flex gap-4">
+        <Button
+          size="lg"
+          onClick={acceptCall}
+          disabled={!hasOfferSignal}
+          className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
+          data-testid="button-accept-call"
+        >
+          <Phone className="w-5 h-5 mr-2" />
+          {hasOfferSignal ? 'Accept' : 'Connecting…'}
+        </Button>
+        <Button
+          size="lg"
+          variant="destructive"
+          onClick={rejectCall}
+          data-testid="button-reject-call"
+        >
+          <PhoneOff className="w-5 h-5 mr-2" />
+            Decline
+        </Button>
+      </div>
+    </div>
+  ) : null;
+
+  const activeCallOverlay = callActive ? (
+    <div
+      className="fixed inset-0 z-[150] flex flex-col bg-black text-white"
+      style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
         <audio ref={remoteAudioRef} autoPlay playsInline className="sr-only" aria-hidden />
         <div className="flex-1 flex items-center justify-center gap-4 p-4 relative">
           {/* Prominent Call Timer Overlay */}
@@ -851,6 +916,16 @@ export default function CallsPage() {
           </div>
         </div>
       </div>
+  ) : null;
+
+  // Portal call overlays to body so they render above the nav (z-20)
+  const callOverlay = incomingCallOverlay ?? activeCallOverlay;
+  if (callOverlay && typeof document !== 'undefined') {
+    return (
+      <>
+        {createPortal(callOverlay, document.body)}
+        <div className="flex-1 min-h-0 flex flex-col bg-background" aria-hidden />
+      </>
     );
   }
 

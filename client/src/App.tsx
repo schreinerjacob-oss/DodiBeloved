@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { Route, Switch, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -25,6 +25,7 @@ import SubscriptionPage from "@/pages/subscription";
 import { MessageSquare, Camera, CalendarHeart, Phone, Settings, Lock, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConnectionStatus } from "@/components/connection-status";
+import { IncomingCallOverlay } from "@/components/incoming-call-overlay";
 import { GlobalSyncHandler } from "@/components/global-sync-handler";
 import { DodiRestoreListener } from "@/components/dodi-restore-listener";
 import { PwaInstallBanner } from "@/components/pwa-install-banner";
@@ -78,28 +79,29 @@ function MainApp() {
   }, [pairingStatus]);
 
   // Reset scroll position on route change and force layout so new page content (and nested ScrollArea) get correct height and don’t render blank
+  // Reset scroll position on route change so new page is shown from top
+  useLayoutEffect(() => {
+    const el = scrollContainerRef.current;
+    if (el) el.scrollTo({ top: 0, left: 0 });
+  }, [location]);
+
+  // Force reflow after route content mounts so nested ScrollArea / flex children get correct height
   useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
     let raf1: number;
     let raf2: number | undefined;
-    let raf3: number | undefined;
     raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
-        const el = scrollContainerRef.current;
-        if (el) {
-          el.scrollTo({ top: 0, left: 0 });
-          void el.offsetHeight;
-        }
-        raf3 = requestAnimationFrame(() => {
-          if (el) void el.offsetHeight;
-        });
+        void el.offsetHeight;
       });
     });
     return () => {
       cancelAnimationFrame(raf1);
       if (raf2 != null) cancelAnimationFrame(raf2);
-      if (raf3 != null) cancelAnimationFrame(raf3);
     };
   }, [location]);
+
   const partnerActive = peerState?.connected || false;
 
   // Allow reset route before any authentication checks
@@ -168,9 +170,10 @@ function MainApp() {
 
       <div className="flex-1 min-h-0 overflow-hidden relative z-10 flex flex-col">
         <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto flex flex-col" style={{ minHeight: 0 }}>
-          {/* Key by location so route content remounts and gets correct layout. Route content must use flex-1 min-h-0 so nested ScrollArea gets a definite height. */}
-          <div key={location} className="flex-1 min-h-0 flex flex-col" style={{ minHeight: '100%', flex: '1 1 0%' }}>
-            <Switch>
+          {/* Key by location so route content remounts and gets correct layout. Wrapper gives route a definite flex height. */}
+          <div key={location} className="flex-1 min-h-0 flex flex-col w-full" style={{ minHeight: 0, flex: '1 1 0%' }}>
+            <div className="flex-1 min-h-0 flex flex-col w-full min-w-0">
+              <Switch>
               <Route path="/pairing">{() => <PairingPage />}</Route>
               <Route path="/chat">{() => <ChatPage />}</Route>
               <Route path="/calls">{() => <CallsPage />}</Route>
@@ -183,7 +186,8 @@ function MainApp() {
               <Route path="/redundancy">{() => <RedundancyPage />}</Route>
               <Route path="/reset">{() => <ResetPage />}</Route>
               <Route path="/">{() => <ChatPage />}</Route>
-            </Switch>
+              </Switch>
+            </div>
           </div>
         </div>
       </div>
@@ -207,6 +211,7 @@ function MainApp() {
       </nav>
 
       <PwaInstallBanner />
+      <IncomingCallOverlay />
     </div>
   );
 }
