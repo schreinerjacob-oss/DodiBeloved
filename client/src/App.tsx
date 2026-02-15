@@ -64,6 +64,7 @@ function MainApp() {
   
   const [location] = useLocation();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevLocationRef = useRef<string>(location);
 
   const { state: peerState } = usePeerConnection();
 
@@ -85,20 +86,36 @@ function MainApp() {
     if (el) el.scrollTo({ top: 0, left: 0 });
   }, [location]);
 
-  // Force layout recalculation after route content mounts so nested ScrollArea gets correct viewport height
+  // Force layout recalculation after route content mounts so nested ScrollArea gets correct viewport height.
+  // When leaving Chat, run an extra delayed pass – Chat uses plain overflow-y-auto; other pages use ScrollArea
+  // and can collapse to zero height if layout hasn't settled when Chat's structure unmounts.
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
+
+    const wasOnChat = prevLocationRef.current === '/chat' || prevLocationRef.current === '/';
+    prevLocationRef.current = location;
+
+    const forceLayout = () => void el.offsetHeight;
+
     let raf1: number;
     let raf2: number | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
     raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
-        void el.offsetHeight;
+        forceLayout();
+        // Extra pass when leaving Chat so ScrollArea viewport gets correct height
+        if (wasOnChat && location !== '/chat' && location !== '/') {
+          timeoutId = setTimeout(forceLayout, 50);
+        }
       });
     });
+
     return () => {
       cancelAnimationFrame(raf1);
       if (raf2 != null) cancelAnimationFrame(raf2);
+      if (timeoutId != null) clearTimeout(timeoutId);
     };
   }, [location]);
 

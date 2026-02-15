@@ -266,13 +266,13 @@ export default function SettingsPage() {
               variant="outline"
               className="hover-elevate"
               onClick={() => {
-                console.log('♾️ [RESTORE] Restore mode entered (from Settings)');
-                setLocation('/pairing?mode=restore');
+                toast({ title: 'Reloading…', description: 'Fetching latest version.' });
+                clearCachesAndReload();
               }}
-              data-testid="button-restore-partner-quick"
+              data-testid="button-get-latest"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
-              Restore
+              Refresh app
             </Button>
           </div>
 
@@ -774,29 +774,6 @@ export default function SettingsPage() {
               )}
             </Card>
           </div>
-
-          {/* Get latest version (soft reset) */}
-          <Card className="p-6 space-y-4 border-muted">
-            <div className="flex items-center gap-3">
-              <RefreshCw className="w-5 h-5 text-muted-foreground" />
-              <div>
-                <h3 className="font-medium">Get latest version</h3>
-                <p className="text-xs text-muted-foreground">Clear caches and reload to fix issues after an update. Your data and pairing stay.</p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                toast({ title: 'Reloading…', description: 'Fetching latest version.' });
-                clearCachesAndReload();
-              }}
-              data-testid="button-get-latest"
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh app
-            </Button>
-          </Card>
 
           {/* Danger zone */}
           <div className="space-y-3">

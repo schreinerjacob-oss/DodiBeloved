@@ -50,18 +50,22 @@ export default function PairingPage() {
   const roomRef = useRef<RoomConnection | null>(null);
   const retryCountRef = useRef<number>(0);
 
+  // When pairingStatus becomes 'connected', show success and register push. Skip when user came here
+  // to generate a restore code (?mode=restore) – use URL param, not mode state, because handleMasterKeyReceived
+  // sets mode to 'success-animation' before React flushes pairingStatus; URL reliably indicates intent.
   useEffect(() => {
-    if (pairingStatus === 'connected') {
-      setShowSuccess(true);
-      // Request notification permission after successful pairing, then register push with notify server
-      requestNotificationPermission().then(async granted => {
-        console.log('📬 Notification permission:', granted ? 'granted' : 'denied');
-        if (granted) {
-          const { registerPushWithNotifyServer } = await import('@/lib/push-register');
-          await registerPushWithNotifyServer();
-        }
-      });
-    }
+    if (pairingStatus !== 'connected') return;
+    const isRestoreIntent = new URLSearchParams(window.location.search).get('mode') === 'restore';
+    if (isRestoreIntent) return; // Showing code for partner – don't show success or request notifications
+
+    setShowSuccess(true);
+    requestNotificationPermission().then(async granted => {
+      console.log('📬 Notification permission:', granted ? 'granted' : 'denied');
+      if (granted) {
+        const { registerPushWithNotifyServer } = await import('@/lib/push-register');
+        await registerPushWithNotifyServer();
+      }
+    });
   }, [pairingStatus]);
 
   useEffect(() => {
