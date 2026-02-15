@@ -49,6 +49,7 @@ export default function PairingPage() {
   const [isRetrying, setIsRetrying] = useState(false);
   const roomRef = useRef<RoomConnection | null>(null);
   const retryCountRef = useRef<number>(0);
+  const creatingRestoreRef = useRef(false);
 
   // When pairingStatus becomes 'connected', show success and register push. Skip when user came here
   // to generate a restore code (?mode=restore) – use URL param, not mode state, because handleMasterKeyReceived
@@ -214,7 +215,6 @@ export default function PairingPage() {
   const handleCreateRoom = useCallback(async () => {
     // Generate code fresh every time for new pairings
     const freshCode = generateRoomCode();
-    setRoomCode(freshCode);
     const normalizedCode = normalizeRoomCode(freshCode);
 
     // VALIDATION: Ensure userId exists
@@ -245,6 +245,8 @@ export default function PairingPage() {
       console.log('🌿 Creating room as creator:', normalizedCode);
       console.log('📋 [ID AUDIT] Creator will send userId to tunnel:', userId);
       const peer = await initializePeer(myPeerId);
+      // Show code only after peer is ready to accept connections (avoids joiner connecting before creator)
+      setRoomCode(freshCode);
       
       const connPromise = waitForConnection(peer, 120000).then(async (conn) => {
         roomRef.current = { peer, conn, isCreator: true, peerId: myPeerId };
@@ -287,10 +289,22 @@ export default function PairingPage() {
   }, [mode, toast, userId, completePairingAsCreator, completePairingWithMasterKey, onPeerConnected]);
 
   useEffect(() => {
-    if (mode === 'restore-mode' && !roomCode) {
-      handleCreateRoom();
-    }
+    if (mode !== 'restore-mode' || roomCode || creatingRestoreRef.current) return;
+    creatingRestoreRef.current = true;
+    handleCreateRoom().finally(() => {
+      creatingRestoreRef.current = false;
+    });
   }, [mode, roomCode, handleCreateRoom]);
+
+  // Cleanup: close room on unmount so peer ID is released for future sessions
+  useEffect(() => {
+    return () => {
+      if (roomRef.current) {
+        closeRoom(roomRef.current);
+        roomRef.current = null;
+      }
+    };
+  }, []);
 
   const attemptJoinRoom = async (normalCode: string, isRetry: boolean = false) => {
     try {
@@ -322,7 +336,7 @@ export default function PairingPage() {
       const myPeerId = createRoomPeerId(normalCode, false);
       const peer = await initializePeer(myPeerId);
       const remotePeerId = getRemotePeerId(normalCode, false);
-      const conn = await connectToRoom(peer, remotePeerId, 6000);
+      const conn = await connectToRoom(peer, remotePeerId, 15000);
       roomRef.current = { peer, conn, isCreator: false, peerId: myPeerId };
       console.log('🌊 [FLOW] Joiner calling runJoinerTunnel with userId:', userId);
       
@@ -938,9 +952,16 @@ export default function PairingPage() {
 
                 <div className="text-center p-6 bg-sage/10 rounded-lg">
                   <div className="flex items-center justify-center gap-3">
-                    <p className="text-4xl font-light tracking-widest text-sage font-mono" data-testid="text-restore-code">
-                      {roomCode || 'RESTORE'}
-                    </p>
+                    {roomCode ? (
+                      <p className="text-4xl font-light tracking-widest text-sage font-mono" data-testid="text-restore-code">
+                        {roomCode}
+                      </p>
+                    ) : (
+                      <div className="flex items-center gap-2 text-sage">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span className="font-medium">Preparing room...</span>
+                      </div>
+                    )}
                     {roomCode && (
                       <Button
                         variant="ghost"
