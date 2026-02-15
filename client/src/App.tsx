@@ -82,46 +82,33 @@ function MainApp() {
 
   // Reset scroll position on route change and force layout so new page content (and nested ScrollArea) get correct height and don’t render blank
   // Reset scroll position on route change so new page is shown from top
-  useLayoutEffect(() => {
-    const el = scrollContainerRef.current;
-    if (el) el.scrollTo({ top: 0, left: 0 });
-  }, [location]);
 
   // Force layout recalculation after route content mounts so nested ScrollArea gets correct viewport height.
   // When leaving Chat, run extra passes – Chat uses plain overflow-y-auto; other pages use ScrollArea
   // and can collapse if layout hasn't settled when Chat's structure unmounts.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
-
     const wasOnChat = prevLocationRef.current === '/chat' || prevLocationRef.current === '/';
     prevLocationRef.current = location;
-
     const forceLayout = () => {
       void el.offsetHeight;
       window.dispatchEvent(new Event('resize'));
     };
-
-    let raf1: number;
     let raf2: number | undefined;
     let t1: ReturnType<typeof setTimeout> | undefined;
-    let t2: ReturnType<typeof setTimeout> | undefined;
-
-    raf1 = requestAnimationFrame(() => {
+    const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         forceLayout();
         if (wasOnChat && location !== '/chat' && location !== '/') {
-          t1 = setTimeout(forceLayout, 50);
-          t2 = setTimeout(forceLayout, 150);
+          t1 = setTimeout(forceLayout, 100);
         }
       });
     });
-
     return () => {
       cancelAnimationFrame(raf1);
       if (raf2 != null) cancelAnimationFrame(raf2);
       if (t1 != null) clearTimeout(t1);
-      if (t2 != null) clearTimeout(t2);
     };
   }, [location]);
 
@@ -191,11 +178,9 @@ function MainApp() {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-hidden relative z-10 flex flex-col">
-        <div className="flex-1 min-h-0 overflow-hidden relative" style={{ minHeight: 0 }}>
-          {/* Scroll container: absolute fill for layout stability; min-h-full child ensures scrollable height for scrollTo(0,0) */}
-          <div ref={scrollContainerRef} className="absolute inset-0 overflow-auto">
-            <div className="min-h-full flex flex-col w-full">
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col z-10" style={{ minHeight: 0 }}>
+          {/* Content area: no outer scroll - each page fills viewport and manages its own scroll (Chat, ScrollArea, etc.) */}
+          <div ref={scrollContainerRef} className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
             <Switch>
               <Route path="/pairing">{() => <PairingPage />}</Route>
               <Route path="/chat">{() => <ChatPage />}</Route>
@@ -210,9 +195,7 @@ function MainApp() {
               <Route path="/reset">{() => <ResetPage />}</Route>
               <Route path="/">{() => <ChatPage />}</Route>
             </Switch>
-            </div>
           </div>
-        </div>
       </div>
 
       <nav className="border-t bg-card/80 backdrop-blur-sm px-2 py-2 flex-shrink-0 relative z-20" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>

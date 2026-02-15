@@ -113,10 +113,7 @@ export function MessageMediaVideo({ messageId }: { messageId: string }) {
   }
 
   return (
-    <div className={cn(
-      'relative w-full aspect-video rounded-md overflow-hidden bg-black/5 group transition-[max-width] duration-300',
-      isPlaying ? 'max-w-[min(90vw,480px)]' : 'max-w-[280px]'
-    )}>
+    <div className="relative w-full aspect-video rounded-md overflow-hidden bg-black/5 group min-w-[200px]">
       <video
         ref={videoRef}
         src={videoUrl}
@@ -128,16 +125,19 @@ export function MessageMediaVideo({ messageId }: { messageId: string }) {
       <button
         type="button"
         onClick={togglePlay}
-        className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors"
+        className={cn(
+          'absolute flex items-center justify-center rounded-full shadow-lg transition-all',
+          isPlaying
+            ? 'bottom-2 right-2 w-9 h-9 bg-white/90 opacity-80 hover:opacity-100'
+            : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-black/40 hover:bg-black/50'
+        )}
         aria-label={isPlaying ? 'Pause' : 'Play'}
       >
-        <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-          {isPlaying ? (
-            <Pause className="w-7 h-7 text-foreground fill-current" />
-          ) : (
-            <Play className="w-7 h-7 text-foreground fill-current ml-1" />
-          )}
-        </div>
+        {isPlaying ? (
+          <Pause className="w-4 h-4 text-foreground fill-current" />
+        ) : (
+          <Play className="w-6 h-6 text-white fill-current ml-0.5" />
+        )}
       </button>
     </div>
   );

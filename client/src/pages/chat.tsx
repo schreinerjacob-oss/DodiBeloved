@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
@@ -90,13 +89,16 @@ export default function ChatPage() {
   }, [messages, messageFilter, sortOrder]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const messageInputRef = useRef<HTMLTextAreaElement>(null);
+  const messageInputRef = useRef<HTMLDivElement>(null);
 
   const adjustMessageInputHeight = useCallback(() => {
     const el = messageInputRef.current;
     if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(Math.max(el.scrollHeight, 40), 160)}px`;
+    el.style.height = '0';
+    el.style.overflow = 'hidden';
+    const h = el.scrollHeight;
+    el.style.overflow = '';
+    el.style.height = `${Math.min(Math.max(h, 40), 160)}px`;
   }, []);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const typingThrottleRef = useRef<NodeJS.Timeout | null>(null);
@@ -126,6 +128,16 @@ export default function ChatPage() {
 
   useEffect(() => {
     adjustMessageInputHeight();
+  }, [newMessage, adjustMessageInputHeight]);
+
+  // Sync newMessage back to contenteditable when cleared externally (e.g. after send).
+  // Only sync when newMessage is empty to avoid overwriting in-flight user input.
+  useEffect(() => {
+    if (newMessage !== '') return;
+    const el = messageInputRef.current;
+    if (!el || el.innerText.trim() === '') return;
+    el.innerText = '';
+    requestAnimationFrame(() => adjustMessageInputHeight());
   }, [newMessage, adjustMessageInputHeight]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
@@ -433,9 +445,29 @@ export default function ChatPage() {
   }, [peerState.connected, partnerId, lastSyncedTimestamp]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    const el = scrollRef.current;
+    if (!el) return;
+    const scrollToBottom = () => {
+      el.scrollTop = el.scrollHeight;
+    };
+    const isNearBottom = () => {
+      const threshold = 120;
+      return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    };
+    const maybeScroll = () => {
+      if (isNearBottom()) scrollToBottom();
+    };
+    // Defer until after DOM/layout so new messages are rendered before we scroll
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(scrollToBottom);
+    });
+    // When content grows (e.g. images load), scroll only if user was near bottom
+    const ro = new ResizeObserver(maybeScroll);
+    ro.observe(el);
+    return () => {
+      cancelAnimationFrame(id);
+      ro.disconnect();
+    };
   }, [messages, messageFilter, sortOrder]);
 
   // Update queued messages to 'sent' when connection is restored
@@ -593,6 +625,9 @@ export default function ChatPage() {
 
       // Add to local state immediately
       setMessages(prev => [...prev, message]);
+      // Clear contenteditable synchronously to avoid race: if we only setState, the DOM
+      // isn't cleared until useEffect runs; user could type in the window and prepend to old text
+      if (messageInputRef.current) messageInputRef.current.innerText = '';
       setNewMessage('');
 
       // Send via P2P data channel - if offline, P2P layer queues it automatically
@@ -1070,7 +1105,7 @@ export default function ChatPage() {
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
-    for (const item of items) {
+    for (const item of Array.from(items)) {
       if (item.type.startsWith('image/')) {
         const file = item.getAsFile();
         if (file) {
@@ -1084,12 +1119,41 @@ export default function ChatPage() {
         return;
       }
     }
+    // Fallback: extract image from text/html (Gboard may embed GIF as data URL in HTML)
+    const html = e.clipboardData?.getData('text/html');
+    if (html) {
+      const imgMatch = html.match(/<img[^>]+src\s*=\s*["'](data:image\/[^"']+)["']/i);
+      if (imgMatch) {
+        const dataUrl = imgMatch[1];
+        if (dataUrl.startsWith('data:image/')) {
+          e.preventDefault();
+          try {
+            const res = dataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+            if (res) {
+              const mime = `image/${res[1]}`;
+              const b64 = atob(res[2]);
+              const bytes = new Uint8Array(b64.length);
+              for (let i = 0; i < b64.length; i++) bytes[i] = b64.charCodeAt(i);
+              const blob = new Blob([bytes], { type: mime });
+              if (blob.size > 25 * 1024 * 1024) {
+                toast({ title: "Image too large", description: "Please choose an image under 25MB.", variant: "destructive" });
+                return;
+              }
+              const file = new File([blob], `pasted.${res[1]}`, { type: mime });
+              processImageFile(file);
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
   }, [processImageFile, toast]);
 
   const isVideoRecordingActive = videoDialogOpen && videoStage === 'recording';
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col bg-background">
+    <div className="flex-1 min-h-0 min-w-0 flex flex-col bg-background">
       <MemoryResurfacing />
       {showInvitation && <SupportInvitation onDismiss={() => setShowInvitation(false)} triggerReason="A growing connection..." />}
       <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b bg-card/50">
@@ -1209,16 +1273,6 @@ export default function ChatPage() {
             </Button>
           )}
 
-          {isPartnerTyping && (
-            <div className="flex justify-start">
-              <div className="flex items-center gap-1 px-4 py-2">
-                <span className="w-1.5 h-1.5 bg-sage rounded-full animate-bounce" />
-                <span className="w-1.5 h-1.5 bg-sage rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                <span className="w-1.5 h-1.5 bg-sage rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
-              </div>
-            </div>
-          )}
-
           {displayedMessages.map((message) => {
             const isSent = message.senderId === userId;
             const isImage = message.type === 'image';
@@ -1242,7 +1296,8 @@ export default function ChatPage() {
                       setShowReactionPicker(showReactionPicker === message.id ? null : message.id);
                     }}
                     className={cn(
-                      'max-w-[70%] cursor-pointer transition-transform active:scale-[0.98]',
+                      'cursor-pointer transition-transform active:scale-[0.98]',
+                      isVideo ? 'max-w-[min(90vw,480px)]' : 'max-w-[70%]',
                       (isImage || isVoice || isVideo) ? 'p-0 overflow-hidden' : 'p-4',
                       isSent ? 'bg-sage/30 border-sage/40' : 'bg-card border-card-border'
                     )}
@@ -1391,6 +1446,16 @@ export default function ChatPage() {
               </div>
             );
           })}
+
+          {isPartnerTyping && (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-1 px-4 py-2">
+                <span className="w-1.5 h-1.5 bg-sage rounded-full animate-bounce" />
+                <span className="w-1.5 h-1.5 bg-sage rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                <span className="w-1.5 h-1.5 bg-sage rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1468,12 +1533,18 @@ export default function ChatPage() {
           </DropdownMenu>
           )}
 
-          <Textarea
+          <div
             ref={messageInputRef}
-            value={newMessage}
-            onChange={(e) => {
-              setNewMessage(e.target.value);
+            contentEditable={!sending}
+            suppressContentEditableWarning
+            role="textbox"
+            aria-label="Message"
+            data-placeholder="Type a message..."
+            onInput={(e) => {
+              const text = (e.target as HTMLDivElement).innerText || '';
+              setNewMessage(text);
               handleTyping();
+              adjustMessageInputHeight();
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -1482,10 +1553,10 @@ export default function ChatPage() {
               }
             }}
             onPaste={handlePaste}
-            placeholder="Type a message..."
-            className="flex-1 min-h-10 max-h-40 resize-none overflow-y-auto py-2"
-            rows={1}
-            disabled={sending}
+            className={cn(
+              "flex-1 min-h-10 max-h-40 resize-none overflow-y-auto py-2 px-3 rounded-md border border-input bg-background text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 md:text-sm",
+              "[&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-muted-foreground"
+            )}
             data-testid="input-message"
           />
 
