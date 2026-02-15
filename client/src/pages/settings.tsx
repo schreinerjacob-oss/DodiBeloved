@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug, RefreshCw, ShieldCheck, Trash2, BookOpen, Image } from 'lucide-react';
+import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug, RefreshCw, ShieldCheck, Trash2, Image } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -408,32 +408,6 @@ export default function SettingsPage() {
             </Card>
           </div>
 
-          {/* Backup & restore education */}
-          <div className="space-y-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">Safety</p>
-
-            <Card className="p-6 space-y-4 border-sage/20 bg-sage/5">
-              <div className="flex items-center gap-3">
-                <BookOpen className="w-5 h-5 text-sage" />
-                <div>
-                  <h3 className="font-medium">How backup & restore works</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    There is no cloud backup. Your pairing code and reconnection details are the only way to restore on a new device.
-                  </p>
-                </div>
-              </div>
-              <ul className="text-sm text-muted-foreground space-y-2 list-disc list-inside">
-                <li>Save your reconnection details (Settings → copy) somewhere safe.</li>
-                <li>If you lose this device, use Restore and enter those details to mirror your shared history from your partner&apos;s device.</li>
-                <li>Both of you hold the full data; nothing is stored on our servers.</li>
-              </ul>
-              <Button variant="outline" size="sm" className="w-full border-sage/40 text-sage hover:bg-sage/10" onClick={() => setLocation('/redundancy')}>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Learn more: The Redundant Garden
-              </Button>
-            </Card>
-          </div>
-
           {/* Privacy */}
           <div className="space-y-3">
             <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">Privacy</p>
@@ -703,30 +677,39 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <RefreshCw className="w-5 h-5 text-sage" />
               <div>
-                <h3 className="font-medium text-sage">Restore & Redundancy</h3>
-                <p className="text-xs text-muted-foreground">Reconnect, restore, and learn how your garden stays serverless</p>
+                <h3 className="font-medium text-sage">How Your Phones Work & Restore</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Your phones are the server. There is no cloud.
+                </p>
               </div>
             </div>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                Both devices hold the full shared history. Nothing is stored on our servers. If you lose this phone, your partner&apos;s device becomes the source: use Restore below, enter your reconnection details (from Settings → Recovery Keys), and your new device will mirror the history from your partner&apos;s phone.
+              </p>
+              <p className="text-xs">
+                Save your reconnection details somewhere safe before you need them.
+              </p>
+            </div>
+            <Button 
+              variant="outline" 
+              className="w-full border-sage/30 text-sage hover:bg-sage/10 hover-elevate"
+              onClick={() => {
+                console.log('♾️ [RESTORE] Restore mode entered (from Settings)');
+                setLocation('/pairing?mode=restore');
+              }}
+              data-testid="button-restore-partner"
+            >
+              Reconnect & Restore Partner Device
+            </Button>
             <Button 
               variant="ghost" 
+              size="sm"
               className="w-full text-sage underline text-xs justify-start h-auto p-0"
               onClick={() => setLocation('/redundancy')}
             >
-              Learn how your data stays safe without a cloud →
+              Learn more: The Redundant Garden →
             </Button>
-            <div className="pt-2">
-              <Button 
-                variant="outline" 
-                className="w-full border-sage/30 text-sage hover:bg-sage/10 hover-elevate"
-                onClick={() => {
-                  console.log('♾️ [RESTORE] Restore mode entered (from Settings)');
-                  setLocation('/pairing?mode=restore');
-                }}
-                data-testid="button-restore-partner"
-              >
-                Reconnect & Restore Partner Device
-              </Button>
-            </div>
           </Card>
           </div>
 

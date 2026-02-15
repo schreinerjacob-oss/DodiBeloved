@@ -471,22 +471,8 @@ export default function PairingPage() {
     );
   }
 
-  if (loading && mode === 'restore-mode') {
-    return (
-      <div className="flex flex-col items-center justify-center p-6 text-center space-y-6 bg-background h-full w-full overflow-y-auto" style={{ minHeight: '100dvh' }}>
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-        >
-          <RefreshCw className="w-12 h-12 text-sage" />
-        </motion.div>
-        <div className="space-y-2">
-          <h2 className="text-2xl font-light text-sage">Restoring Your Garden...</h2>
-          <p className="text-muted-foreground italic text-sm">One moment while we regrow the vines of your connection ♾️</p>
-        </div>
-      </div>
-    );
-  }
+  // In restore-mode, we must always show the generated code so the user can share it with their partner.
+  // Do not show loading spinner for restore-mode creator – show the code card instead.
 
     const isRestoreFlow = searchParams.get('mode') === 'restore' || mode === 'restore-mode';
 
@@ -947,9 +933,24 @@ export default function PairingPage() {
                 </div>
 
                 <div className="text-center p-6 bg-sage/10 rounded-lg">
-                  <p className="text-4xl font-light tracking-widest text-sage font-mono" data-testid="text-restore-code">
-                    {roomCode || 'RESTORE'}
-                  </p>
+                  <div className="flex items-center justify-center gap-3">
+                    <p className="text-4xl font-light tracking-widest text-sage font-mono" data-testid="text-restore-code">
+                      {roomCode || 'RESTORE'}
+                    </p>
+                    {roomCode && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleCopyCode}
+                        className="text-sage hover:bg-sage/10"
+                      >
+                        {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                      </Button>
+                    )}
+                  </div>
+                  {roomCode && (
+                    <p className="text-xs text-muted-foreground mt-2">Give this code to your partner</p>
+                  )}
                 </div>
 
                 {/* Fallback: if restore-mode was entered but room code didn't generate, allow manual entry */}

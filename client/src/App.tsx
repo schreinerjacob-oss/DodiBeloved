@@ -85,14 +85,21 @@ function MainApp() {
     if (el) el.scrollTo({ top: 0, left: 0 });
   }, [location]);
 
-  // Force layout recalculation after route content mounts so nested ScrollArea gets correct viewport height (no key= remount, so we need this)
+  // Force layout recalculation after route content mounts so nested ScrollArea gets correct viewport height
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
-    const id = requestAnimationFrame(() => {
-      void el.offsetHeight;
+    let raf1: number;
+    let raf2: number | undefined;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        void el.offsetHeight;
+      });
     });
-    return () => cancelAnimationFrame(id);
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2 != null) cancelAnimationFrame(raf2);
+    };
   }, [location]);
 
   const partnerActive = peerState?.connected || false;
@@ -163,8 +170,8 @@ function MainApp() {
 
       <div className="flex-1 min-h-0 overflow-hidden relative z-10 flex flex-col">
         <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto flex flex-col" style={{ minHeight: 0 }}>
-          {/* Route wrapper: no key to avoid blank remount flash on tab switch; use min-h-0 + flex for height propagation */}
-          <div className="flex-1 min-h-0 flex flex-col w-full" style={{ minHeight: 0, flex: '1 1 0%' }}>
+          {/* Route wrapper: no key to avoid blank on tab switch; min-h-[1px] prevents flex collapse; double RAF fixes ScrollArea height */}
+          <div className="flex-1 min-h-0 flex flex-col w-full" style={{ minHeight: 1, flex: '1 1 0%' }}>
             <Switch>
               <Route path="/pairing">{() => <PairingPage />}</Route>
               <Route path="/chat">{() => <ChatPage />}</Route>
