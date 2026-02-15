@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Heart, Send, Image, Mic, MicOff, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter, Video, VideoOff, Circle, Square } from 'lucide-react';
+import { Heart, Send, Image, Mic, MicOff, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter, Video, VideoOff, Circle, Square, Plus } from 'lucide-react';
 import { getMessages, saveMessage, deleteMessage } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { useOfflineQueueSize } from '@/hooks/use-offline-queue';
@@ -23,6 +23,12 @@ import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage, compressImageWithPreset, cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const QUICK_REACTIONS = [
   { id: 'heart', icon: Heart, color: 'text-accent' },
@@ -84,6 +90,14 @@ export default function ChatPage() {
   }, [messages, messageFilter, sortOrder]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const adjustMessageInputHeight = useCallback(() => {
+    const el = messageInputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 40), 160)}px`;
+  }, []);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const typingThrottleRef = useRef<NodeJS.Timeout | null>(null);
   const doubleTapRef = useRef<{ messageId: string; time: number } | null>(null);
@@ -109,6 +123,10 @@ export default function ChatPage() {
     document.addEventListener('visibilitychange', handler);
     return () => document.removeEventListener('visibilitychange', handler);
   }, []);
+
+  useEffect(() => {
+    adjustMessageInputHeight();
+  }, [newMessage, adjustMessageInputHeight]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
@@ -936,30 +954,9 @@ export default function ChatPage() {
     }
   }, [recordedBlob, recordedBlobUrl, userId, partnerId, peerState.connected, isDisappearing, sendP2P, sendMedia, toast]);
 
-  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file is an image
-    if (!file.type.startsWith('image/')) {
-      toast({
-        title: "Not an image",
-        description: "Please choose a photo (JPEG, PNG, etc.).",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Max 25MB - compression handles most sizes
-    if (file.size > 25 * 1024 * 1024) {
-      toast({
-        title: "Image too large",
-        description: "Please choose an image under 25MB.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  const processImageFile = useCallback(async (file: File) => {
+    const displayName = file.name || `pasted.${(file.type.split('/')[1] || 'image')}`;
+    const isGif = file.type === 'image/gif';
     setSending(true);
     try {
       const messageId = nanoid();
@@ -970,11 +967,16 @@ export default function ChatPage() {
       const { getSetting } = await import('@/lib/storage-encrypted');
       const imageSendMode = (await getSetting('imageSendMode')) || 'balanced';
 
-      // Preview for chat list (always compressed)
-      const previewPreset = imageSendMode === 'aggressive' ? 'aggressive' : 'balanced';
-      console.log('🖼️ Compressing preview...');
-      const compressedBlob = await compressImageWithPreset(file, previewPreset);
-      await saveMediaBlob(messageId, compressedBlob, 'message', 'preview');
+      // GIFs: use as-is to preserve animation; photos: compress
+      let previewBlob: Blob;
+      if (isGif) {
+        previewBlob = file;
+      } else {
+        const previewPreset = imageSendMode === 'aggressive' ? 'aggressive' : 'balanced';
+        console.log('🖼️ Compressing preview...');
+        previewBlob = await compressImageWithPreset(file, previewPreset);
+      }
+      await saveMediaBlob(messageId, previewBlob, 'message', 'preview');
 
       const DISAPPEAR_MS = 30_000;
       const disappearsAt = isDisappearing ? new Date(Date.now() + DISAPPEAR_MS) : undefined;
@@ -982,7 +984,7 @@ export default function ChatPage() {
         id: messageId,
         senderId: userId!,
         recipientId: partnerId!,
-        content: file.name,
+        content: displayName,
         type: 'image',
         mediaUrl: null,
         isDisappearing: isDisappearing ?? undefined,
@@ -1004,10 +1006,10 @@ export default function ChatPage() {
       });
 
       // Send preview first (chat list)
-      await sendMedia({ mediaId: messageId, kind: 'message', mime: compressedBlob.type || file.type || 'image/jpeg' });
+      await sendMedia({ mediaId: messageId, kind: 'message', mime: previewBlob.type || file.type || 'image/jpeg' });
 
-      // Send full in background (balanced/full mode)
-      if ((imageSendMode === 'balanced' || imageSendMode === 'full') && file.size !== compressedBlob.size) {
+      // Send full in background (photos: balanced/full mode; GIFs: already full)
+      if (!isGif && (imageSendMode === 'balanced' || imageSendMode === 'full') && file.size !== previewBlob.size) {
         const trySendFull = async () => {
           try {
             await saveMediaBlob(messageId, file, 'message', 'full');
@@ -1048,12 +1050,41 @@ export default function ChatPage() {
       });
       setSending(false);
     }
+  }, [userId, partnerId, peerState.connected, isDisappearing, sendP2P, sendMedia, toast]);
 
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast({ title: "Not an image", description: "Please choose a photo or GIF (JPEG, PNG, GIF, etc.).", variant: "destructive" });
+      return;
     }
+    if (file.size > 25 * 1024 * 1024) {
+      toast({ title: "Image too large", description: "Please choose an image under 25MB.", variant: "destructive" });
+      return;
+    }
+    await processImageFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          if (file.size > 25 * 1024 * 1024) {
+            toast({ title: "Image too large", description: "Please choose an image under 25MB.", variant: "destructive" });
+            return;
+          }
+          processImageFile(file);
+        }
+        return;
+      }
+    }
+  }, [processImageFile, toast]);
 
   const isVideoRecordingActive = videoDialogOpen && videoStage === 'recording';
 
@@ -1220,9 +1251,12 @@ export default function ChatPage() {
                       <div className="space-y-2">
                         <MessageMediaImage messageId={message.id} fileName={message.content} />
                         <div className="flex items-center justify-between px-3 pb-2">
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            {message.isDisappearing && <EyeOff className="w-3 h-3 text-muted-foreground shrink-0" title="Disappearing message" />}
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
                           {isSent && (
                             <div className="ml-2">
                               {message.status === 'queued' && <Clock className="w-3 h-3 text-amber-500" />}
@@ -1239,9 +1273,12 @@ export default function ChatPage() {
                       <div className="space-y-2 p-2">
                         <MessageMediaVoice messageId={message.id} />
                         <div className="flex items-center justify-between px-2 pb-1">
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            {message.isDisappearing && <EyeOff className="w-3 h-3 text-muted-foreground shrink-0" title="Disappearing message" />}
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
                           {isSent && (
                             <div className="ml-2">
                               {message.status === 'queued' && <Clock className="w-3 h-3 text-amber-500" />}
@@ -1258,9 +1295,12 @@ export default function ChatPage() {
                       <div className="space-y-2 p-2">
                         <MessageMediaVideo messageId={message.id} />
                         <div className="flex items-center justify-between px-2 pb-1">
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            {message.isDisappearing && <EyeOff className="w-3 h-3 text-muted-foreground shrink-0" title="Disappearing message" />}
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
                           {isSent && (
                             <div className="ml-2">
                               {message.status === 'queued' && <Clock className="w-3 h-3 text-amber-500" />}
@@ -1277,9 +1317,12 @@ export default function ChatPage() {
                       <>
                         <p className="text-sm leading-relaxed">{message.content}</p>
                         <div className="flex items-center justify-between mt-2 gap-2">
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            {message.isDisappearing && <EyeOff className="w-3 h-3 text-muted-foreground shrink-0" title="Disappearing message" />}
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
                           {isSent && (
                             <div className="ml-2">
                               {message.status === 'queued' && <Clock className="w-3 h-3 text-amber-500" />}
@@ -1361,72 +1404,87 @@ export default function ChatPage() {
             className="hidden"
             data-testid="input-image-file"
           />
-          <button
-            onClick={handleImageClick}
-            disabled={sending || isRecording || isVideoRecordingActive}
-            className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
-            data-testid="button-attach-image"
-            type="button"
-          >
-            <Image className="w-5 h-5 text-muted-foreground" />
-          </button>
-
-          <button
-            onClick={handleVoiceClick}
-            disabled={sending || isVideoRecordingActive}
-            className={cn(
-              'flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed',
-              isRecording && 'bg-destructive/20 text-destructive'
-            )}
-            data-testid="button-voice-note"
-            type="button"
-            title={isRecording ? 'Tap to send' : 'Record voice message'}
-          >
-            {isRecording ? (
+          {isRecording ? (
+            <button
+              onClick={handleVoiceClick}
+              className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md bg-destructive/20 text-destructive hover:bg-destructive/30"
+              data-testid="button-voice-note"
+              type="button"
+              title="Tap to stop recording"
+            >
               <MicOff className="w-5 h-5" />
-            ) : (
-              <Mic className="w-5 h-5 text-muted-foreground" />
-            )}
-          </button>
+            </button>
+          ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                disabled={sending || isVideoRecordingActive}
+                className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="button-attach-menu"
+                type="button"
+                title="Attach or record"
+              >
+                <Plus className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" className="w-48">
+              <DropdownMenuItem
+                onClick={handleImageClick}
+                disabled={sending || isRecording || isVideoRecordingActive}
+                data-testid="menu-item-image"
+              >
+                <Image className="w-4 h-4 mr-2" />
+                Photo
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={handleVoiceClick}
+                disabled={sending || isVideoRecordingActive}
+                data-testid="menu-item-voice"
+              >
+                <Mic className="w-4 h-4 mr-2" />
+                Voice note
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={handleVideoClick}
+                disabled={sending || isRecording || isVideoRecordingActive}
+                data-testid="menu-item-video"
+              >
+                <Video className="w-4 h-4 mr-2" />
+                Video message
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setIsDisappearing(!isDisappearing)}
+                disabled={sending || isRecording || isVideoRecordingActive}
+                data-testid="menu-item-disappearing"
+              >
+                {isDisappearing ? (
+                  <EyeOff className="w-4 h-4 mr-2 text-accent" />
+                ) : (
+                  <Eye className="w-4 h-4 mr-2" />
+                )}
+                {isDisappearing ? 'Disappearing: On' : 'Disappearing message'}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          )}
 
-          <button
-            onClick={handleVideoClick}
-            disabled={sending || isRecording || isVideoRecordingActive}
-            className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
-            data-testid="button-video-note"
-            type="button"
-            title="Record video message"
-          >
-            <Video className="w-5 h-5 text-muted-foreground" />
-          </button>
-
-          <button
-            onClick={() => {
-              console.log('Toggle clicked! New state:', !isDisappearing);
-              setIsDisappearing(!isDisappearing);
-            }}
-            disabled={sending || isRecording || isVideoRecordingActive}
-            className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md hover:bg-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
-            data-testid="button-disappearing"
-            title="Send disappearing message"
-            type="button"
-          >
-            {isDisappearing ? (
-              <EyeOff className="w-5 h-5 text-accent" />
-            ) : (
-              <Eye className="w-5 h-5 text-muted-foreground" />
-            )}
-          </button>
-
-          <Input
+          <Textarea
+            ref={messageInputRef}
             value={newMessage}
             onChange={(e) => {
               setNewMessage(e.target.value);
               handleTyping();
             }}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            onPaste={handlePaste}
             placeholder="Type a message..."
-            className="flex-1"
+            className="flex-1 min-h-10 max-h-40 resize-none overflow-y-auto py-2"
+            rows={1}
             disabled={sending}
             data-testid="input-message"
           />

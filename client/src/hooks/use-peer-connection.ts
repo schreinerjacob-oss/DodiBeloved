@@ -593,8 +593,10 @@ async function flushOfflineQueue(conn: DataConnection) {
     }
   }
   
-  notifyQueueListeners(offlineQueue.length);
-  if (offlineQueue.length === 0) {
+  // Use storage count (not in-memory) so pending badge clears reliably after sync
+  const size = await getOfflineQueueSize();
+  notifyQueueListeners(size);
+  if (size === 0) {
     queueIntendedForPartnerId = null;
   }
   queueFlushInProgress = false;
@@ -958,11 +960,23 @@ export function getRemotePeerId(code: string, isCreator: boolean): string {
 
 export async function waitForConnection(peer: Peer, timeout: number): Promise<DataConnection> {
   return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('Connection timed out')), timeout);
-    peer.on('connection', (conn) => {
+    const handler = (conn: DataConnection) => {
       clearTimeout(t);
-      resolve(conn);
-    });
+      peer.off('connection', handler);
+      // Must wait for conn.open before using - otherwise messages may be lost (joiner's tunnel-init)
+      if (conn.open) {
+        resolve(conn);
+        return;
+      }
+      // Attach error first so we never miss an error that fires before open
+      conn.on('error', (err) => reject(err));
+      conn.on('open', () => resolve(conn));
+    };
+    const t = setTimeout(() => {
+      peer.off('connection', handler);
+      reject(new Error('Connection timed out'));
+    }, timeout);
+    peer.on('connection', handler);
   });
 }
 
@@ -1417,9 +1431,16 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     return () => window.removeEventListener('dodi-cancel-sync', handleCancel);
   }, []);
 
-  // Periodic health check - ensure connection is active; treat stale (no pong) as dead
+  // Periodic health check - ensure connection is active when app is open; treat stale (no pong) as dead
+  // Use short interval when visible so both devices sitting idle will reconnect within ~30s
+  const [tabVisible, setTabVisible] = useState(() => (typeof document !== 'undefined' ? document.visibilityState === 'visible' : true));
   useEffect(() => {
-    const checkInterval = allowWakeUp ? 5000 : 30 * 60 * 1000;
+    const handler = () => setTabVisible(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, []);
+  useEffect(() => {
+    const checkIntervalMs = tabVisible ? (allowWakeUp ? 5000 : 30000) : 30 * 60 * 1000;
     const interval = setInterval(() => {
       notifyListeners();
       if (globalConn && globalConn.open && isConnectionLikelyDead()) {
@@ -1436,9 +1457,9 @@ export function usePeerConnection(): UsePeerConnectionReturn {
           connectToPartner(partnerId);
         }
       }
-    }, checkInterval);
+    }, checkIntervalMs);
     return () => clearInterval(interval);
-  }, [partnerId, allowWakeUp]);
+  }, [partnerId, allowWakeUp, tabVisible]);
 
   // Initialize background sync for reconnection when app is backgrounded
   useEffect(() => {

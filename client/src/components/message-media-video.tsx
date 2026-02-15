@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Play, Pause } from 'lucide-react';
 import { getMediaBlob } from '@/lib/storage';
+import { cn } from '@/lib/utils';
 
 export function MessageMediaVideo({ messageId }: { messageId: string }) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -112,7 +113,10 @@ export function MessageMediaVideo({ messageId }: { messageId: string }) {
   }
 
   return (
-    <div className="relative w-full max-w-[280px] aspect-video rounded-md overflow-hidden bg-black/5 group">
+    <div className={cn(
+      'relative w-full aspect-video rounded-md overflow-hidden bg-black/5 group transition-[max-width] duration-300',
+      isPlaying ? 'max-w-[min(90vw,480px)]' : 'max-w-[280px]'
+    )}>
       <video
         ref={videoRef}
         src={videoUrl}

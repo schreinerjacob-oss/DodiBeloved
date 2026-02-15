@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useLocation } from 'wouter';
 import { generatePassphrase, generateSalt, arrayBufferToBase64 } from '@/lib/crypto';
 import { saveSetting, getSetting, initDB, clearEncryptionCache } from '@/lib/storage-encrypted';
 import { useInactivityTimer } from '@/hooks/use-inactivity-timer';
@@ -286,10 +287,13 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     await saveSetting('inactivityMinutes', String(minutes));
   };
 
+  const [location] = useLocation();
+  const isRestoreFlow = location.startsWith('/pairing') && typeof window !== 'undefined' && window.location.search.includes('mode=restore');
+
   useInactivityTimer({
     onInactivity: lockAppHandler,
     timeoutMinutes: inactivityMinutes,
-    enabled: pinEnabled && pairingStatus === 'connected' && !isLocked,
+    enabled: pinEnabled && pairingStatus === 'connected' && !isLocked && !isRestoreFlow,
   });
 
   const initializeProfile = async (name: string) => {

@@ -96,9 +96,45 @@ export function isAppInBackground(): boolean {
   return document.hidden || document.visibilityState === 'hidden';
 }
 
+let lastInAppAlertAt = 0;
+const IN_APP_ALERT_COOLDOWN_MS = 600;
+
+/**
+ * Play a short gentle tone and vibrate when a new message arrives (app in foreground).
+ * Uses Web Audio API for the tone; falls back to vibration-only if AudioContext fails.
+ * Cooldown prevents double-play when both chat page and global sync handler fire.
+ */
+export function playInAppMessageAlert(): void {
+  const now = Date.now();
+  if (now - lastInAppAlertAt < IN_APP_ALERT_COOLDOWN_MS) return;
+  lastInAppAlertAt = now;
+  try {
+    if ('vibrate' in navigator) {
+      navigator.vibrate([150, 80, 150]);
+    }
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(523.25, now); // C5
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.15, now + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  } catch (e) {
+    if ('vibrate' in navigator) {
+      navigator.vibrate(200);
+    }
+  }
+}
+
 export async function notifyNewMessage(options?: { type?: 'text' | 'image' | 'voice' | 'video' }): Promise<boolean> {
   if (!isAppInBackground()) {
-    console.log('📬 App in foreground, skipping notification');
+    playInAppMessageAlert();
     return false;
   }
 
