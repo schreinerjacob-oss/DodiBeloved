@@ -85,21 +85,14 @@ function MainApp() {
     if (el) el.scrollTo({ top: 0, left: 0 });
   }, [location]);
 
-  // Force reflow after route content mounts so nested ScrollArea / flex children get correct height
+  // Force layout recalculation after route content mounts so nested ScrollArea gets correct viewport height (no key= remount, so we need this)
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
-    let raf1: number;
-    let raf2: number | undefined;
-    raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        void el.offsetHeight;
-      });
+    const id = requestAnimationFrame(() => {
+      void el.offsetHeight;
     });
-    return () => {
-      cancelAnimationFrame(raf1);
-      if (raf2 != null) cancelAnimationFrame(raf2);
-    };
+    return () => cancelAnimationFrame(id);
   }, [location]);
 
   const partnerActive = peerState?.connected || false;
@@ -170,10 +163,9 @@ function MainApp() {
 
       <div className="flex-1 min-h-0 overflow-hidden relative z-10 flex flex-col">
         <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto flex flex-col" style={{ minHeight: 0 }}>
-          {/* Key by location so route content remounts and gets correct layout. Wrapper gives route a definite flex height. */}
-          <div key={location} className="flex-1 min-h-0 flex flex-col w-full" style={{ minHeight: 0, flex: '1 1 0%' }}>
-            <div className="flex-1 min-h-0 flex flex-col w-full min-w-0">
-              <Switch>
+          {/* Route wrapper: no key to avoid blank remount flash on tab switch; use min-h-0 + flex for height propagation */}
+          <div className="flex-1 min-h-0 flex flex-col w-full" style={{ minHeight: 0, flex: '1 1 0%' }}>
+            <Switch>
               <Route path="/pairing">{() => <PairingPage />}</Route>
               <Route path="/chat">{() => <ChatPage />}</Route>
               <Route path="/calls">{() => <CallsPage />}</Route>
@@ -186,8 +178,7 @@ function MainApp() {
               <Route path="/redundancy">{() => <RedundancyPage />}</Route>
               <Route path="/reset">{() => <ResetPage />}</Route>
               <Route path="/">{() => <ChatPage />}</Route>
-              </Switch>
-            </div>
+            </Switch>
           </div>
         </div>
       </div>
