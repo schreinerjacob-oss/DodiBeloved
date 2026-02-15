@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Heart, Send, Image, Mic, MicOff, Lock, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter, Video, VideoOff, Circle, Square } from 'lucide-react';
+import { Heart, Send, Image, Mic, MicOff, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter, Video, VideoOff, Circle, Square } from 'lucide-react';
 import { getMessages, saveMessage, deleteMessage } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { useOfflineQueueSize } from '@/hooks/use-offline-queue';
@@ -637,6 +637,15 @@ export default function ChatPage() {
   };
 
   const handleThinkingOfYou = async () => {
+    if (!partnerId || !peerState.connected) {
+      toast({
+        title: "Not connected",
+        description: "Connect with your beloved to send a heart",
+        variant: "destructive",
+      });
+      return;
+    }
+    sendP2P({ type: 'thinking-of-you', data: {}, timestamp: Date.now() });
     toast({
       title: "Thinking of you",
       description: "Heart sent to your beloved",
@@ -1052,18 +1061,12 @@ export default function ChatPage() {
     <div className="flex-1 min-h-0 flex flex-col bg-background">
       <MemoryResurfacing />
       {showInvitation && <SupportInvitation onDismiss={() => setShowInvitation(false)} triggerReason="A growing connection..." />}
-      <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b bg-card/50">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-sage to-blush flex items-center justify-center ${peerState.connected ? 'animate-gentle-pulse' : ''}`}>
-            <Heart className="w-5 h-5 text-white" />
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b bg-card/50">
+        <div className="flex items-center gap-2">
+          <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-sage to-blush flex items-center justify-center ${peerState.connected ? 'animate-gentle-pulse' : ''}`}>
+            <Heart className="w-4 h-4 text-white" />
           </div>
-          <div>
-            <h2 className="font-medium text-foreground">my beloved</h2>
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Lock className="w-3 h-3" />
-              Your whispers stay only between you two — forever
-            </p>
-          </div>
+          <h2 className="font-medium text-foreground">my beloved</h2>
         </div>
 
         <div className="flex items-center gap-2">

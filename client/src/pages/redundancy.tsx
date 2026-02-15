@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { ShieldCheck, Database, RefreshCw, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLocation } from 'wouter';
@@ -30,8 +31,9 @@ export default function RedundancyExplainer() {
   ];
 
   return (
-    <div className="min-h-screen bg-background p-6 space-y-8">
-      <div className="max-w-2xl mx-auto space-y-6">
+    <div className="flex-1 min-h-0 flex flex-col bg-background">
+      <ScrollArea className="flex-1 min-h-0 p-6">
+        <div className="max-w-2xl mx-auto space-y-6 pb-24">
         <header className="space-y-2">
           <h1 className="text-3xl font-serif text-foreground">The Redundant Garden</h1>
           <p className="text-muted-foreground">
@@ -67,6 +69,7 @@ export default function RedundancyExplainer() {
           </Button>
         </div>
       </div>
+      </ScrollArea>
     </div>
   );
 }

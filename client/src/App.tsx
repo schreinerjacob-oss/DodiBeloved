@@ -28,6 +28,7 @@ import { ConnectionStatus } from "@/components/connection-status";
 import { IncomingCallOverlay } from "@/components/incoming-call-overlay";
 import { GlobalSyncHandler } from "@/components/global-sync-handler";
 import { DodiRestoreListener } from "@/components/dodi-restore-listener";
+import { DodiThinkingOfYouHandler } from "@/components/dodi-thinking-of-you-handler";
 import { PwaInstallBanner } from "@/components/pwa-install-banner";
 import { ServiceWorkerUpdateNotifier } from "@/components/service-worker-update";
 import { getNotifyServerUrl, registerPushWithNotifyServer } from "@/lib/push-register";
@@ -87,8 +88,8 @@ function MainApp() {
   }, [location]);
 
   // Force layout recalculation after route content mounts so nested ScrollArea gets correct viewport height.
-  // When leaving Chat, run an extra delayed pass – Chat uses plain overflow-y-auto; other pages use ScrollArea
-  // and can collapse to zero height if layout hasn't settled when Chat's structure unmounts.
+  // When leaving Chat, run extra passes – Chat uses plain overflow-y-auto; other pages use ScrollArea
+  // and can collapse if layout hasn't settled when Chat's structure unmounts.
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
@@ -96,18 +97,22 @@ function MainApp() {
     const wasOnChat = prevLocationRef.current === '/chat' || prevLocationRef.current === '/';
     prevLocationRef.current = location;
 
-    const forceLayout = () => void el.offsetHeight;
+    const forceLayout = () => {
+      void el.offsetHeight;
+      window.dispatchEvent(new Event('resize'));
+    };
 
     let raf1: number;
     let raf2: number | undefined;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let t1: ReturnType<typeof setTimeout> | undefined;
+    let t2: ReturnType<typeof setTimeout> | undefined;
 
     raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         forceLayout();
-        // Extra pass when leaving Chat so ScrollArea viewport gets correct height
         if (wasOnChat && location !== '/chat' && location !== '/') {
-          timeoutId = setTimeout(forceLayout, 50);
+          t1 = setTimeout(forceLayout, 50);
+          t2 = setTimeout(forceLayout, 150);
         }
       });
     });
@@ -115,7 +120,8 @@ function MainApp() {
     return () => {
       cancelAnimationFrame(raf1);
       if (raf2 != null) cancelAnimationFrame(raf2);
-      if (timeoutId != null) clearTimeout(timeoutId);
+      if (t1 != null) clearTimeout(t1);
+      if (t2 != null) clearTimeout(t2);
     };
   }, [location]);
 
@@ -187,8 +193,8 @@ function MainApp() {
 
       <div className="flex-1 min-h-0 overflow-hidden relative z-10 flex flex-col">
         <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto flex flex-col" style={{ minHeight: 0 }}>
-          {/* Route wrapper: no key to avoid blank on tab switch; min-h-[1px] prevents flex collapse; double RAF fixes ScrollArea height */}
-          <div className="flex-1 min-h-0 flex flex-col w-full" style={{ minHeight: 1, flex: '1 1 0%' }}>
+          {/* Route wrapper: min-h-full prevents flex collapse; flex layout allows scroll overflow so scrollTo(0,0) works */}
+          <div className="flex-1 min-h-0 flex flex-col w-full" style={{ minHeight: '100%', flex: '1 1 0%' }}>
             <Switch>
               <Route path="/pairing">{() => <PairingPage />}</Route>
               <Route path="/chat">{() => <ChatPage />}</Route>
@@ -207,7 +213,7 @@ function MainApp() {
         </div>
       </div>
 
-      <nav className="border-t bg-card/80 backdrop-blur-sm px-2 py-2 flex-shrink-0 relative z-20" style={{ paddingBottom: 'var(--safe-area-inset-bottom)' }}>
+      <nav className="border-t bg-card/80 backdrop-blur-sm px-2 py-2 flex-shrink-0 relative z-20" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
         <div className="flex items-center justify-around max-w-md mx-auto">
           {navItems.map((item) => (
             <NavItem
@@ -237,6 +243,7 @@ export default function App() {
       <TooltipProvider>
         <DodiProvider>
           <DodiRestoreListener />
+          <DodiThinkingOfYouHandler />
           <ServiceWorkerUpdateNotifier />
           <OnboardingProvider>
             <MainApp />

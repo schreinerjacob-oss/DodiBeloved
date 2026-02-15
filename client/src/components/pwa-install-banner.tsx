@@ -9,7 +9,7 @@ export function PwaInstallBanner() {
   if (!canInstall) return null;
 
   return (
-    <div className="fixed inset-x-4 bottom-24 z-[85] animate-in slide-in-from-bottom-4 duration-500">
+    <div className="fixed inset-x-4 z-[85] animate-in slide-in-from-bottom-4 duration-500" style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}>
       <Card className="p-4 bg-gradient-to-br from-sage/10 via-background to-blush/10 border-sage/30 shadow-xl flex items-center gap-4">
         <div className="flex-shrink-0 w-10 h-10 rounded-full bg-sage/20 flex items-center justify-center">
           <Download className="w-5 h-5 text-sage" />
