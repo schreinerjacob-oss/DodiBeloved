@@ -97,11 +97,13 @@ function MainApp() {
     };
     let raf2: number | undefined;
     let t1: ReturnType<typeof setTimeout> | undefined;
+    let t2: ReturnType<typeof setTimeout> | undefined;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         forceLayout();
         if (wasOnChat && location !== '/chat' && location !== '/') {
-          t1 = setTimeout(forceLayout, 100);
+          t1 = setTimeout(forceLayout, 50);
+          t2 = setTimeout(forceLayout, 150);
         }
       });
     });
@@ -109,6 +111,7 @@ function MainApp() {
       cancelAnimationFrame(raf1);
       if (raf2 != null) cancelAnimationFrame(raf2);
       if (t1 != null) clearTimeout(t1);
+      if (t2 != null) clearTimeout(t2);
     };
   }, [location]);
 
