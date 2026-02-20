@@ -24,7 +24,7 @@ interface DodiContextType {
   hasPIN: boolean;
   setPremiumStatus: (status: boolean) => Promise<void>;
   setAllowWakeUp: (enabled: boolean) => Promise<void>;
-  initializeProfile: (displayName: string) => Promise<string>;
+  initializeProfile: (displayName: string, birthday?: string) => Promise<string>;
   initializePairing: () => Promise<{ userId: string; passphrase: string }>;
   completePairingWithMasterKey: (masterKey: string, salt: string, creatorId: string) => Promise<void>;
   completePairingAsCreator: (masterKey: string, salt: string, joinerId: string) => Promise<void>;
@@ -296,10 +296,13 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     enabled: pinEnabled && pairingStatus === 'connected' && !isLocked && !isRestoreFlow,
   });
 
-  const initializeProfile = async (name: string) => {
+  const initializeProfile = async (name: string, birthday?: string) => {
     const newUserId = nanoid();
     await saveSetting('userId', newUserId);
     await saveSetting('displayName', name);
+    if (birthday != null && birthday.trim() !== '') {
+      await saveSetting('birthday', birthday.trim());
+    }
     // Explicitly set in localStorage for immediate recovery
     localStorage.setItem('dodi-userId', newUserId);
     localStorage.setItem('dodi-displayName', name);
@@ -312,7 +315,11 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     clearEncryptionCache();
     setPassphrase(null);
     const db = await initDB();
-    await Promise.all(['settings', 'messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'reactions'].map(s => db.clear(s)));
+    await Promise.all([
+      'settings', 'messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions',
+      'partnerDetails', 'momentQuestionProgress', 'belovedSurveys',
+      'messageMedia', 'memoryMedia', 'offlineQueue', 'offlineMediaQueue',
+    ].map(s => db.clear(s)));
     setUserId(null);
     setDisplayName(null);
     setPartnerId(null);

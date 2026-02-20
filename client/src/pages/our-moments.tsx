@@ -5,15 +5,18 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { CalendarHeart, Heart, Plus, Sparkles, Trash2 } from 'lucide-react';
-import { getAllCalendarEvents, saveCalendarEvent, deleteCalendarEvent } from '@/lib/storage-encrypted';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CalendarHeart, Heart, Plus, Sparkles, FileText, MessageCircle, User } from 'lucide-react';
+import { getSetting, getAllCalendarEvents, saveCalendarEvent } from '@/lib/storage-encrypted';
 import type { CalendarEvent } from '@/types';
 import { format, differenceInDays, differenceInYears, differenceInMonths } from 'date-fns';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
-import { cn } from '@/lib/utils';
-import { Link, useLocation } from 'wouter';
+import { useLocation } from 'wouter';
+import { SavedPartnerDetailsTab } from '@/components/moments/saved-partner-details-tab';
+import { MakingNewMomentsTab } from '@/components/moments/making-new-moments-tab';
+import { MyBelovedTab } from '@/components/moments/my-beloved-tab';
 
 const MAX_MOMENTS = 10;
 
@@ -33,6 +36,55 @@ export default function OurMomentsPage() {
   useEffect(() => {
     loadMoments();
   }, []);
+
+  // Ensure Birthday calendar event exists when birthday is in settings (from profile setup).
+  // Use next occurring birthday (current or next year), not the birth year.
+  useEffect(() => {
+    if (!userId || !partnerId) return;
+    let cancelled = false;
+    (async () => {
+      const birthdaySetting = await getSetting('birthday');
+      if (!birthdaySetting || cancelled) return;
+      const all = await getAllCalendarEvents();
+      const birthdayId = `birthday-${userId}`;
+      if (all.some(e => e.id === birthdayId)) return;
+      // Parse as calendar date (YYYY-MM-DD) to avoid timezone shifting the day (e.g. UTC+12 making Jan 15 become Jan 16)
+      const parts = birthdaySetting.split('-').map(Number);
+      if (parts.length !== 3 || parts.some(Number.isNaN)) return;
+      const [birthY, birthM, birthD] = parts;
+      if (birthM < 1 || birthM > 12 || birthD < 1 || birthD > 31) return;
+      const month = birthM - 1; // 0-indexed for Date
+      const day = birthD;
+      const now = new Date();
+      // Clamp day to last day of month for target year (e.g. Feb 29 → Feb 28 in non-leap years)
+      const clampDayForMonth = (y: number, m: number, d: number) =>
+        Math.min(d, new Date(y, m + 1, 0).getDate());
+      const year1 = now.getFullYear();
+      const day1 = clampDayForMonth(year1, month, day);
+      let eventDate = new Date(year1, month, day1);
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (eventDate.getTime() < todayStart.getTime()) {
+        const year2 = year1 + 1;
+        const day2 = clampDayForMonth(year2, month, day);
+        eventDate = new Date(year2, month, day2);
+      }
+      const moment: CalendarEvent = {
+        id: birthdayId,
+        userId,
+        partnerId,
+        title: 'Birthday',
+        description: null,
+        eventDate,
+        isAnniversary: false,
+        createdAt: new Date(),
+      };
+      await saveCalendarEvent(moment);
+      if (cancelled) return;
+      sendP2P({ type: 'calendar_event', data: moment, timestamp: Date.now() });
+      loadMoments();
+    })();
+    return () => { cancelled = true; };
+  }, [userId, partnerId]);
 
   useEffect(() => {
     const handleCalendarSynced = (event: CustomEvent) => {
@@ -63,7 +115,8 @@ export default function OurMomentsPage() {
       return;
     }
 
-    if (!isAnniversary && moments.length >= MAX_MOMENTS) {
+    const nonBirthdayCount = moments.filter(m => !m.id.startsWith('birthday-')).length;
+    if (!isAnniversary && nonBirthdayCount >= MAX_MOMENTS) {
       toast({
         title: "Limit reached",
         description: `You can save up to ${MAX_MOMENTS} special dates`,
@@ -138,69 +191,91 @@ export default function OurMomentsPage() {
 
   const timeTogether = formatTimeTogether();
 
+  const [activeTab, setActiveTab] = useState('dates');
+
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-background">
-      <div className="flex items-center justify-between px-6 py-4 border-b bg-card/50">
-        <div>
-          <h2 className="text-xl font-light text-foreground">Our Moments</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            Special dates to remember
-          </p>
-        </div>
-
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" data-testid="button-add-moment">
-              <Plus className="w-4 h-4 mr-1" />
-              Add
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="font-light">Add Special Date</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 mt-4">
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="What's the occasion?"
-                data-testid="input-moment-title"
-              />
-              <Input
-                type="date"
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-                data-testid="input-moment-date"
-              />
-              
-              {!anniversary && (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isAnniversary}
-                    onChange={(e) => setIsAnniversary(e.target.checked)}
-                    className="rounded border-border"
-                  />
-                  <span className="text-sm">This is when we got together</span>
-                </label>
-              )}
-
-              <Button
-                onClick={handleSave}
-                disabled={!title.trim() || !eventDate || saving}
-                className="w-full"
-                data-testid="button-save-moment"
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+      <div className="px-6 py-4 border-b bg-card/50">
+        <h2 className="text-xl font-light text-foreground">Moments</h2>
+        <p className="text-xs text-muted-foreground mt-1">
+          Connect and grow deeper
+        </p>
       </div>
 
-      <ScrollArea className="flex-1 min-h-0 p-6">
-        <div className="max-w-md mx-auto space-y-6">
-          {anniversary && timeTogether && (
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+        <div className="px-6 py-2 border-b bg-card/30">
+          <TabsList className="grid grid-cols-4 w-full max-w-md mx-auto h-11 bg-muted/50 p-1">
+            <TabsTrigger value="dates" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg text-xs px-2">
+              <CalendarHeart className="w-4 h-4 shrink-0 mr-1" />
+              Dates
+            </TabsTrigger>
+            <TabsTrigger value="details" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg text-xs px-2">
+              <FileText className="w-4 h-4 shrink-0 mr-1" />
+              Details
+            </TabsTrigger>
+            <TabsTrigger value="questions" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg text-xs px-2">
+              <MessageCircle className="w-4 h-4 shrink-0 mr-1" />
+              Questions
+            </TabsTrigger>
+            <TabsTrigger value="beloved" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg text-xs px-2">
+              <User className="w-4 h-4 shrink-0 mr-1" />
+              Beloved
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <ScrollArea className="flex-1 min-h-0 p-6">
+          <div className="max-w-md mx-auto">
+            <TabsContent value="dates" className="mt-0 space-y-6">
+              <div className="flex justify-end">
+                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" data-testid="button-add-moment">
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle className="font-light">Add Special Date</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                      <Input
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="What's the occasion?"
+                        data-testid="input-moment-title"
+                      />
+                      <Input
+                        type="date"
+                        value={eventDate}
+                        onChange={(e) => setEventDate(e.target.value)}
+                        data-testid="input-moment-date"
+                      />
+                      {!anniversary && (
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isAnniversary}
+                            onChange={(e) => setIsAnniversary(e.target.checked)}
+                            className="rounded border-border"
+                          />
+                          <span className="text-sm">This is when we got together</span>
+                        </label>
+                      )}
+                      <Button
+                        onClick={handleSave}
+                        disabled={!title.trim() || !eventDate || saving}
+                        className="w-full"
+                        data-testid="button-save-moment"
+                      >
+                        {saving ? 'Saving...' : 'Save'}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              {anniversary && timeTogether && (
             <Card className="p-6 bg-gradient-to-br from-primary/10 via-accent/5 to-blush/10 border-gold/30">
               <div className="text-center space-y-3">
                 <div className="w-14 h-14 mx-auto rounded-full bg-gold/20 flex items-center justify-center">
@@ -245,7 +320,7 @@ export default function OurMomentsPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium text-muted-foreground">Special Dates</h3>
-                <span className="text-xs text-muted-foreground">{moments.length}/{MAX_MOMENTS}</span>
+                <span className="text-xs text-muted-foreground">{moments.filter(m => !m.id.startsWith('birthday-')).length}/{MAX_MOMENTS}</span>
               </div>
               {moments.map((moment) => (
                 <Card
@@ -274,19 +349,33 @@ export default function OurMomentsPage() {
             </div>
           )}
 
-          <div className="pt-4 border-t space-y-2">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-muted-foreground"
-              onClick={() => setLocation('/heart-space')}
-              data-testid="link-heart-space"
-            >
-              <Heart className="w-4 h-4 mr-2" />
-              Heart Space
-            </Button>
+              <div className="pt-4 border-t space-y-2">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-muted-foreground"
+                  onClick={() => setLocation('/heart-space')}
+                  data-testid="link-heart-space"
+                >
+                  <Heart className="w-4 h-4 mr-2" />
+                  Heart Space
+                </Button>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="details" className="mt-0">
+              <SavedPartnerDetailsTab />
+            </TabsContent>
+
+            <TabsContent value="questions" className="mt-0">
+              <MakingNewMomentsTab />
+            </TabsContent>
+
+            <TabsContent value="beloved" className="mt-0">
+              <MyBelovedTab />
+            </TabsContent>
           </div>
-        </div>
-      </ScrollArea>
+        </ScrollArea>
+      </Tabs>
     </div>
   );
 }

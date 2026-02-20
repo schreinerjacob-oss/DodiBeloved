@@ -1,8 +1,8 @@
 import { openDB, type IDBPDatabase } from 'idb';
-import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction } from '@/types';
+import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction, PartnerDetail, MomentQuestionProgress, BelovedSurveyAnswer } from '@/types';
 
 const DB_NAME = 'dodi-encrypted-storage';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 export type MediaVariant = 'preview' | 'full';
 
@@ -35,6 +35,9 @@ interface DodiDB {
   memoryMedia: { id: string; blob: Blob };
   offlineQueue: QueuedMessage;
   offlineMediaQueue: QueuedMedia;
+  partnerDetails: PartnerDetail;
+  momentQuestionProgress: MomentQuestionProgress;
+  belovedSurveys: BelovedSurveyAnswer;
 }
 
 let dbInstance: IDBPDatabase<DodiDB> | null = null;
@@ -104,6 +107,21 @@ export async function initDB(): Promise<IDBPDatabase<DodiDB>> {
       if (!db.objectStoreNames.contains('offlineMediaQueue')) {
         const mediaQueueStore = db.createObjectStore('offlineMediaQueue', { keyPath: 'id' });
         mediaQueueStore.createIndex('createdAt', 'createdAt');
+      }
+
+      if (!db.objectStoreNames.contains('partnerDetails')) {
+        const partnerDetailsStore = db.createObjectStore('partnerDetails', { keyPath: 'id' });
+        partnerDetailsStore.createIndex('createdAt', 'createdAt');
+        partnerDetailsStore.createIndex('userId', 'userId');
+      }
+
+      if (!db.objectStoreNames.contains('momentQuestionProgress')) {
+        db.createObjectStore('momentQuestionProgress', { keyPath: 'id' });
+      }
+
+      if (!db.objectStoreNames.contains('belovedSurveys')) {
+        const belovedSurveysStore = db.createObjectStore('belovedSurveys', { keyPath: 'id' });
+        belovedSurveysStore.createIndex('surveyId', 'surveyId');
       }
     },
   });

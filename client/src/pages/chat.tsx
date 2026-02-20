@@ -6,8 +6,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Heart, Send, Image, Mic, MicOff, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter, Video, VideoOff, Circle, Square, Plus } from 'lucide-react';
-import { getMessages, saveMessage, deleteMessage } from '@/lib/storage-encrypted';
+import { Heart, Send, Image, Mic, MicOff, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter, Video, VideoOff, Circle, Square, Plus, FileText } from 'lucide-react';
+import { getMessages, saveMessage, deleteMessage, savePartnerDetail } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { useOfflineQueueSize } from '@/hooks/use-offline-queue';
 import { MessageMediaImage } from '@/components/message-media-image';
@@ -17,7 +17,7 @@ import { MessageMediaVideo } from '@/components/message-media-video';
 import { MemoryResurfacing } from '@/components/resurfacing/memory-resurfacing';
 import { SupportInvitation } from '@/components/support-invitation';
 import { notifyNewMessage, notifyMessageQueued } from '@/lib/notifications';
-import type { Message, SyncMessage } from '@/types';
+import type { Message, SyncMessage, PartnerDetail, PartnerDetailTag } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage, compressImageWithPreset, cn } from '@/lib/utils';
@@ -28,6 +28,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const QUICK_REACTIONS = [
   { id: 'heart', icon: Heart, color: 'text-accent' },
@@ -72,6 +75,9 @@ export default function ChatPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
+  const [saveDetailMessage, setSaveDetailMessage] = useState<Message | null>(null);
+  const [saveDetailContent, setSaveDetailContent] = useState('');
+  const [saveDetailTag, setSaveDetailTag] = useState<PartnerDetailTag>('remember');
   const [messageFilter, setMessageFilter] = useState<'all' | 'media' | 'voice' | 'video'>('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('oldest');
 
@@ -581,6 +587,41 @@ export default function ChatPage() {
       doubleTapRef.current = { messageId, time: now };
     }
   }, [handleReaction]);
+
+  const handleOpenSaveDetail = useCallback((message: Message) => {
+    const content = message.type === 'text' && message.content
+      ? message.content.slice(0, 500)
+      : `Message from ${new Date(message.timestamp).toLocaleDateString()}`;
+    setSaveDetailMessage(message);
+    setSaveDetailContent(content);
+    setSaveDetailTag('remember');
+    setShowReactionPicker(null);
+  }, []);
+
+  const handleSaveDetail = useCallback(async () => {
+    if (!saveDetailMessage || !saveDetailContent.trim() || !userId || !partnerId) return;
+    const detail: PartnerDetail = {
+      id: nanoid(),
+      userId,
+      partnerId,
+      content: saveDetailContent.trim(),
+      tag: saveDetailTag,
+      messageId: saveDetailMessage.id,
+      messageContext: saveDetailMessage.type === 'text' ? saveDetailMessage.content.slice(0, 200) : undefined,
+      createdAt: new Date(),
+    };
+    try {
+      await savePartnerDetail(detail);
+      sendP2P({ type: 'partner_detail', data: detail, timestamp: Date.now() });
+      setSaveDetailMessage(null);
+      setSaveDetailContent('');
+      setSaveDetailTag('remember');
+      toast({ title: 'Saved to Moments', description: 'Added to Moments → Details.' });
+    } catch (e) {
+      console.warn('Failed to save partner detail:', e);
+      toast({ title: 'Could not save', description: 'Something went wrong. Please try again.', variant: 'destructive' });
+    }
+  }, [saveDetailMessage, saveDetailContent, saveDetailTag, userId, partnerId, sendP2P, toast]);
 
   const handleSend = async () => {
     if (!newMessage.trim()) {
@@ -1417,29 +1458,47 @@ export default function ChatPage() {
 
                   {showReactionPicker === message.id && (
                     <div className={cn(
-                      'absolute -top-10 flex gap-1 bg-card border rounded-full px-2 py-1 shadow-lg z-10',
-                      isSent ? 'right-0' : 'left-0'
+                      'absolute z-10 flex flex-col gap-1',
+                      isSent ? 'right-0 -top-10' : 'left-0 -top-10'
                     )}>
-                      {QUICK_REACTIONS.map((r) => {
-                        const Icon = r.icon;
-                        const isActive = myReaction === r.id;
-                        return (
-                          <button
-                            key={r.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleReaction(message.id, r.id);
-                            }}
-                            className={cn(
-                              'p-1.5 rounded-full transition-transform hover:scale-110',
-                              isActive && 'bg-accent/20'
-                            )}
-                            data-testid={`reaction-${r.id}-${message.id}`}
-                          >
-                            <Icon className={cn('w-4 h-4', r.color, isActive && 'fill-current')} />
-                          </button>
-                        );
-                      })}
+                      <div className={cn(
+                        'flex gap-1 bg-card border rounded-full px-2 py-1 shadow-lg',
+                        isSent ? 'right-0' : 'left-0'
+                      )}>
+                        {QUICK_REACTIONS.map((r) => {
+                          const Icon = r.icon;
+                          const isActive = myReaction === r.id;
+                          return (
+                            <button
+                              key={r.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleReaction(message.id, r.id);
+                              }}
+                              className={cn(
+                                'p-1.5 rounded-full transition-transform hover:scale-110',
+                                isActive && 'bg-accent/20'
+                              )}
+                              data-testid={`reaction-${r.id}-${message.id}`}
+                            >
+                              <Icon className={cn('w-4 h-4', r.color, isActive && 'fill-current')} />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {!isSent && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenSaveDetail(message);
+                          }}
+                          className="flex items-center gap-1.5 bg-card border rounded-full px-3 py-1.5 shadow-lg text-xs hover:bg-accent/10 whitespace-nowrap"
+                          data-testid={`save-detail-${message.id}`}
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          Save as detail about you
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1662,6 +1721,47 @@ export default function ChatPage() {
                 </Button>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={saveDetailMessage !== null} onOpenChange={(open) => { if (!open) { setSaveDetailMessage(null); setSaveDetailContent(''); setSaveDetailTag('remember'); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-light">Save as detail about you</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">Add this to Moments → Details. Only you see it.</p>
+          <div className="space-y-4 mt-4">
+            <div>
+              <Label className="text-xs">Note</Label>
+              <Input
+                value={saveDetailContent}
+                onChange={(e) => setSaveDetailContent(e.target.value)}
+                placeholder="Context or note..."
+                className="mt-1 min-h-[60px]"
+                data-testid="input-save-detail-content"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Tag</Label>
+              <Select value={saveDetailTag} onValueChange={(v) => setSaveDetailTag(v as PartnerDetailTag)}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="remember">Remember</SelectItem>
+                  <SelectItem value="important">Important</SelectItem>
+                  <SelectItem value="follow-up">Follow-up</SelectItem>
+                  <SelectItem value="funny">Funny</SelectItem>
+                  <SelectItem value="sweet">Sweet</SelectItem>
+                  <SelectItem value="to celebrate">To celebrate</SelectItem>
+                  <SelectItem value="to avoid">To avoid</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleSaveDetail} disabled={!saveDetailContent.trim()} className="w-full" data-testid="button-save-detail-submit">
+              Save to Moments → Details
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -110,3 +110,54 @@ export interface SyncMessage {
   // data can contain ArrayBuffer for binary media (no Base64 overhead)
 }
 
+// Moments tab: Saved Partner Details (private notes about partner)
+export type PartnerDetailTag =
+  | 'remember'
+  | 'important'
+  | 'follow-up'
+  | 'funny'
+  | 'sweet'
+  | 'to celebrate'
+  | 'to avoid';
+
+export interface PartnerDetail {
+  id: string;
+  userId: string;
+  partnerId?: string | null;
+  content: string;
+  tag: PartnerDetailTag;
+  messageContext?: string | null;
+  messageId?: string | null;
+  createdAt: Date;
+}
+
+// Making New Moments: question progress (per path, per pair)
+export interface MomentQuestionProgress {
+  id: string; // `${userId}-${partnerId}-${path}`
+  userId: string;
+  partnerId: string;
+  path: 1 | 2 | 3;
+  lastQuestionIndex: number;
+  updatedAt: Date;
+}
+
+// My Beloved: survey answers (one record per surveyId + userId)
+export type BelovedSurveyId =
+  | 'loveLanguage'
+  | 'attachmentStyle'
+  | 'apologyLanguage'
+  | 'communicationStyle'
+  | 'coreValues'
+  | 'familyNorms'
+  | 'likesDislikes'
+  | 'dreamsFuture';
+
+export interface BelovedSurveyAnswer {
+  id: string; // `${surveyId}-${userId}`
+  surveyId: BelovedSurveyId;
+  userId: string;
+  partnerId: string;
+  answers: Record<string, string | string[]>;
+  updatedAt: Date;
+}
+

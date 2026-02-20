@@ -13,6 +13,7 @@ export default function ProfileSetupPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [displayName, setDisplayName] = useState('');
+  const [birthday, setBirthday] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleCreateProfile = async () => {
@@ -27,7 +28,7 @@ export default function ProfileSetupPage() {
 
     setLoading(true);
     try {
-      await initializeProfile(displayName);
+      await initializeProfile(displayName, birthday.trim() || undefined);
       toast({
         title: 'Profile created!',
         description: `Welcome, ${displayName}. Now pair with your beloved.`,
@@ -69,6 +70,21 @@ export default function ProfileSetupPage() {
               className="text-base"
             />
             <p className="text-xs text-muted-foreground">This is how your beloved will see you in dodi</p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Birthday (optional)</label>
+            <Input
+              type="date"
+              value={birthday}
+              onChange={(e) => setBirthday(e.target.value)}
+              disabled={loading}
+              data-testid="input-birthday"
+              className="text-base"
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional — helps us remember your special day. Stored only on your two devices, never shared.
+            </p>
           </div>
 
           <Button
