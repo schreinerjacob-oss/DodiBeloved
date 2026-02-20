@@ -1,27 +1,41 @@
 import { useEffect, useRef, useState } from 'react';
-import { Play } from 'lucide-react';
+import { Play, ImageOff } from 'lucide-react';
 import { getMediaBlob } from '@/lib/storage';
+
+type LoadStatus = 'loading' | 'loaded' | 'error';
 
 export function MemoryMediaImage({ memoryId, mediaType }: { memoryId: string; mediaType?: 'image' | 'video' | 'photo' }) {
   const [mediaSrc, setMediaSrc] = useState<string>('');
   const [isVideo, setIsVideo] = useState<boolean>(mediaType === 'video');
+  const [status, setStatus] = useState<LoadStatus>('loading');
   const currentUrlRef = useRef<string>('');
 
   useEffect(() => {
     let cancelled = false;
     setIsVideo(mediaType === 'video');
+    setStatus('loading');
 
     const load = async () => {
-      const blob = await getMediaBlob(memoryId, 'memory', 'preview');
-      if (cancelled) return;
-      if (blob) {
-        const url = URL.createObjectURL(blob);
-        if (currentUrlRef.current) URL.revokeObjectURL(currentUrlRef.current);
-        currentUrlRef.current = url;
-        setMediaSrc(url);
-        // When mediaType is unknown (e.g. legacy memories), infer from blob MIME type
-        if (mediaType === undefined) {
-          setIsVideo(typeof blob.type === 'string' && blob.type.startsWith('video/'));
+      setStatus('loading');
+      try {
+        const blob = await getMediaBlob(memoryId, 'memory', 'preview');
+        if (cancelled) return;
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          if (currentUrlRef.current) URL.revokeObjectURL(currentUrlRef.current);
+          currentUrlRef.current = url;
+          setMediaSrc(url);
+          setStatus('loaded');
+          if (mediaType === undefined) {
+            setIsVideo(typeof blob.type === 'string' && blob.type.startsWith('video/'));
+          }
+        } else {
+          setStatus('error');
+        }
+      } catch (e) {
+        if (!cancelled) {
+          console.warn('[MemoryMediaImage] Failed to load blob:', memoryId, e);
+          setStatus('error');
         }
       }
     };
@@ -44,7 +58,16 @@ export function MemoryMediaImage({ memoryId, mediaType }: { memoryId: string; me
     };
   }, [memoryId, mediaType]);
 
-  if (!mediaSrc) {
+  if (status === 'error') {
+    return (
+      <div className="w-full h-full bg-muted flex flex-col items-center justify-center text-xs text-muted-foreground gap-2 p-4">
+        <ImageOff className="w-8 h-8" />
+        <span>Unavailable</span>
+      </div>
+    );
+  }
+
+  if (status === 'loading' || !mediaSrc) {
     return (
       <div className="w-full h-full bg-muted animate-pulse flex items-center justify-center text-xs text-muted-foreground">
         Loading…

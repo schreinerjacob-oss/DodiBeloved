@@ -5,8 +5,8 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Camera, Lock, Calendar, Heart, X, ChevronUp } from 'lucide-react';
-import { getMemories, saveMemory } from '@/lib/storage-encrypted';
+import { Camera, Lock, Calendar, Heart, X, ChevronUp, Trash2, Pencil } from 'lucide-react';
+import { getMemories, getMemoriesCount, saveMemory, deleteMemory } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { MemoryMediaImage } from '@/components/memory-media-image';
 import { ImageFullscreenViewer } from '@/components/image-fullscreen-viewer';
@@ -33,9 +33,20 @@ export default function MemoriesPage() {
   const [hasMoreMemories, setHasMoreMemories] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const memoriesRef = useRef<Memory[]>([]);
+  memoriesRef.current = memories;
 
   useEffect(() => {
     loadMemories();
+  }, []);
+
+  // Reload list when tab becomes visible so we reflect changes from another tab or after long background.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshNewestMemories();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, []);
 
   // Clear dialog form state when dialog closes so reopening starts fresh
@@ -48,7 +59,8 @@ export default function MemoriesPage() {
     }
   }, [dialogOpen]);
 
-  // Listen for memories synced by the global sync handler
+  // List order: oldest loaded at top, newest at bottom. This handler appends incoming
+  // synced memories with duplicate check by id, then sorts by timestamp for robustness to out-of-order delivery.
   useEffect(() => {
     const handleMemorySynced = (event: CustomEvent) => {
       const incomingMemory = event.detail as Memory;
@@ -56,7 +68,10 @@ export default function MemoriesPage() {
         if (prev.some(m => m.id === incomingMemory.id)) {
           return prev;
         }
-        return [...prev, incomingMemory];
+        const next = [...prev, incomingMemory].sort(
+          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
+        return next;
       });
     };
 
@@ -67,10 +82,48 @@ export default function MemoriesPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleMemoryDeleted = (event: CustomEvent<{ memoryId: string }>) => {
+      const { memoryId } = event.detail || {};
+      if (memoryId) setMemories(prev => prev.filter(m => m.id !== memoryId));
+    };
+    window.addEventListener('memory-deleted', handleMemoryDeleted as EventListener);
+    return () => window.removeEventListener('memory-deleted', handleMemoryDeleted as EventListener);
+  }, []);
+
+  useEffect(() => {
+    const handleMemoryUpdated = (event: CustomEvent<Memory>) => {
+      const updated = event.detail;
+      if (updated?.id) setMemories(prev => prev.map(m => (m.id === updated.id ? updated : m)));
+    };
+    window.addEventListener('memory-updated', handleMemoryUpdated as EventListener);
+    return () => window.removeEventListener('memory-updated', handleMemoryUpdated as EventListener);
+  }, []);
+
   const loadMemories = async () => {
     const mems = await getMemories(MEMORIES_PER_PAGE, 0);
     setMemories(mems);
     setMemoryOffset(0);
+    setHasMoreMemories(mems.length === MEMORIES_PER_PAGE);
+  };
+
+  // Refresh only the newest page and merge with existing state. Preserves scroll position and
+  // older memories already loaded. Caps memoryOffset by DB size so "Load more" never requests beyond the DB.
+  const refreshNewestMemories = async () => {
+    const [mems, totalCount] = await Promise.all([
+      getMemories(MEMORIES_PER_PAGE, 0),
+      getMemoriesCount(),
+    ]);
+    const prev = memoriesRef.current;
+    const newestIds = new Set(mems.map(m => m.id));
+    const olderLoaded = prev.filter(m => !newestIds.has(m.id));
+    const merged = [...olderLoaded, ...mems].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+    const offsetFromMerge = Math.max(0, merged.length - MEMORIES_PER_PAGE);
+    const maxOffset = Math.max(0, totalCount - MEMORIES_PER_PAGE);
+    setMemories(merged);
+    setMemoryOffset(Math.min(offsetFromMerge, maxOffset));
     setHasMoreMemories(mems.length === MEMORIES_PER_PAGE);
   };
 
@@ -85,6 +138,51 @@ export default function MemoriesPage() {
   };
 
   const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
+  const [editingCaption, setEditingCaption] = useState('');
+
+  const handleDeleteMemory = async (memoryId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!userId || !partnerId) return;
+    if (!window.confirm('Remove this memory? Your partner will no longer see it.')) return;
+    try {
+      await deleteMemory(memoryId);
+      setMemories(prev => prev.filter(m => m.id !== memoryId));
+      sendP2P({
+        type: 'memory-delete',
+        data: { memoryId, userId, partnerId },
+        timestamp: Date.now(),
+      });
+      toast({ title: 'Memory removed', description: 'It has been removed for both of you.' });
+    } catch (err) {
+      console.error('Delete memory error:', err);
+      toast({ title: 'Failed to remove', description: 'Could not remove memory.', variant: 'destructive' });
+    }
+  };
+
+  const handleEditCaption = (memory: Memory, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingMemoryId(memory.id);
+    setEditingCaption(memory.caption ?? '');
+  };
+
+  const handleSaveCaption = async () => {
+    if (!editingMemoryId || !userId || !partnerId) return;
+    const memory = memories.find(m => m.id === editingMemoryId);
+    if (!memory) return;
+    const updated: Memory = { ...memory, caption: editingCaption.trim() || null };
+    try {
+      await saveMemory(updated);
+      setMemories(prev => prev.map(m => (m.id === updated.id ? updated : m)));
+      sendP2P({ type: 'memory-update', data: updated, timestamp: Date.now() });
+      setEditingMemoryId(null);
+      setEditingCaption('');
+      toast({ title: 'Caption updated', description: 'Your partner will see the change.' });
+    } catch (err) {
+      console.error('Update caption error:', err);
+      toast({ title: 'Failed to update caption', variant: 'destructive' });
+    }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,6 +194,8 @@ export default function MemoriesPage() {
     e.target.value = '';
   };
 
+  // Offline create: memory is saved locally; P2P payload and media are queued. On reconnect,
+  // both flush so partner receives metadata then media and sees the memory.
   const handleSaveMemory = async () => {
     if (!previewFile || !userId || !partnerId) return;
     const isVideo = previewFile.type.startsWith('video/');
@@ -318,6 +418,28 @@ export default function MemoriesPage() {
                   setFullscreenMediaType(memory.mediaType);
                 }}
               >
+                <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 bg-black/50 hover:bg-black/70 text-white"
+                    onClick={(e) => handleEditCaption(memory, e)}
+                    data-testid={`button-edit-memory-${memory.id}`}
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 bg-black/50 hover:bg-black/70 text-white"
+                    onClick={(e) => handleDeleteMemory(memory.id, e)}
+                    data-testid={`button-delete-memory-${memory.id}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
                 <MemoryMediaImage memoryId={memory.id} mediaType={memory.mediaType} />
                 <div className="absolute inset-0 bg-gradient-to-br from-sage/20 to-blush/20" />
                 <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent">
@@ -335,6 +457,25 @@ export default function MemoriesPage() {
           </div>
         )}
       </ScrollArea>
+
+      <Dialog open={editingMemoryId !== null} onOpenChange={(open) => { if (!open) { setEditingMemoryId(null); setEditingCaption(''); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-light">Edit caption</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={editingCaption}
+            onChange={(e) => setEditingCaption(e.target.value)}
+            placeholder="Caption (optional)"
+            data-testid="input-edit-caption"
+            className="mt-2"
+          />
+          <div className="flex gap-2 justify-end mt-4">
+            <Button variant="outline" onClick={() => { setEditingMemoryId(null); setEditingCaption(''); }}>Cancel</Button>
+            <Button onClick={handleSaveCaption} data-testid="button-save-caption">Save</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {fullscreenMemoryId && (
         <ImageFullscreenViewer

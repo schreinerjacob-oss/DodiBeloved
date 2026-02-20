@@ -40,6 +40,13 @@ export async function getMemories(limit: number = 20, offset: number = 0): Promi
   return Promise.all(sliced.map(enc => decryptMemory(enc)));
 }
 
+/** Returns the current number of memories in the DB (for pagination bounds). */
+export async function getMemoriesCount(): Promise<number> {
+  const db = await initDBRaw();
+  const all = await db.getAllFromIndex('memories', 'timestamp');
+  return all.length;
+}
+
 // Sync Tracking
 export async function getLastSynced(category: string): Promise<number> {
   const db = await initDBRaw();
@@ -462,6 +469,17 @@ export async function saveMemory(memory: Memory): Promise<void> {
     await db.put('memories', record);
   } catch (error) {
     console.error('Failed to save memory:', error);
+    throw error;
+  }
+}
+
+export async function deleteMemory(memoryId: string): Promise<void> {
+  try {
+    const db = await initDB();
+    await db.delete('memories', memoryId);
+    await deleteMediaBlob(memoryId, 'memory');
+  } catch (error) {
+    console.error('Failed to delete memory:', memoryId, error);
     throw error;
   }
 }

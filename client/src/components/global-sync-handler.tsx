@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
-import { saveMemory, saveCalendarEvent, saveDailyRitual, saveLoveLetter, savePrayer, saveReaction } from '@/lib/storage-encrypted';
+import { saveMemory, deleteMemory, saveCalendarEvent, saveDailyRitual, saveLoveLetter, savePrayer, saveReaction } from '@/lib/storage-encrypted';
 import { notifyNewMemory, notifyCalendarEvent, notifyDailyRitual, notifyNewLoveLetter, notifyNewMessage } from '@/lib/notifications';
 import type { SyncMessage, Memory, CalendarEvent, DailyRitual, LoveLetter, Prayer, Reaction } from '@/types';
 
@@ -29,7 +29,7 @@ export function GlobalSyncHandler() {
         const message: SyncMessage = event.detail;
         const { setLastSynced, saveMemory, saveCalendarEvent, saveDailyRitual, saveLoveLetter, savePrayer, saveReaction } = await import('@/lib/storage-encrypted');
         
-        // Handle memory sync
+        // Handle memory sync. Metadata is saved first; media arrives separately via media channel and dodi-media-ready.
         if (message.type === 'memory') {
           const incomingMemory = message.data as Memory;
           const isOurMemory = (incomingMemory.userId === userId && incomingMemory.partnerId === partnerId) ||
@@ -69,6 +69,40 @@ export function GlobalSyncHandler() {
             
             // Dispatch event for UI updates
             window.dispatchEvent(new CustomEvent('memory-synced', { detail: incomingMemory }));
+          }
+        }
+
+        // Handle memory update (e.g. caption edit); validate pair, save and notify UI
+        if (message.type === 'memory-update') {
+          const updatedMemory = message.data as Memory;
+          const isOurMemory =
+            updatedMemory &&
+            ((updatedMemory.userId === userId && updatedMemory.partnerId === partnerId) ||
+              (updatedMemory.userId === partnerId && updatedMemory.partnerId === userId));
+          if (isOurMemory && updatedMemory.id) {
+            try {
+              await saveMemory(updatedMemory);
+              window.dispatchEvent(new CustomEvent('memory-updated', { detail: updatedMemory }));
+            } catch (e) {
+              console.warn('Failed to save memory on memory-update:', e);
+            }
+          }
+        }
+
+        // Handle memory delete (either partner can delete; validate pair via userId/partnerId in payload)
+        if (message.type === 'memory-delete') {
+          const { memoryId, userId: payloadUserId, partnerId: payloadPartnerId } = (message.data as { memoryId: string; userId?: string; partnerId?: string }) || {};
+          const isOurPair =
+            payloadUserId !== undefined &&
+            payloadPartnerId !== undefined &&
+            ((payloadUserId === userId && payloadPartnerId === partnerId) || (payloadUserId === partnerId && payloadPartnerId === userId));
+          if (memoryId && isOurPair) {
+            try {
+              await deleteMemory(memoryId);
+              window.dispatchEvent(new CustomEvent('memory-deleted', { detail: { memoryId } }));
+            } catch (e) {
+              console.warn('Failed to delete memory on memory-delete:', e);
+            }
           }
         }
         
