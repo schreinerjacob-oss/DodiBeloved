@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import fs from "fs";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 /** At build time, inject cache version into sw.js so each deploy gets a new cache. */
 function swCacheVersion() {
@@ -20,23 +19,25 @@ function swCacheVersion() {
   };
 }
 
-export default defineConfig({
-  plugins: [
-    react(),
-    runtimeErrorOverlay(),
-    swCacheVersion(),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer(),
-          ),
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
-            m.devBanner(),
-          ),
-        ]
-      : []),
-  ],
+/** Load Replit plugins only when running on Replit (optional for Vercel/local). */
+async function replitPlugins(): Promise<unknown[]> {
+  if (process.env.NODE_ENV === "production" || process.env.REPL_ID === undefined) {
+    return [];
+  }
+  try {
+    const [runtimeErrorOverlay, cartographer, devBanner] = await Promise.all([
+      import("@replit/vite-plugin-runtime-error-modal").then((m) => m.default()),
+      import("@replit/vite-plugin-cartographer").then((m) => m.cartographer()),
+      import("@replit/vite-plugin-dev-banner").then((m) => m.devBanner()),
+    ]);
+    return [runtimeErrorOverlay, cartographer, devBanner];
+  } catch {
+    return [];
+  }
+}
+
+export default defineConfig(async () => ({
+  plugins: [react(), swCacheVersion(), ...(await replitPlugins())],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
@@ -55,13 +56,14 @@ export default defineConfig({
     allowedHosts: [
       "localhost",
       ".localhost",
-      ".replit.app", // Replit Deployments
-      ".repl.co", // Replit classic dev/live
-      "frontend_web", // Replit internal proxy
+      ".vercel.app",
+      ".replit.app",
+      ".repl.co",
+      "frontend_web",
     ],
     fs: {
       strict: true,
       deny: ["**/.*"],
     },
   },
-});
+}));
