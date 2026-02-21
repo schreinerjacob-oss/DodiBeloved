@@ -1583,14 +1583,6 @@ export default function ChatPage() {
                 Photo
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={handleImageClick}
-                disabled={sending || isRecording || isVideoRecordingActive}
-                data-testid="menu-item-gif"
-              >
-                <Smile className="w-4 h-4 mr-2" />
-                GIF
-              </DropdownMenuItem>
-              <DropdownMenuItem
                 onClick={handleVoiceClick}
                 disabled={sending || isVideoRecordingActive}
                 data-testid="menu-item-voice"
