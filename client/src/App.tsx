@@ -180,6 +180,9 @@ function MainApp() {
     { href: "/settings", icon: Settings, label: "Settings" },
   ];
 
+  const otherContentPaths = ["/calls", "/memories", "/moments", "/heart-space", "/settings", "/subscription", "/redundancy", "/setup", "/pairing"];
+  const showChat = !otherContentPaths.includes(location);
+
   return (
     <div className="w-screen flex flex-col bg-background relative overflow-hidden h-screen" style={{ height: '100dvh' }}>
       <GlobalSyncHandler />
@@ -202,23 +205,35 @@ function MainApp() {
       )}
 
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col z-10" style={{ minHeight: 0 }}>
-          {/* Content area: no outer scroll - each page fills viewport and manages its own scroll (Chat, ScrollArea, etc.) */}
-          {/* relative + absolute inset-0 keeps route content full-size when switching; flex parent height comes from flex layout, not content, so no collapse when Chat unmounts */}
-          <div ref={scrollContainerRef} className="flex-1 min-h-0 min-w-0 relative overflow-hidden">
-            <div key={location} className="absolute inset-0 flex flex-col overflow-hidden">
+          {/* Content area: each page fills viewport and manages its own scroll. Keep all main-tab pages mounted and toggle visibility so layout never collapses when leaving Chat. Unknown routes fall back to Chat (same as previous Route path="/"). */}
+          <div ref={scrollContainerRef} className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+            <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", !showChat && "hidden")}>
+              <ChatPage />
+            </div>
+            <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", location !== "/calls" && "hidden")}>
+              <CallsPage />
+            </div>
+            <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", location !== "/memories" && "hidden")}>
+              <MemoriesPage />
+            </div>
+            <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", location !== "/moments" && "hidden")}>
+              <OurMomentsPage />
+            </div>
+            <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", location !== "/heart-space" && "hidden")}>
+              <HeartSpacePage />
+            </div>
+            <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", location !== "/settings" && "hidden")}>
+              <SettingsPage />
+            </div>
+            <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", location !== "/subscription" && "hidden")}>
+              <SubscriptionPage />
+            </div>
+            {/* Secondary routes (from settings etc.): render when location matches so content is never blank. /pairing included so route-based navigation matches state-based rendering. */}
+            <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", location !== "/redundancy" && location !== "/setup" && location !== "/pairing" && "hidden")}>
               <Switch>
-                <Route path="/pairing">{() => <PairingPage />}</Route>
-                <Route path="/chat">{() => <ChatPage />}</Route>
-                <Route path="/calls">{() => <CallsPage />}</Route>
-                <Route path="/memories">{() => <MemoriesPage />}</Route>
-                <Route path="/moments">{() => <OurMomentsPage />}</Route>
-                <Route path="/heart-space">{() => <HeartSpacePage />}</Route>
-                <Route path="/settings">{() => <SettingsPage />}</Route>
-                <Route path="/subscription">{() => <SubscriptionPage />}</Route>
-                <Route path="/setup">{() => <ProfileSetupPage />}</Route>
                 <Route path="/redundancy">{() => <RedundancyPage />}</Route>
-                <Route path="/reset">{() => <ResetPage />}</Route>
-                <Route path="/">{() => <ChatPage />}</Route>
+                <Route path="/setup">{() => <ProfileSetupPage />}</Route>
+                <Route path="/pairing">{() => <PairingPage />}</Route>
               </Switch>
             </div>
           </div>
