@@ -203,9 +203,9 @@ function MainApp() {
 
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col z-10" style={{ minHeight: 0 }}>
           {/* Content area: no outer scroll - each page fills viewport and manages its own scroll (Chat, ScrollArea, etc.) */}
-          <div ref={scrollContainerRef} className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
-            {/* Wrapper with key so route changes get a fresh flex container; ensures non-Chat pages (ScrollArea) receive correct height after Chat unmounts */}
-            <div key={location} className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+          {/* relative + absolute inset-0 keeps route content full-size when switching; flex parent height comes from flex layout, not content, so no collapse when Chat unmounts */}
+          <div ref={scrollContainerRef} className="flex-1 min-h-0 min-w-0 relative overflow-hidden">
+            <div key={location} className="absolute inset-0 flex flex-col overflow-hidden">
               <Switch>
                 <Route path="/pairing">{() => <PairingPage />}</Route>
                 <Route path="/chat">{() => <ChatPage />}</Route>
