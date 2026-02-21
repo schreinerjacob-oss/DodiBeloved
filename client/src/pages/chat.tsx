@@ -1145,6 +1145,16 @@ export default function ChatPage() {
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
+    // #region agent log
+    const clipTypes = e.clipboardData ? Array.from(e.clipboardData.types) : [];
+    const hasImageItem = items && Array.from(items).some((i) => i.type.startsWith('image/'));
+    let htmlPrefix = '';
+    if (e.clipboardData?.types.includes('text/html')) {
+      const h = e.clipboardData.getData('text/html');
+      htmlPrefix = h.slice(0, 300).replace(/\s+/g, ' ');
+    }
+    fetch('http://127.0.0.1:7242/ingest/48a62d14-14c2-4f21-9c07-fb4b93f7157a', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '762ed6' }, body: JSON.stringify({ sessionId: '762ed6', location: 'chat.tsx:handlePaste', message: 'paste fired', data: { clipboardTypes: clipTypes, hasImageItem, htmlLength: e.clipboardData?.getData('text/html')?.length ?? 0, htmlPrefix }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
+    // #endregion
     if (!items) return;
     for (const item of Array.from(items)) {
       if (item.type.startsWith('image/')) {
@@ -1155,6 +1165,9 @@ export default function ChatPage() {
             toast({ title: "Image too large", description: "Please choose an image under 25MB.", variant: "destructive" });
             return;
           }
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/48a62d14-14c2-4f21-9c07-fb4b93f7157a', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '762ed6' }, body: JSON.stringify({ sessionId: '762ed6', location: 'chat.tsx:handlePaste', message: 'processImageFile from clipboard item', data: { mime: file.type, size: file.size }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+          // #endregion
           processImageFile(file);
         }
         return;
@@ -1164,6 +1177,10 @@ export default function ChatPage() {
     const html = e.clipboardData?.getData('text/html');
     if (html) {
       const imgMatch = html.match(/<img[^>]+src\s*=\s*["'](data:image\/[^"']+)["']/i);
+      // #region agent log
+      const altMatch = html.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
+      fetch('http://127.0.0.1:7242/ingest/48a62d14-14c2-4f21-9c07-fb4b93f7157a', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '762ed6' }, body: JSON.stringify({ sessionId: '762ed6', location: 'chat.tsx:handlePaste', message: 'html fallback', data: { dataUrlMatch: !!imgMatch, srcPrefix: altMatch ? altMatch[1].slice(0, 80) : null }, timestamp: Date.now(), hypothesisId: 'H3' }) }).catch(() => {});
+      // #endregion
       if (imgMatch) {
         const dataUrl = imgMatch[1];
         if (dataUrl.startsWith('data:image/')) {
@@ -1181,10 +1198,15 @@ export default function ChatPage() {
                 return;
               }
               const file = new File([blob], `pasted.${res[1]}`, { type: mime });
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/48a62d14-14c2-4f21-9c07-fb4b93f7157a', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '762ed6' }, body: JSON.stringify({ sessionId: '762ed6', location: 'chat.tsx:handlePaste', message: 'processImageFile from html data URL', data: { mime, size: blob.size }, timestamp: Date.now(), hypothesisId: 'H4' }) }).catch(() => {});
+              // #endregion
               processImageFile(file);
             }
-          } catch {
-            // ignore
+          } catch (err) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/48a62d14-14c2-4f21-9c07-fb4b93f7157a', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '762ed6' }, body: JSON.stringify({ sessionId: '762ed6', location: 'chat.tsx:handlePaste', message: 'html data URL parse error', data: { err: String(err) }, timestamp: Date.now(), hypothesisId: 'H5' }) }).catch(() => {});
+            // #endregion
           }
         }
       }
@@ -1559,6 +1581,14 @@ export default function ChatPage() {
               >
                 <Image className="w-4 h-4 mr-2" />
                 Photo
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={handleImageClick}
+                disabled={sending || isRecording || isVideoRecordingActive}
+                data-testid="menu-item-gif"
+              >
+                <Smile className="w-4 h-4 mr-2" />
+                GIF
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={handleVoiceClick}
