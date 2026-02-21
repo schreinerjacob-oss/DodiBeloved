@@ -66,6 +66,7 @@ function MainApp() {
   const [location] = useLocation();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevLocationRef = useRef<string>(location);
+  const justLeftChatRef = useRef(false);
 
   const { state: peerState } = usePeerConnection();
 
@@ -98,12 +99,17 @@ function MainApp() {
     let raf2: number | undefined;
     let t1: ReturnType<typeof setTimeout> | undefined;
     let t2: ReturnType<typeof setTimeout> | undefined;
+    let t3: ReturnType<typeof setTimeout> | undefined;
+    if (wasOnChat && location !== '/chat' && location !== '/') {
+      justLeftChatRef.current = true;
+    }
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         forceLayout();
         if (wasOnChat && location !== '/chat' && location !== '/') {
           t1 = setTimeout(forceLayout, 50);
           t2 = setTimeout(forceLayout, 150);
+          t3 = setTimeout(forceLayout, 300);
         }
       });
     });
@@ -112,7 +118,21 @@ function MainApp() {
       if (raf2 != null) cancelAnimationFrame(raf2);
       if (t1 != null) clearTimeout(t1);
       if (t2 != null) clearTimeout(t2);
+      if (t3 != null) clearTimeout(t3);
     };
+  }, [location]);
+
+  // After paint: when we've just left Chat, force one more layout so ScrollArea on the new page definitely gets correct dimensions
+  useEffect(() => {
+    if (!justLeftChatRef.current) return;
+    justLeftChatRef.current = false;
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const id = setTimeout(() => {
+      void el.offsetHeight;
+      window.dispatchEvent(new Event('resize'));
+    }, 100);
+    return () => clearTimeout(id);
   }, [location]);
 
   const partnerActive = peerState?.connected || false;
@@ -184,20 +204,23 @@ function MainApp() {
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col z-10" style={{ minHeight: 0 }}>
           {/* Content area: no outer scroll - each page fills viewport and manages its own scroll (Chat, ScrollArea, etc.) */}
           <div ref={scrollContainerRef} className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
-            <Switch>
-              <Route path="/pairing">{() => <PairingPage />}</Route>
-              <Route path="/chat">{() => <ChatPage />}</Route>
-              <Route path="/calls">{() => <CallsPage />}</Route>
-              <Route path="/memories">{() => <MemoriesPage />}</Route>
-              <Route path="/moments">{() => <OurMomentsPage />}</Route>
-              <Route path="/heart-space">{() => <HeartSpacePage />}</Route>
-              <Route path="/settings">{() => <SettingsPage />}</Route>
-              <Route path="/subscription">{() => <SubscriptionPage />}</Route>
-              <Route path="/setup">{() => <ProfileSetupPage />}</Route>
-              <Route path="/redundancy">{() => <RedundancyPage />}</Route>
-              <Route path="/reset">{() => <ResetPage />}</Route>
-              <Route path="/">{() => <ChatPage />}</Route>
-            </Switch>
+            {/* Wrapper with key so route changes get a fresh flex container; ensures non-Chat pages (ScrollArea) receive correct height after Chat unmounts */}
+            <div key={location} className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+              <Switch>
+                <Route path="/pairing">{() => <PairingPage />}</Route>
+                <Route path="/chat">{() => <ChatPage />}</Route>
+                <Route path="/calls">{() => <CallsPage />}</Route>
+                <Route path="/memories">{() => <MemoriesPage />}</Route>
+                <Route path="/moments">{() => <OurMomentsPage />}</Route>
+                <Route path="/heart-space">{() => <HeartSpacePage />}</Route>
+                <Route path="/settings">{() => <SettingsPage />}</Route>
+                <Route path="/subscription">{() => <SubscriptionPage />}</Route>
+                <Route path="/setup">{() => <ProfileSetupPage />}</Route>
+                <Route path="/redundancy">{() => <RedundancyPage />}</Route>
+                <Route path="/reset">{() => <ResetPage />}</Route>
+                <Route path="/">{() => <ChatPage />}</Route>
+              </Switch>
+            </div>
           </div>
       </div>
 
