@@ -40,15 +40,12 @@ dodi is a **Progressive Web App (PWA)** that runs entirely in the browser with n
 The pairing system uses a Signal-inspired secure tunnel approach for key exchange:
 
 **Flow:**
-1. **Device A (Creator)** generates ephemeral ECDH P-256 keypair
-2. **Device A** creates ultra-light QR code containing:
-   - WebRTC offer (SDP)
-   - Ephemeral public key
-   - Key fingerprint (SHA-256 based, e.g., "AB:CD:EF:12")
-3. **Device B (Joiner)** scans QR → establishes WebRTC data channel
-4. **Tunnel Handshake** occurs over encrypted WebRTC channel:
+1. **Device A (Creator)** taps "Create Connection" → generates ephemeral ECDH P-256 keypair + WebRTC offer; displays an 8-character pairing code.
+2. **Device B (Joiner)** taps "Join with Code" and enters the code from Device A.
+3. **PeerJS** connects both devices (signaling via peerjs.com); WebRTC data channel opens.
+4. **Tunnel Handshake** occurs over the encrypted WebRTC channel:
    - Device A sends `tunnel-init` with public key + fingerprint
-   - Device B verifies fingerprint matches QR code (SECURITY CRITICAL)
+   - Device B verifies fingerprint (SECURITY CRITICAL)
    - Device B responds with own `tunnel-init`
    - Shared secret derived via ECDH
 5. **Device A** generates permanent AES-GCM 256-bit master key + 16-byte salt
@@ -65,7 +62,7 @@ The pairing system uses a Signal-inspired secure tunnel approach for key exchang
 **Implementation:**
 - `client/src/lib/tunnel-handshake.ts` - Key generation, derivation, encryption
 - `client/src/hooks/use-peer-connection.ts` - Tunnel message handling
-- `client/src/pages/pairing.tsx` - Ultra-light QR + beautiful animations
+- `client/src/pages/pairing.tsx` - Code-based pairing + beautiful animations
 
 ### Encryption System
 
@@ -105,8 +102,8 @@ All sensitive data is encrypted before storage using the **Web Crypto API**:
 Real-time sync between paired devices uses **WebRTC Data Channels**:
 
 - **Library:** Native WebRTC (RTCPeerConnection, RTCDataChannel)
-- **Signaling:** Ultra-light QR code (WebRTC offer + ephemeral public key)
-- **No signaling server** - Completely serverless pairing
+- **Signaling:** 8-character pairing code; PeerJS for initial connection, then WebRTC data channel
+- **No custom signaling server** - PeerJS relay for setup only; data is P2P
 - **Incremental Sync:** Only new messages since last sync are transmitted
 - Implementation: `client/src/hooks/use-peer-connection.ts`
 
@@ -190,21 +187,20 @@ Runs Vite dev server on port 5000 (Replit-friendly). `npm run build` produces st
 1. **Client-only PWA** - No backend; dev and production use Vite only
 2. **Types in client/src/types.ts** - All domain types defined locally, no shared folder
 3. **Encryption is mandatory** - Never store unencrypted sensitive data
-4. **P2P signaling via ultra-light QR** - No server relay, single scan pairing
+4. **P2P pairing via shared code** - No server relay; both devices use the same 8-character code
 5. **Fingerprint verification is critical** - Always verify before accepting keys
 
 ## Pairing Flow (Signal-Style Tunnel)
 
-1. **Creator** taps "Create Connection" → generates ephemeral ECDH keypair + WebRTC offer
-2. **Creator** shows ultra-light QR code with offer + public key + fingerprint
-3. **Joiner** scans QR code → extracts offer, public key, fingerprint
-4. **WebRTC connection established** → data channel opens
-5. **Creator** sends tunnel-init with public key + fingerprint
-6. **Joiner** verifies fingerprint matches QR → derives shared secret → responds with tunnel-init
-7. **Creator** generates master key + salt → encrypts with shared secret → sends tunnel-key
-8. **Joiner** receives master key → stores in IndexedDB → sends tunnel-ack
-9. **Both devices** now have identical master key for AES-GCM encryption
-10. **Beautiful animation:** "Your Gardens Are Now Eternally Connected ♾️"
+1. **Creator** taps "Create Connection" → generates ephemeral ECDH keypair + WebRTC offer; screen shows 8-character code
+2. **Joiner** taps "Join with Code" and enters the code from the creator's device
+3. **WebRTC connection established** (via PeerJS) → data channel opens
+4. **Creator** sends tunnel-init with public key + fingerprint
+5. **Joiner** verifies fingerprint → derives shared secret → responds with tunnel-init
+6. **Creator** generates master key + salt → encrypts with shared secret → sends tunnel-key
+7. **Joiner** receives master key → stores in IndexedDB → sends tunnel-ack
+8. **Both devices** now have identical master key for AES-GCM encryption
+9. **Beautiful animation:** "Your Gardens Are Now Eternally Connected ♾️"
 
 ## Support the Garden
 Dodi is funded entirely by its users. Support the garden — keep it private forever for couples everywhere.
@@ -218,9 +214,8 @@ Dodi is funded entirely by its users. Support the garden — keep it private for
 ## External Dependencies
 
 **P2P Communication:**
-- **qrcode.react**: QR code generation
-- **html5-qrcode**: QR code scanning
-- Native WebRTC (RTCPeerConnection)
+- **Pairing:** 8-character code (see `client/src/lib/pairing-codes.ts`); no QR
+- Native WebRTC (RTCPeerConnection) via PeerJS
 
 **UI & Styling:**
 - **Radix UI**: Accessible component primitives

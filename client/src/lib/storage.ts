@@ -1,8 +1,8 @@
 import { openDB, type IDBPDatabase } from 'idb';
-import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction, PartnerDetail, MomentQuestionProgress, BelovedSurveyAnswer } from '@/types';
+import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction, PartnerDetail } from '@/types';
 
 const DB_NAME = 'dodi-encrypted-storage';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 export type MediaVariant = 'preview' | 'full';
 
@@ -36,8 +36,6 @@ interface DodiDB {
   offlineQueue: QueuedMessage;
   offlineMediaQueue: QueuedMedia;
   partnerDetails: PartnerDetail;
-  momentQuestionProgress: MomentQuestionProgress;
-  belovedSurveys: BelovedSurveyAnswer;
 }
 
 let dbInstance: IDBPDatabase<DodiDB> | null = null;
@@ -46,7 +44,11 @@ export async function initDB(): Promise<IDBPDatabase<DodiDB>> {
   if (dbInstance) return dbInstance;
 
   dbInstance = await openDB<DodiDB>(DB_NAME, DB_VERSION, {
-    upgrade(db) {
+    upgrade(db, oldVersion) {
+      if (oldVersion < 5) {
+        if (db.objectStoreNames.contains('momentQuestionProgress')) db.deleteObjectStore('momentQuestionProgress');
+        if (db.objectStoreNames.contains('belovedSurveys')) db.deleteObjectStore('belovedSurveys');
+      }
       if (!db.objectStoreNames.contains('messages')) {
         const messagesStore = db.createObjectStore('messages', { keyPath: 'id' });
         messagesStore.createIndex('timestamp', 'timestamp');
@@ -113,15 +115,6 @@ export async function initDB(): Promise<IDBPDatabase<DodiDB>> {
         const partnerDetailsStore = db.createObjectStore('partnerDetails', { keyPath: 'id' });
         partnerDetailsStore.createIndex('createdAt', 'createdAt');
         partnerDetailsStore.createIndex('userId', 'userId');
-      }
-
-      if (!db.objectStoreNames.contains('momentQuestionProgress')) {
-        db.createObjectStore('momentQuestionProgress', { keyPath: 'id' });
-      }
-
-      if (!db.objectStoreNames.contains('belovedSurveys')) {
-        const belovedSurveysStore = db.createObjectStore('belovedSurveys', { keyPath: 'id' });
-        belovedSurveysStore.createIndex('surveyId', 'surveyId');
       }
     },
   });

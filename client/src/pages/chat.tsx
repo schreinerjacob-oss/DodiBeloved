@@ -7,7 +7,7 @@ import { Toggle } from '@/components/ui/toggle';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Heart, Send, Image, Mic, MicOff, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter, Video, VideoOff, Circle, Square, Plus, FileText } from 'lucide-react';
-import { getMessages, saveMessage, deleteMessage, savePartnerDetail } from '@/lib/storage-encrypted';
+import { getMessages, saveMessage, deleteMessage, savePartnerDetail, getSetting, saveSetting } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { useOfflineQueueSize } from '@/hooks/use-offline-queue';
 import { MessageMediaImage } from '@/components/message-media-image';
@@ -15,9 +15,10 @@ import { ImageFullscreenViewer } from '@/components/image-fullscreen-viewer';
 import { MessageMediaVoice } from '@/components/message-media-voice';
 import { MessageMediaVideo } from '@/components/message-media-video';
 import { MemoryResurfacing } from '@/components/resurfacing/memory-resurfacing';
-import { SupportInvitation } from '@/components/support-invitation';
+import { HeartWhisperCard } from '@/components/heart-whisper-card';
+import { getNextWhisper } from '@/lib/heart-whispers';
 import { notifyNewMessage, notifyMessageQueued } from '@/lib/notifications';
-import type { Message, SyncMessage, PartnerDetail, PartnerDetailTag } from '@/types';
+import type { Message, SyncMessage, PartnerDetail } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage, compressImageWithPreset, cn } from '@/lib/utils';
@@ -28,7 +29,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -45,14 +45,29 @@ export default function ChatPage() {
   const { toast } = useToast();
   const { send: sendP2P, sendMedia, state: peerState } = usePeerConnection();
   const pendingCount = useOfflineQueueSize();
-  const [showInvitation, setShowInvitation] = useState(false);
+  const [heartWhisper, setHeartWhisper] = useState<{ id: string; text: string } | null>(null);
 
   useEffect(() => {
-    // 5% chance to show invitation on chat open if not premium
-    if (!isPremium && Math.random() < 0.05) {
-      setShowInvitation(true);
-    }
-  }, [isPremium]);
+    (async () => {
+      const [lastShown, lastId, dismissed, weekStart] = await Promise.all([
+        getSetting('lastWhisperShownAt'),
+        getSetting('lastWhisperId'),
+        getSetting('dismissedWhisperIds'),
+        getSetting('dismissedWhisperIdsWeekStart'),
+      ]);
+      const next = getNextWhisper({
+        lastWhisperShownAt: lastShown,
+        lastWhisperId: lastId || undefined,
+        dismissedWhisperIds: dismissed || undefined,
+        dismissedWhisperIdsWeekStart: weekStart || undefined,
+      });
+      if (next) {
+        setHeartWhisper(next);
+        saveSetting('lastWhisperShownAt', String(Date.now()));
+        saveSetting('lastWhisperId', next.id);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const handleReconciliation = (event: any) => {
@@ -77,7 +92,6 @@ export default function ChatPage() {
   const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
   const [saveDetailMessage, setSaveDetailMessage] = useState<Message | null>(null);
   const [saveDetailContent, setSaveDetailContent] = useState('');
-  const [saveDetailTag, setSaveDetailTag] = useState<PartnerDetailTag>('remember');
   const [messageFilter, setMessageFilter] = useState<'all' | 'media' | 'voice' | 'video'>('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('oldest');
 
@@ -594,7 +608,6 @@ export default function ChatPage() {
       : `Message from ${new Date(message.timestamp).toLocaleDateString()}`;
     setSaveDetailMessage(message);
     setSaveDetailContent(content);
-    setSaveDetailTag('remember');
     setShowReactionPicker(null);
   }, []);
 
@@ -605,23 +618,25 @@ export default function ChatPage() {
       userId,
       partnerId,
       content: saveDetailContent.trim(),
-      tag: saveDetailTag,
+      tag: 'remember',
       messageId: saveDetailMessage.id,
       messageContext: saveDetailMessage.type === 'text' ? saveDetailMessage.content.slice(0, 200) : undefined,
       createdAt: new Date(),
     };
     try {
       await savePartnerDetail(detail);
-      sendP2P({ type: 'partner_detail', data: detail, timestamp: Date.now() });
+      const syncNotes = await getSetting('syncPrivateNotes');
+      if (syncNotes !== 'false') {
+        sendP2P({ type: 'partner_detail', data: detail, timestamp: Date.now() });
+      }
       setSaveDetailMessage(null);
       setSaveDetailContent('');
-      setSaveDetailTag('remember');
-      toast({ title: 'Saved to Moments', description: 'Added to Moments → Details.' });
+      toast({ title: 'Saved to Our Story', description: 'Added to Notes on you.' });
     } catch (e) {
       console.warn('Failed to save partner detail:', e);
       toast({ title: 'Could not save', description: 'Something went wrong. Please try again.', variant: 'destructive' });
     }
-  }, [saveDetailMessage, saveDetailContent, saveDetailTag, userId, partnerId, sendP2P, toast]);
+  }, [saveDetailMessage, saveDetailContent, userId, partnerId, sendP2P, toast]);
 
   const handleSend = async () => {
     if (!newMessage.trim()) {
@@ -1218,7 +1233,6 @@ export default function ChatPage() {
   return (
     <div className="flex-1 min-h-0 min-w-0 flex flex-col bg-background">
       <MemoryResurfacing />
-      {showInvitation && <SupportInvitation onDismiss={() => setShowInvitation(false)} triggerReason="A growing connection..." />}
       <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b bg-card/50">
         <div className="flex items-center gap-2">
           <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-sage to-blush flex items-center justify-center ${peerState.connected ? 'animate-gentle-pulse' : ''}`}>
@@ -1303,6 +1317,13 @@ export default function ChatPage() {
 
       <div className="flex-1 overflow-y-auto p-6" ref={scrollRef}>
         <div className="space-y-4 max-w-3xl mx-auto">
+          {heartWhisper && (
+            <HeartWhisperCard
+              whisper={heartWhisper}
+              onDismiss={() => setHeartWhisper(null)}
+              onSavedOrDismissed={() => setHeartWhisper(null)}
+            />
+          )}
           {displayedMessages.length === 0 && (
             <div className="text-center py-12 space-y-3">
               <div className="w-16 h-16 mx-auto rounded-full bg-sage/20 flex items-center justify-center">
@@ -1747,12 +1768,12 @@ export default function ChatPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={saveDetailMessage !== null} onOpenChange={(open) => { if (!open) { setSaveDetailMessage(null); setSaveDetailContent(''); setSaveDetailTag('remember'); } }}>
+      <Dialog open={saveDetailMessage !== null} onOpenChange={(open) => { if (!open) { setSaveDetailMessage(null); setSaveDetailContent(''); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-light">Save as detail about you</DialogTitle>
+            <DialogTitle className="font-light">Save as note</DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground">Add this to Moments → Details. Only you see it.</p>
+          <p className="text-xs text-muted-foreground">Add to Our Story → Notes on you. Only you see it.</p>
           <div className="space-y-4 mt-4">
             <div>
               <Label className="text-xs">Note</Label>
@@ -1764,25 +1785,8 @@ export default function ChatPage() {
                 data-testid="input-save-detail-content"
               />
             </div>
-            <div>
-              <Label className="text-xs">Tag</Label>
-              <Select value={saveDetailTag} onValueChange={(v) => setSaveDetailTag(v as PartnerDetailTag)}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="remember">Remember</SelectItem>
-                  <SelectItem value="important">Important</SelectItem>
-                  <SelectItem value="follow-up">Follow-up</SelectItem>
-                  <SelectItem value="funny">Funny</SelectItem>
-                  <SelectItem value="sweet">Sweet</SelectItem>
-                  <SelectItem value="to celebrate">To celebrate</SelectItem>
-                  <SelectItem value="to avoid">To avoid</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             <Button onClick={handleSaveDetail} disabled={!saveDetailContent.trim()} className="w-full" data-testid="button-save-detail-submit">
-              Save to Moments → Details
+              Save to Our Story
             </Button>
           </div>
         </DialogContent>

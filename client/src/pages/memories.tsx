@@ -4,19 +4,22 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Camera, Lock, Calendar, Heart, X, ChevronUp, Trash2, Pencil } from 'lucide-react';
-import { getMemories, getMemoriesCount, saveMemory, deleteMemory } from '@/lib/storage-encrypted';
+import { Camera, Lock, Calendar, Heart, X, ChevronUp, Trash2, Pencil, Plus, FileText, Bell } from 'lucide-react';
+import { getMemories, getMemoriesCount, saveMemory, deleteMemory, getSetting, saveSetting, getAllCalendarEvents, saveCalendarEvent, getPartnerDetailsByUserId } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { MemoryMediaImage } from '@/components/memory-media-image';
 import { ImageFullscreenViewer } from '@/components/image-fullscreen-viewer';
-import type { Memory } from '@/types';
-import { format } from 'date-fns';
+import type { Memory, CalendarEvent, PartnerDetail } from '@/types';
+import { format, isSameDay, subYears } from 'date-fns';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage, compressImageWithPreset } from '@/lib/utils';
 
 const MEMORIES_PER_PAGE = 20;
+const MAX_SPECIAL_DATES = 10;
 
 export default function MemoriesPage() {
   const { userId, partnerId } = useDodi();
@@ -36,9 +39,243 @@ export default function MemoriesPage() {
   const memoriesRef = useRef<Memory[]>([]);
   memoriesRef.current = memories;
 
+  // Our Story: special dates, notes, resurfaced
+  const [specialDates, setSpecialDates] = useState<CalendarEvent[]>([]);
+  const [anniversary, setAnniversary] = useState<CalendarEvent | null>(null);
+  const [notesOnYou, setNotesOnYou] = useState<PartnerDetail[]>([]);
+  const [resurfacedMemory, setResurfacedMemory] = useState<Memory | null>(null);
+  const [resurfacedYearsAgo, setResurfacedYearsAgo] = useState<number | null>(null);
+  const [addDateOpen, setAddDateOpen] = useState(false);
+  const [addDateTitle, setAddDateTitle] = useState('');
+  const [addDateValue, setAddDateValue] = useState('');
+  const [addDateIsAnniversary, setAddDateIsAnniversary] = useState(false);
+  const [savingDate, setSavingDate] = useState(false);
+  const [remindEventIds, setRemindEventIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     loadMemories();
+    loadSpecialDates();
+    loadNotesOnYou();
+    checkResurfaced();
+    getSetting('dodi-remind-ids').then((raw) => {
+      if (raw) setRemindEventIds(new Set(raw.split(',').filter(Boolean)));
+    });
   }, []);
+
+  // Remind me: check on visibility if any reminded date is today and not yet notified
+  useEffect(() => {
+    const checkReminders = async () => {
+      if (remindEventIds.size === 0) return;
+      const all = await getAllCalendarEvents();
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const notifiedKey = 'dodi-remind-notified-' + todayStr;
+      const notified = (await getSetting(notifiedKey)) || '';
+      const notifiedSet = new Set(notified.split(',').filter(Boolean));
+      for (const ev of all) {
+        if (!remindEventIds.has(ev.id)) continue;
+        const evDateStr = format(new Date(ev.eventDate), 'yyyy-MM-dd');
+        if (evDateStr !== todayStr) continue;
+        if (notifiedSet.has(ev.id)) continue;
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          try {
+            new Notification('Our Story', { body: `${ev.title} is today.`, icon: '/favicon.ico' });
+            notifiedSet.add(ev.id);
+            await saveSetting(notifiedKey, [...notifiedSet].join(','));
+          } catch (_) {}
+        }
+      }
+    };
+    checkReminders();
+    const onVis = () => checkReminders();
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [remindEventIds.size]);
+
+  useEffect(() => {
+    if (userId) loadNotesOnYou();
+  }, [userId]);
+
+  useEffect(() => {
+    const handleCalendarSynced = () => loadSpecialDates();
+    window.addEventListener('calendar-synced', handleCalendarSynced as EventListener);
+    return () => window.removeEventListener('calendar-synced', handleCalendarSynced as EventListener);
+  }, []);
+
+  useEffect(() => {
+    const handlePartnerDetailSynced = () => loadNotesOnYou();
+    window.addEventListener('partner-detail-synced', handlePartnerDetailSynced as EventListener);
+    return () => window.removeEventListener('partner-detail-synced', handlePartnerDetailSynced as EventListener);
+  }, []);
+
+  // Ensure Birthday calendar event exists when birthday is in settings
+  useEffect(() => {
+    if (!userId || !partnerId) return;
+    let cancelled = false;
+    (async () => {
+      const birthdaySetting = await getSetting('birthday');
+      if (!birthdaySetting || cancelled) return;
+      const all = await getAllCalendarEvents();
+      const birthdayId = `birthday-${userId}`;
+      if (all.some(e => e.id === birthdayId)) return;
+      const parts = birthdaySetting.split('-').map(Number);
+      if (parts.length !== 3 || parts.some(Number.isNaN)) return;
+      const [birthY, birthM, birthD] = parts;
+      if (birthM < 1 || birthM > 12 || birthD < 1 || birthD > 31) return;
+      const month = birthM - 1;
+      const now = new Date();
+      const clampDay = (y: number, m: number, d: number) => Math.min(d, new Date(y, m + 1, 0).getDate());
+      const year1 = now.getFullYear();
+      let eventDate = new Date(year1, month, clampDay(year1, month, birthD));
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (eventDate.getTime() < todayStart.getTime()) {
+        eventDate = new Date(year1 + 1, month, clampDay(year1 + 1, month, birthD));
+      }
+      const moment: CalendarEvent = {
+        id: birthdayId,
+        userId,
+        partnerId,
+        title: 'Birthday',
+        description: null,
+        eventDate,
+        isAnniversary: false,
+        createdAt: new Date(),
+      };
+      await saveCalendarEvent(moment);
+      if (!cancelled) {
+        sendP2P({ type: 'calendar_event', data: moment, timestamp: Date.now() });
+        loadSpecialDates();
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, partnerId]);
+
+  const loadSpecialDates = async () => {
+    const all = await getAllCalendarEvents();
+    const anniv = all.find(e => e.isAnniversary) || null;
+    setAnniversary(anniv);
+    const others = all
+      .filter(e => !e.isAnniversary && !e.id.startsWith('birthday-'))
+      .sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
+    setSpecialDates(others);
+  };
+
+  const loadNotesOnYou = async () => {
+    if (!userId) return;
+    const list = await getPartnerDetailsByUserId(userId);
+    setNotesOnYou(list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+  };
+
+  const checkResurfaced = async () => {
+    const today = new Date();
+    const dismissedAt = await getSetting('resurfacedDismissedAt');
+    if (dismissedAt && isSameDay(new Date(Number(dismissedAt)), today)) return;
+    const all = await getMemories(1000);
+    for (const y of [1, 2, 3]) {
+      const target = subYears(today, y);
+      const match = all.find(m => isSameDay(new Date(m.timestamp), target));
+      if (match) {
+        setResurfacedMemory(match);
+        setResurfacedYearsAgo(y);
+        break;
+      }
+    }
+  };
+
+  const onResurfacedDismiss = () => {
+    saveSetting('resurfacedDismissedAt', String(Date.now()));
+    setResurfacedMemory(null);
+    setResurfacedYearsAgo(null);
+  };
+
+  const handleSaveDate = async () => {
+    if (!addDateTitle.trim() || !addDateValue || !userId || !partnerId) {
+      toast({ title: 'Missing info', description: 'Please add a title and date', variant: 'destructive' });
+      return;
+    }
+    const nonBirthdayCount = specialDates.filter(m => !m.id.startsWith('birthday-')).length;
+    if (!addDateIsAnniversary && nonBirthdayCount >= MAX_SPECIAL_DATES) {
+      toast({ title: 'Limit reached', description: `You can save up to ${MAX_SPECIAL_DATES} special dates`, variant: 'destructive' });
+      return;
+    }
+    setSavingDate(true);
+    try {
+      const event: CalendarEvent = {
+        id: nanoid(),
+        userId,
+        partnerId,
+        title: addDateTitle.trim(),
+        description: null,
+        eventDate: new Date(addDateValue),
+        isAnniversary: addDateIsAnniversary,
+        createdAt: new Date(),
+      };
+      await saveCalendarEvent(event);
+      sendP2P({ type: 'calendar_event', data: event, timestamp: Date.now() });
+      setAddDateOpen(false);
+      setAddDateTitle('');
+      setAddDateValue('');
+      setAddDateIsAnniversary(false);
+      loadSpecialDates();
+      toast({ title: 'Date saved', description: 'Added to Our Story.' });
+    } catch (e) {
+      toast({ title: 'Failed to save', variant: 'destructive' });
+    } finally {
+      setSavingDate(false);
+    }
+  };
+
+  const handleDeleteDate = async (event: CalendarEvent) => {
+    if (!window.confirm(`Remove "${event.title}"?`)) return;
+    const { deleteCalendarEvent } = await import('@/lib/storage-encrypted');
+    await deleteCalendarEvent(event.id);
+    sendP2P({ type: 'calendar_event_delete', data: { id: event.id }, timestamp: Date.now() });
+    loadSpecialDates();
+    setRemindEventIds((prev) => {
+      const next = new Set(prev);
+      next.delete(event.id);
+      getSetting('dodi-remind-ids').then((raw) => {
+        const ids = (raw || '').split(',').filter((id) => id !== event.id);
+        saveSetting('dodi-remind-ids', ids.join(','));
+      });
+      return next;
+    });
+    toast({ title: 'Date removed' });
+  };
+
+  const handleRemindToggle = async (eventId: string, checked: boolean) => {
+    if (checked) {
+      if (typeof Notification === 'undefined') {
+        toast({ title: 'Notifications not supported', variant: 'destructive' });
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        toast({ title: 'Notifications disabled', description: 'Enable in browser settings to get reminders.', variant: 'destructive' });
+        return;
+      }
+      if (Notification.permission === 'default') {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') {
+          toast({ title: 'Notifications disabled', description: 'Reminders need notification permission.', variant: 'destructive' });
+          return;
+        }
+      }
+    }
+    setRemindEventIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(eventId);
+      else next.delete(eventId);
+      return next;
+    });
+    const raw = await getSetting('dodi-remind-ids');
+    const ids = (raw || '').split(',').filter(Boolean);
+    if (checked) {
+      if (!ids.includes(eventId)) ids.push(eventId);
+    } else {
+      const i = ids.indexOf(eventId);
+      if (i >= 0) ids.splice(i, 1);
+    }
+    await saveSetting('dodi-remind-ids', ids.join(','));
+  };
 
   // Reload list when tab becomes visible so we reflect changes from another tab or after long background.
   useEffect(() => {
@@ -303,10 +540,10 @@ export default function MemoriesPage() {
     <div className="flex-1 min-h-0 flex flex-col bg-background">
       <div className="flex items-center justify-between px-6 py-4 border-b bg-card/50">
         <div>
-          <h2 className="text-xl font-light text-foreground">Our Memories</h2>
+          <h2 className="text-xl font-light text-foreground">Our Story</h2>
           <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
             <Lock className="w-3 h-3" />
-            Private vault • Never in gallery
+            Memories, dates, and notes — your private garden
           </p>
         </div>
 
@@ -375,6 +612,95 @@ export default function MemoriesPage() {
       </div>
 
       <ScrollArea className="flex-1 min-h-0 p-6">
+        <div className="max-w-2xl mx-auto space-y-10 pb-6">
+          {/* Resurfaced: 1 match per day, dismiss hides for day */}
+          {resurfacedMemory && resurfacedYearsAgo !== null && (
+            <section>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">
+                On this day, {resurfacedYearsAgo} {resurfacedYearsAgo === 1 ? 'year' : 'years'} ago
+              </h3>
+              <Card className="p-4 border-sage/30 overflow-hidden">
+                <div className="flex gap-4">
+                  <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
+                    <MemoryMediaImage memoryId={resurfacedMemory.id} mediaType={resurfacedMemory.mediaType} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm italic text-foreground">{resurfacedMemory.caption || 'A beautiful moment...'}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{format(resurfacedMemory.timestamp, 'MMMM d, yyyy')}</p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" className="mt-2" onClick={onResurfacedDismiss}>Later</Button>
+              </Card>
+            </section>
+          )}
+
+          {/* Special dates */}
+          <section>
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">Special dates</h3>
+            {anniversary && (
+              <Card className="p-3 mb-2 border-accent/20">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Heart className="w-4 h-4 text-accent shrink-0" />
+                    <span className="font-medium truncate">{anniversary.title}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-muted-foreground">{format(new Date(anniversary.eventDate), 'MMM d')}</span>
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Bell className="w-3.5 h-3.5" />
+                      <Switch
+                        checked={remindEventIds.has(anniversary.id)}
+                        onCheckedChange={(c) => handleRemindToggle(anniversary.id, c)}
+                        className="data-[state=checked]:bg-sage"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </Card>
+            )}
+            {specialDates.map(ev => (
+              <Card key={ev.id} className="p-3 mb-2 flex items-center justify-between gap-2">
+                <span className="text-sm truncate min-w-0">{ev.title}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-muted-foreground">{format(new Date(ev.eventDate), 'MMM d')}</span>
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Bell className="w-3.5 h-3.5" />
+                    <Switch
+                      checked={remindEventIds.has(ev.id)}
+                      onCheckedChange={(c) => handleRemindToggle(ev.id, c)}
+                      className="data-[state=checked]:bg-sage"
+                    />
+                  </label>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteDate(ev)}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </Card>
+            ))}
+            <Button variant="outline" size="sm" onClick={() => setAddDateOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add date
+            </Button>
+          </section>
+
+          {/* Notes on You */}
+          <section>
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">Notes on you</h3>
+            <p className="text-xs text-muted-foreground mb-2">One-tap save from chat reactions. Private, just for you.</p>
+            {notesOnYou.map(n => (
+              <Card key={n.id} className="p-3 mb-2">
+                <p className="text-sm text-foreground">{n.content}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">{format(n.createdAt, 'MMM d, yyyy')}</p>
+              </Card>
+            ))}
+            {notesOnYou.length === 0 && (
+              <p className="text-sm text-muted-foreground italic">Long-press a message in Chat → Save as note</p>
+            )}
+          </section>
+
+          {/* Our memories grid */}
+          <section>
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">Our memories</h3>
         {memories.length === 0 ? (
           <div className="max-w-md mx-auto text-center py-16 space-y-4">
             <div className="w-20 h-20 mx-auto rounded-full bg-accent/20 flex items-center justify-center">
@@ -456,7 +782,49 @@ export default function MemoriesPage() {
             </div>
           </div>
         )}
+          </section>
+        </div>
       </ScrollArea>
+
+      <Dialog open={addDateOpen} onOpenChange={setAddDateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-light">Add special date</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label className="text-xs text-muted-foreground">Title</Label>
+              <Input
+                value={addDateTitle}
+                onChange={e => setAddDateTitle(e.target.value)}
+                placeholder="e.g. First date"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Date</Label>
+              <Input
+                type="date"
+                value={addDateValue}
+                onChange={e => setAddDateValue(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={addDateIsAnniversary}
+                onChange={e => setAddDateIsAnniversary(e.target.checked)}
+                className="rounded"
+              />
+              <span className="text-sm">Anniversary</span>
+            </label>
+            <Button onClick={handleSaveDate} disabled={savingDate || !addDateTitle.trim() || !addDateValue} className="w-full">
+              {savingDate ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editingMemoryId !== null} onOpenChange={(open) => { if (!open) { setEditingMemoryId(null); setEditingCaption(''); } }}>
         <DialogContent className="max-w-md">

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, lazy, Suspense } from "react";
 import { Route, Switch, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -15,14 +15,7 @@ import ResetPage from "@/pages/reset";
 import PinSetupPage from "@/pages/pin-setup";
 import PinLockPage from "@/pages/pin-lock";
 import OnboardingPage from "@/pages/onboarding";
-import ChatPage from "@/pages/chat";
-import MemoriesPage from "@/pages/memories";
-import OurMomentsPage from "@/pages/our-moments";
-import HeartSpacePage from "@/pages/heart-space";
-import CallsPage from "@/pages/calls";
-import SettingsPage from "@/pages/settings";
-import SubscriptionPage from "@/pages/subscription";
-import { MessageSquare, Camera, CalendarHeart, Phone, Settings, Lock, Heart } from "lucide-react";
+import { MessageSquare, Camera, Phone, Settings, Lock, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConnectionStatus } from "@/components/connection-status";
 import { IncomingCallOverlay } from "@/components/incoming-call-overlay";
@@ -33,6 +26,12 @@ import { PwaInstallBanner } from "@/components/pwa-install-banner";
 import { ServiceWorkerUpdateNotifier } from "@/components/service-worker-update";
 import { getNotifyServerUrl, registerPushWithNotifyServer } from "@/lib/push-register";
 import { getNotificationPermission } from "@/lib/notifications";
+
+const ChatPage = lazy(() => import("@/pages/chat"));
+const MemoriesPage = lazy(() => import("@/pages/memories"));
+const HeartSpacePage = lazy(() => import("@/pages/heart-space"));
+const CallsPage = lazy(() => import("@/pages/calls"));
+const SettingsPage = lazy(() => import("@/pages/settings"));
 
 function NavItem({ href, icon: Icon, label, active }: { href: string; icon: any; label: string; active: boolean }) {
   const [, setLocation] = useLocation();
@@ -175,12 +174,11 @@ function MainApp() {
     { href: "/chat", icon: MessageSquare, label: "Chat" },
     { href: "/calls", icon: Phone, label: "Calls" },
     { href: "/heart-space", icon: Heart, label: "Heart" },
-    { href: "/memories", icon: Camera, label: "Memories" },
-    { href: "/moments", icon: CalendarHeart, label: "Moments" },
+    { href: "/memories", icon: Camera, label: "Our Story" },
     { href: "/settings", icon: Settings, label: "Settings" },
   ];
 
-  const otherContentPaths = ["/calls", "/memories", "/moments", "/heart-space", "/settings", "/subscription", "/redundancy", "/setup", "/pairing"];
+  const otherContentPaths = ["/calls", "/memories", "/heart-space", "/settings", "/redundancy", "/setup", "/pairing"];
   const showChat = !otherContentPaths.includes(location);
 
   return (
@@ -207,6 +205,7 @@ function MainApp() {
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col z-10" style={{ minHeight: 0 }}>
           {/* Content area: each page fills viewport and manages its own scroll. Keep all main-tab pages mounted and toggle visibility so layout never collapses when leaving Chat. Unknown routes fall back to Chat (same as previous Route path="/"). */}
           <div ref={scrollContainerRef} className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">Loading...</div>}>
             <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", !showChat && "hidden")}>
               <ChatPage />
             </div>
@@ -216,18 +215,13 @@ function MainApp() {
             <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", location !== "/memories" && "hidden")}>
               <MemoriesPage />
             </div>
-            <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", location !== "/moments" && "hidden")}>
-              <OurMomentsPage />
-            </div>
             <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", location !== "/heart-space" && "hidden")}>
               <HeartSpacePage />
             </div>
             <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", location !== "/settings" && "hidden")}>
               <SettingsPage />
             </div>
-            <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", location !== "/subscription" && "hidden")}>
-              <SubscriptionPage />
-            </div>
+            </Suspense>
             {/* Secondary routes (from settings etc.): render when location matches so content is never blank. /pairing included so route-based navigation matches state-based rendering. */}
             <div className={cn("flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden", location !== "/redundancy" && location !== "/setup" && location !== "/pairing" && "hidden")}>
               <Switch>

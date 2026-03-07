@@ -1,6 +1,6 @@
 import { encrypt, decrypt, deriveKey, base64ToArrayBuffer } from '@/lib/crypto';
 import { initDB as initDBRaw, getSetting as getSettingRaw, saveSetting as saveSettingRaw, saveMediaBlob, getMediaBlob, deleteMediaBlob, getMessages as getMessagesRaw, getMemories as getMemoriesRaw } from '@/lib/storage';
-import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction, EncryptedData, PartnerDetail, BelovedSurveyAnswer, MomentQuestionProgress } from '@/types';
+import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction, EncryptedData, PartnerDetail } from '@/types';
 
 let cachedKey: CryptoKey | null = null;
 let cachedPINKey: CryptoKey | null = null;
@@ -215,14 +215,6 @@ export async function encryptPartnerDetail(detail: PartnerDetail): Promise<Encry
 }
 
 export async function decryptPartnerDetail(encrypted: EncryptedData): Promise<PartnerDetail> {
-  return decryptObject(encrypted);
-}
-
-export async function encryptBelovedSurveyAnswer(answer: BelovedSurveyAnswer): Promise<EncryptedData> {
-  return encryptObject(answer);
-}
-
-export async function decryptBelovedSurveyAnswer(encrypted: EncryptedData): Promise<BelovedSurveyAnswer> {
   return decryptObject(encrypted);
 }
 
@@ -547,55 +539,6 @@ export async function getPartnerDetailsByUserId(userId: string): Promise<Partner
   const all = await db.getAllFromIndex('partnerDetails', 'userId', userId);
   const sorted = all.sort((a: { createdAt: number }, b: { createdAt: number }) => a.createdAt - b.createdAt);
   return Promise.all(sorted.map((enc: EncryptedData & { id: string }) => decryptPartnerDetail(enc)));
-}
-
-// Beloved survey answers (My Beloved); encrypted, sync for recovery
-export async function saveBelovedSurveyAnswer(answer: BelovedSurveyAnswer): Promise<void> {
-  const db = await initDB();
-  const encrypted = await encryptBelovedSurveyAnswer(answer);
-  const updatedAt = toMillis(answer.updatedAt);
-  await db.put('belovedSurveys', { id: answer.id, ...encrypted, surveyId: answer.surveyId, updatedAt, timestamp: updatedAt });
-}
-
-export async function getBelovedSurveyAnswer(surveyId: BelovedSurveyAnswer['surveyId'], userId: string): Promise<BelovedSurveyAnswer | null> {
-  const db = await initDB();
-  const id = `${surveyId}-${userId}`;
-  const record = await db.get('belovedSurveys', id);
-  if (!record) return null;
-  return decryptBelovedSurveyAnswer(record);
-}
-
-export async function getAllBelovedSurveyAnswersForUser(userId: string): Promise<BelovedSurveyAnswer[]> {
-  const db = await initDB();
-  const all = await db.getAll('belovedSurveys');
-  const results: BelovedSurveyAnswer[] = [];
-  for (const enc of all) {
-    try {
-      const dec = await decryptBelovedSurveyAnswer(enc);
-      if (dec.userId === userId) results.push(dec);
-    } catch {
-      // skip corrupted
-    }
-  }
-  return results.sort((a, b) => toMillis(a.updatedAt) - toMillis(b.updatedAt));
-}
-
-// Moment question progress (Making New Moments); stored plain, local-only
-export async function saveMomentQuestionProgress(progress: MomentQuestionProgress): Promise<void> {
-  const db = await initDB();
-  const record = { ...progress, updatedAt: toMillis(progress.updatedAt) };
-  await db.put('momentQuestionProgress', record);
-}
-
-export async function getMomentQuestionProgress(userId: string, partnerId: string, path: 1 | 2 | 3): Promise<MomentQuestionProgress | null> {
-  const db = await initDB();
-  const id = `${userId}-${partnerId}-${path}`;
-  const record = await db.get('momentQuestionProgress', id);
-  if (!record) return null;
-  return {
-    ...record,
-    updatedAt: new Date((record as MomentQuestionProgress).updatedAt),
-  } as MomentQuestionProgress;
 }
 
 export async function saveDailyRitual(ritual: DailyRitual): Promise<void> {

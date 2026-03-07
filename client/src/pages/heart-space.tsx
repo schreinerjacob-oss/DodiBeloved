@@ -12,7 +12,6 @@ import {
   Heart, Sparkles, Send, Smile, Star, Cloud, Sun, Moon, 
   Pen, Lock, Plus, MessageSquareHeart, ScrollText, HeartHandshake
 } from 'lucide-react';
-import { SupportInvitation } from '@/components/support-invitation';
 import { 
   getAllDailyRituals, saveDailyRitual, 
   getAllLoveLetters, saveLoveLetter,
@@ -39,8 +38,6 @@ export default function HeartSpacePage() {
   const { send: sendP2P, state: peerState } = usePeerConnection();
   
   const [activeTab, setActiveTab] = useState('whispers');
-  const [showInvitation, setShowInvitation] = useState(false);
-  const [triggerReason, setTriggerReason] = useState('');
   
   // Whispers state
   const [whispers, setWhispers] = useState<DailyRitual[]>([]);
@@ -152,10 +149,6 @@ export default function HeartSpacePage() {
     const todayPrayers = [...prayers, incoming].filter(p => format(new Date(p.prayerDate), 'yyyy-MM-dd') === today);
     if (todayPrayers.length === 2) {
       toast({ title: "Sacred moment 🙏", description: "Your beloved's gratitude has been revealed." });
-      if (!isPremium) {
-        setTriggerReason("A sacred revelation...");
-        setShowInvitation(true);
-      }
     }
   };
 
@@ -189,7 +182,6 @@ export default function HeartSpacePage() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-background">
-      {showInvitation && <SupportInvitation onDismiss={() => setShowInvitation(false)} triggerReason={triggerReason} />}
       <div className="px-6 py-4 border-b bg-card/50">
         <h2 className="text-xl font-light text-foreground flex items-center gap-2">
           <Heart className="w-5 h-5 text-accent fill-accent" />

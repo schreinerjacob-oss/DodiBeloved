@@ -317,7 +317,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     const db = await initDB();
     await Promise.all([
       'settings', 'messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions',
-      'partnerDetails', 'momentQuestionProgress', 'belovedSurveys',
+      'partnerDetails',
       'messageMedia', 'memoryMedia', 'offlineQueue', 'offlineMediaQueue',
     ].map(s => db.clear(s)));
     setUserId(null);

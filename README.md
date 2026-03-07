@@ -27,7 +27,7 @@ npm install
 npm run dev
 ```
 
-Then open the URL shown in the terminal (e.g. `http://localhost:5000`) in your browser. Pair with your partner by scanning a QR code or entering a code from the other device.
+Then open the URL shown in the terminal (e.g. `http://localhost:5000`) in your browser. Pair with your partner by entering the pairing code from the other device.
 
 ## Beta
 

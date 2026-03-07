@@ -7,3 +7,6 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Local IDE/editor settings (user- or machine-specific)
+.claude/settings.local.json

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug, RefreshCw, ShieldCheck, Trash2, Image } from 'lucide-react';
+import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, Bug, RefreshCw, ShieldCheck, Trash2, Image, FileText } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -35,7 +35,7 @@ import { savePIN, verifyPINAndGetPassphrase, getSetting, saveSetting } from '@/l
 import { clearAndGoToPairing, clearCachesAndReload } from '@/lib/clear-app-data';
 
 export default function SettingsPage() {
-  const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp, isPaired, isPremium, hasPIN } = useDodi();
+  const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp, isPaired, isPremium, setPremiumStatus, hasPIN } = useDodi();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const { reconnect } = usePeerConnection();
@@ -52,12 +52,25 @@ export default function SettingsPage() {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [peerState, setPeerState] = useState<any>(null);
   const [imageSendMode, setImageSendModeState] = useState<'aggressive' | 'balanced' | 'full'>('balanced');
+  const [syncPrivateNotes, setSyncPrivateNotesState] = useState(true);
 
   useEffect(() => {
     getSetting('imageSendMode').then((v) => {
       if (v === 'aggressive' || v === 'balanced' || v === 'full') setImageSendModeState(v);
     });
   }, []);
+
+  useEffect(() => {
+    getSetting('syncPrivateNotes').then((v) => {
+      setSyncPrivateNotesState(v !== 'false');
+    });
+  }, []);
+
+  const setSyncPrivateNotes = async (on: boolean) => {
+    setSyncPrivateNotesState(on);
+    await saveSetting('syncPrivateNotes', on ? 'true' : 'false');
+    toast({ title: on ? 'Notes will sync with partner' : 'Notes are local only', description: on ? 'Notes on you sync across devices when both are online.' : 'New notes stay on this device only.' });
+  };
 
   const setImageSendMode = async (mode: 'aggressive' | 'balanced' | 'full') => {
     setImageSendModeState(mode);
@@ -276,36 +289,15 @@ export default function SettingsPage() {
             </Button>
           </div>
 
-          {/* Support */}
+          {/* Support the Garden */}
           <Card className="p-6 space-y-4 border-accent/20 bg-accent/5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Heart className={`w-5 h-5 ${isPremium ? 'text-accent fill-accent' : 'text-muted-foreground'}`} />
-                <div>
-                  <h3 className="font-medium">Support Status</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {isPremium ? 'You are an Eternal Guardian' : 'Help keep Dodi private forever'}
-                  </p>
-                </div>
-              </div>
-              <Button 
-                variant={isPremium ? "outline" : "default"}
-                size="sm" 
-                onClick={() => setLocation('/subscription')}
-                className="hover-elevate"
-              >
-                {isPremium ? 'View Details' : 'Support Now'}
-              </Button>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Dodi is free. Optional support keeps it private and ad-free.</p>
+              <Button onClick={() => setPremiumStatus(true)} variant="outline" size="sm">Support the Garden</Button>
             </div>
-            
-            <div className="pt-4 border-t flex flex-col gap-3">
-              <Button variant="ghost" className="text-xs text-accent underline p-0 h-auto justify-start" onClick={() => setLocation('/subscription')}>
-                Why support? Your gift keeps Dodi serverless, private, and free of ads — for you and others.
-              </Button>
-              <Button variant="ghost" className="text-[10px] text-muted-foreground underline p-0 h-auto justify-start" onClick={() => setLocation('/subscription')}>
-                Restore my support
-              </Button>
-            </div>
+            {isPremium && (
+              <p className="text-xs text-accent">Thank you for supporting — you are an Eternal Guardian.</p>
+            )}
           </Card>
 
           {/* Connection & Sync */}
@@ -374,6 +366,24 @@ export default function SettingsPage() {
                     Fallback: local polling every 30 minutes
                   </p>
                 )}
+
+                <div className="flex items-start justify-between gap-4 pt-3 border-t">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FileText className="w-5 h-5 text-sage" />
+                    <div>
+                      <h4 className="font-medium">Sync private notes?</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Notes on you (from Chat) sync with partner when both online. Off = local only.
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={syncPrivateNotes}
+                    onCheckedChange={setSyncPrivateNotes}
+                    className="shrink-0 data-[state=checked]:bg-sage data-[state=unchecked]:bg-muted"
+                    data-testid="switch-sync-private-notes"
+                  />
+                </div>
 
                 <div className="pt-3 border-t space-y-3">
                   <div className="flex items-start gap-3">

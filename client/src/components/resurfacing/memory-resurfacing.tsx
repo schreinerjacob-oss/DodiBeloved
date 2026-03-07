@@ -4,10 +4,9 @@ import { Sparkles, X, Heart } from 'lucide-react';
 import { getMemories } from '@/lib/storage-encrypted';
 import { format, isSameDay, subYears } from 'date-fns';
 import type { Memory } from '@/types';
-import { MessageMediaImage } from '@/components/message-media-image';
+import { MemoryMediaImage } from '@/components/memory-media-image';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { SupportInvitation } from '@/components/support-invitation';
 import { useDodi } from '@/contexts/DodiContext';
 
 export function MemoryResurfacing() {
@@ -15,7 +14,6 @@ export function MemoryResurfacing() {
   const [memory, setMemory] = useState<Memory | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [yearsAgo, setYearsAgo] = useState(1);
-  const [showInvitation, setShowInvitation] = useState(false);
 
   useEffect(() => {
     async function checkForMemory() {
@@ -31,11 +29,6 @@ export function MemoryResurfacing() {
           setMemory(match);
           setYearsAgo(y);
           setIsVisible(true);
-          
-          // Trigger invitation after seeing a memory if not premium
-          if (!isPremium) {
-            setTimeout(() => setShowInvitation(true), 3000);
-          }
           break;
         }
       }
@@ -48,7 +41,6 @@ export function MemoryResurfacing() {
 
   return (
     <>
-      {showInvitation && <SupportInvitation onDismiss={() => setShowInvitation(false)} triggerReason={`${yearsAgo} Year Anniversary...`} />}
       <div className="fixed bottom-24 left-4 right-4 z-50 animate-soft-fade-in pointer-events-auto">
         <Card className="p-4 bg-gradient-to-br from-sage/20 via-background to-blush/20 border-accent/30 shadow-xl overflow-hidden relative">
           <Button 
@@ -69,7 +61,7 @@ export function MemoryResurfacing() {
 
           <div className="flex gap-4 items-start">
             <div className="w-24 h-24 rounded-lg overflow-hidden bg-muted flex-shrink-0 border">
-              <MessageMediaImage messageId={memory.id} fileName={memory.caption || 'memory'} />
+              <MemoryMediaImage memoryId={memory.id} mediaType={memory.mediaType} />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-handwritten italic line-clamp-3 mb-2">

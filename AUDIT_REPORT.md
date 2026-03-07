@@ -46,14 +46,11 @@ Several bugs and inconsistencies were found that affect **restore sync**, **esse
 
 ---
 
-### 4. **“Scan QR” in Restore flow did nothing**
+### 4. **Pairing is code-only (no QR)**
 
-**Location:** `client/src/pages/pairing.tsx` – Restore from Partner → “Scan QR”
+**Location:** `client/src/pages/pairing.tsx`
 
-**Problem:** The “Scan QR” button only called `setShowScanner(true)`. There was no UI that rendered when `showScanner` was true (no QR scanner component, no `#qr-reader`, no `html5-qrcode` usage). The button appeared to work but had no effect.  
-`QR_SCANNING_DEBUG_GUIDE.md` describes a “Join with QR Code” flow that doesn’t exist in the current pairing UI.
-
-**Fix:** The button now shows a toast: *“Scan QR coming soon – Please enter the 8-character code from your partner’s device for now.”* The unused `showScanner` state was removed.
+**Note:** Pairing and restore use the shared 8-character code flow only. There is no QR scanning; both "Create Connection" / "Join with Code" and "Restore from Partner" use the same code-based tunnel handshake. Any prior "Scan QR" UI or references have been removed.
 
 ---
 
@@ -126,7 +123,7 @@ Several bugs and inconsistencies were found that affect **restore sync**, **esse
 |------|--------|
 | `client/src/lib/storage-encrypted.ts` | `saveLoveLetter`, `saveFutureLetter`, `savePrayer` now persist `createdAt`, `unlockDate`, `prayerDate` at top-level of encrypted records. `getEssentials` and `getBatchForRestore` filter by these top-level timestamps and send all items from `loveLetters` store. |
 | `client/src/contexts/DodiContext.tsx` | `allowWakeUp` state moved above the effect that uses it. |
-| `client/src/pages/pairing.tsx` | “Scan QR” shows a “coming soon” toast; `showScanner` state removed. UI copy updated for "Join with Code" vs "Restore". |
+| `client/src/pages/pairing.tsx` | Pairing and restore are code-only. UI copy differentiates "Join with Code" vs "Restore". |
 | `client/src/pages/pin-setup.tsx` | Removed redundant hidden PIN input. |
 | `client/src/components/dodi-restore-listener.tsx` | New component created to globally handle `dodi-restore-payload` events. |
 | `client/src/App.tsx` | Integrated `DodiRestoreListener` for global handling of restore payloads. |

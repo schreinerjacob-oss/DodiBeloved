@@ -131,33 +131,4 @@ export interface PartnerDetail {
   createdAt: Date;
 }
 
-// Making New Moments: question progress (per path, per pair)
-export interface MomentQuestionProgress {
-  id: string; // `${userId}-${partnerId}-${path}`
-  userId: string;
-  partnerId: string;
-  path: 1 | 2 | 3;
-  lastQuestionIndex: number;
-  updatedAt: Date;
-}
-
-// My Beloved: survey answers (one record per surveyId + userId)
-export type BelovedSurveyId =
-  | 'loveLanguage'
-  | 'attachmentStyle'
-  | 'apologyLanguage'
-  | 'communicationStyle'
-  | 'coreValues'
-  | 'familyNorms'
-  | 'likesDislikes'
-  | 'dreamsFuture';
-
-export interface BelovedSurveyAnswer {
-  id: string; // `${surveyId}-${userId}`
-  surveyId: BelovedSurveyId;
-  userId: string;
-  partnerId: string;
-  answers: Record<string, string | string[]>;
-  updatedAt: Date;
-}
 

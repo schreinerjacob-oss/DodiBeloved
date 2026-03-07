@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
-import { saveMemory, deleteMemory, saveCalendarEvent, saveDailyRitual, saveLoveLetter, savePrayer, saveReaction } from '@/lib/storage-encrypted';
+import { saveMemory, deleteMemory, saveCalendarEvent, saveDailyRitual, saveLoveLetter, savePrayer, saveReaction, getSetting } from '@/lib/storage-encrypted';
 import { notifyNewMemory, notifyCalendarEvent, notifyDailyRitual, notifyNewLoveLetter, notifyNewMessage } from '@/lib/notifications';
-import type { SyncMessage, Memory, CalendarEvent, DailyRitual, LoveLetter, Prayer, Reaction, PartnerDetail, BelovedSurveyAnswer } from '@/types';
+import type { SyncMessage, Memory, CalendarEvent, DailyRitual, LoveLetter, Prayer, Reaction, PartnerDetail } from '@/types';
 
 export function GlobalSyncHandler() {
   const { userId, partnerId } = useDodi();
@@ -157,33 +157,21 @@ export function GlobalSyncHandler() {
           window.dispatchEvent(new CustomEvent('reaction-synced', { detail: reaction }));
         }
 
-        // Partner detail (Moments → Saved Partner Details); sync for recovery (both directions so partner's details are saved here too)
+        // Partner detail (Notes on You); sync when "Sync private notes?" is on (default on)
         if (message.type === 'partner_detail') {
-          const detail = message.data as PartnerDetail;
-          if (!detail.partnerId || !partnerId || !detail.id) return;
-          const isOurPair = (detail.userId === userId && detail.partnerId === partnerId) || (detail.userId === partnerId && detail.partnerId === userId);
-          if (isOurPair) {
-            try {
-              const { savePartnerDetail } = await import('@/lib/storage-encrypted');
-              await savePartnerDetail(detail);
-              window.dispatchEvent(new CustomEvent('partner-detail-synced', { detail }));
-            } catch (e) {
-              console.warn('Failed to save partner detail on sync:', e);
-            }
-          }
-        }
-
-        // Beloved survey answer (My Beloved); sync for recovery so partner column can show their answers
-        if (message.type === 'beloved_survey') {
-          const answer = message.data as BelovedSurveyAnswer;
-          const isOurPair = (answer.userId === userId && answer.partnerId === partnerId) || (answer.userId === partnerId && answer.partnerId === userId);
-          if (isOurPair && answer.id) {
-            try {
-              const { saveBelovedSurveyAnswer } = await import('@/lib/storage-encrypted');
-              await saveBelovedSurveyAnswer(answer);
-              window.dispatchEvent(new CustomEvent('beloved-survey-synced', { detail: answer }));
-            } catch (e) {
-              console.warn('Failed to save beloved survey on sync:', e);
+          const syncNotes = await getSetting('syncPrivateNotes');
+          if (syncNotes !== 'false') {
+            const detail = message.data as PartnerDetail;
+            if (!detail.partnerId || !partnerId || !detail.id) return;
+            const isOurPair = (detail.userId === userId && detail.partnerId === partnerId) || (detail.userId === partnerId && detail.partnerId === userId);
+            if (isOurPair) {
+              try {
+                const { savePartnerDetail } = await import('@/lib/storage-encrypted');
+                await savePartnerDetail(detail);
+                window.dispatchEvent(new CustomEvent('partner-detail-synced', { detail }));
+              } catch (e) {
+                console.warn('Failed to save partner detail on sync:', e);
+              }
             }
           }
         }
