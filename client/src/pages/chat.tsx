@@ -21,7 +21,9 @@ import { notifyNewMessage, notifyMessageQueued } from '@/lib/notifications';
 import type { Message, SyncMessage, PartnerDetail } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
-import { compressImage, compressImageWithPreset, cn } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { sendImageFromFile } from '@/lib/send-image';
+import { saveMediaBlob } from '@/lib/storage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -1046,99 +1048,30 @@ export default function ChatPage() {
   }, [recordedBlob, recordedBlobUrl, userId, partnerId, peerState.connected, isDisappearing, sendP2P, sendMedia, toast]);
 
   const processImageFile = useCallback(async (file: File) => {
-    const displayName = file.name || `pasted.${(file.type.split('/')[1] || 'image')}`;
-    const isGif = file.type === 'image/gif';
     setSending(true);
     try {
-      const messageId = nanoid();
-      const now = new Date();
-      const isOffline = !peerState.connected;
-
-      const { saveMediaBlob } = await import('@/lib/storage');
-      const { getSetting } = await import('@/lib/storage-encrypted');
-      const imageSendMode = (await getSetting('imageSendMode')) || 'balanced';
-
-      // GIFs: use as-is to preserve animation; photos: compress
-      let previewBlob: Blob;
-      if (isGif) {
-        previewBlob = file;
-      } else {
-        const previewPreset = imageSendMode === 'aggressive' ? 'aggressive' : 'balanced';
-        console.log('🖼️ Compressing preview...');
-        previewBlob = await compressImageWithPreset(file, previewPreset);
-      }
-      await saveMediaBlob(messageId, previewBlob, 'message', 'preview');
-
-      const DISAPPEAR_MS = 30_000;
-      const disappearsAt = isDisappearing ? new Date(Date.now() + DISAPPEAR_MS) : undefined;
-      const message: Message = {
-        id: messageId,
-        senderId: userId!,
-        recipientId: partnerId!,
-        content: displayName,
-        type: 'image',
-        mediaUrl: null,
-        isDisappearing: isDisappearing ?? undefined,
-        disappearsAt: disappearsAt ?? undefined,
-        timestamp: now,
-        status: isOffline ? 'queued' : 'sending',
-      };
-
-      await saveMessage(message);
-
-      // Add to local state
-      setMessages(prev => [...prev, message]);
-
-      // Send message metadata (small, queue-friendly)
-      sendP2P({
-        type: 'message',
-        data: { ...message, mediaUrl: null },
-        timestamp: Date.now(),
+      await sendImageFromFile(file, { kind: 'message', isDisappearing }, {
+        userId: userId!,
+        partnerId: partnerId!,
+        connected: peerState.connected,
+        sendP2P,
+        sendMedia,
+        saveMediaBlob,
+        getSetting,
+        toast,
+        saveMessage,
+        onMessageCreated: (m) => setMessages((prev) => [...prev, m]),
+        onDisappearingTimer: (messageId, deleteAt, deleteCb) => {
+          const id = setTimeout(() => {
+            disappearingTimersRef.current.delete(id);
+            setMessages((prev) => prev.filter((m) => m.id !== messageId));
+            deleteCb();
+          }, deleteAt - Date.now());
+          disappearingTimersRef.current.add(id);
+        },
+        deleteMessage,
       });
-
-      // Send preview first (chat list)
-      await sendMedia({ mediaId: messageId, kind: 'message', mime: previewBlob.type || file.type || 'image/jpeg' });
-
-      // Send full in background (photos: balanced/full mode; GIFs: already full)
-      if (!isGif && (imageSendMode === 'balanced' || imageSendMode === 'full') && file.size !== previewBlob.size) {
-        const trySendFull = async () => {
-          try {
-            await saveMediaBlob(messageId, file, 'message', 'full');
-            await sendMedia({ mediaId: messageId, kind: 'message', mime: file.type || 'image/jpeg', variant: 'full', blob: file });
-          } catch {
-            const fallback = await compressImage(file, 960, 0.5);
-            await saveMediaBlob(messageId, fallback, 'message', 'full');
-            await sendMedia({ mediaId: messageId, kind: 'message', mime: 'image/jpeg', variant: 'full', blob: fallback });
-          }
-        };
-        void trySendFull().catch((err) => {
-          console.warn('🖼️ [MEDIA] Full-quality send failed, will retry when online:', err);
-          toast({ title: 'Full-quality sync delayed', description: 'Will send when connection is stable.', variant: 'default' });
-        });
-      }
-
-      toast({
-        title: isOffline ? "Image queued" : "Image sending",
-      });
-
-      if (isDisappearing) {
-        const id = setTimeout(() => {
-          disappearingTimersRef.current.delete(id);
-          setMessages((prev) => prev.filter((m) => m.id !== messageId));
-          deleteMessage(messageId).catch((e) => console.warn('Delete disappearing message:', e));
-          sendP2P({ type: 'message-delete', data: { messageId }, timestamp: Date.now() });
-        }, DISAPPEAR_MS);
-        disappearingTimersRef.current.add(id);
-      }
-
-      setSending(false);
-    } catch (error) {
-      console.error('Image send error:', error);
-      toast({
-        title: "Image didn't send",
-        description: "Try again when you're back online.",
-        variant: "destructive",
-      });
+    } finally {
       setSending(false);
     }
   }, [userId, partnerId, peerState.connected, isDisappearing, sendP2P, sendMedia, toast]);

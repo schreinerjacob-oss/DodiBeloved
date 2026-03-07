@@ -1,5 +1,6 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction, PartnerDetail } from '@/types';
+import { getNativeSetting, setNativeSetting, isNativePlatform } from '@/lib/capacitor-preferences';
 
 const DB_NAME = 'dodi-encrypted-storage';
 const DB_VERSION = 5;
@@ -119,6 +120,9 @@ export async function initDB(): Promise<IDBPDatabase<DodiDB>> {
     },
   });
 
+  if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
+    navigator.storage.persist().catch(() => {});
+  }
   return dbInstance;
 }
 
@@ -244,6 +248,10 @@ export async function getRecentReactions(limit: number = 10): Promise<Reaction[]
 }
 
 export async function saveSetting(key: string, value: string): Promise<void> {
+  // Native: mirror critical keys to Keychain/Preferences so they survive eviction
+  if (isNativePlatform()) {
+    await setNativeSetting(key, value);
+  }
   // Always save to both IndexedDB and localStorage for persistence
   // localStorage is more reliable for PWA pairing data
   try {
@@ -251,12 +259,17 @@ export async function saveSetting(key: string, value: string): Promise<void> {
   } catch (e) {
     console.warn('localStorage unavailable:', e);
   }
-  
+
   const db = await initDB();
   await db.put('settings', { key, value });
 }
 
 export async function getSetting(key: string): Promise<string | undefined> {
+  // Native: read critical keys from Keychain/Preferences first
+  if (isNativePlatform()) {
+    const nativeValue = await getNativeSetting(key);
+    if (nativeValue !== undefined) return nativeValue;
+  }
   // Try localStorage first (faster, more reliable for PWA)
   try {
     const value = localStorage.getItem(`dodi-${key}`);

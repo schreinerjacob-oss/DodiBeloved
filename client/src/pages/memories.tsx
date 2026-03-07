@@ -16,7 +16,8 @@ import type { Memory, CalendarEvent, PartnerDetail } from '@/types';
 import { format, isSameDay, subYears } from 'date-fns';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
-import { compressImage, compressImageWithPreset } from '@/lib/utils';
+import { sendImageFromFile } from '@/lib/send-image';
+import { saveMediaBlob } from '@/lib/storage';
 
 const MEMORIES_PER_PAGE = 20;
 const MAX_SPECIAL_DATES = 10;
@@ -474,45 +475,18 @@ export default function MemoriesPage() {
         });
         await sendMedia({ mediaId: memoryId, kind: 'memory', mime: previewFile.type || 'video/mp4' });
       } else {
-        const imageSendMode = (await getSetting('imageSendMode')) || 'balanced';
-        const previewPreset = imageSendMode === 'aggressive' ? 'aggressive' : 'balanced';
-        const compressedBlob = await compressImageWithPreset(previewFile, previewPreset);
-        await saveMediaBlob(memoryId, compressedBlob, 'memory', 'preview');
-        const memory: Memory = {
-          id: memoryId,
+        await sendImageFromFile(previewFile, { kind: 'memory', caption: caption.trim() }, {
           userId,
           partnerId,
-          imageData: '',
-          mediaUrl: null,
-          caption: caption.trim() || null,
-          mediaType: 'photo',
-          timestamp: new Date(),
-          createdAt: new Date(),
-        };
-        await saveMemory(memory);
-        setMemories(prev => [...prev, memory]);
-        sendP2P({
-          type: 'memory',
-          data: { ...memory, mediaUrl: null, imageData: '' },
-          timestamp: Date.now(),
+          connected: peerState.connected,
+          sendP2P,
+          sendMedia,
+          saveMediaBlob,
+          getSetting,
+          toast,
+          saveMemory,
+          onMemoryCreated: (m) => setMemories((prev) => [...prev, m]),
         });
-        await sendMedia({ mediaId: memoryId, kind: 'memory', mime: compressedBlob.type || previewFile.type || 'image/jpeg' });
-        if ((imageSendMode === 'balanced' || imageSendMode === 'full') && previewFile.size !== compressedBlob.size) {
-          const trySendFull = async () => {
-            try {
-              await saveMediaBlob(memoryId, previewFile, 'memory', 'full');
-              await sendMedia({ mediaId: memoryId, kind: 'memory', mime: previewFile.type || 'image/jpeg', variant: 'full', blob: previewFile });
-            } catch {
-              const fallback = await compressImage(previewFile, 960, 0.5);
-              await saveMediaBlob(memoryId, fallback, 'memory', 'full');
-              await sendMedia({ mediaId: memoryId, kind: 'memory', mime: 'image/jpeg', variant: 'full', blob: fallback });
-            }
-          };
-          void trySendFull().catch((err) => {
-            console.warn('🖼️ [MEDIA] Full-quality send failed, will retry when online:', err);
-            toast({ title: 'Full-quality sync delayed', description: 'Will send when connection is stable.', variant: 'default' });
-          });
-        }
       }
 
       if (preview) URL.revokeObjectURL(preview);
@@ -520,10 +494,12 @@ export default function MemoriesPage() {
       setPreview('');
       setPreviewFile(null);
       setDialogOpen(false);
-      toast({
-        title: isVideo ? 'Memory saved 🎬' : 'Memory saved 📸',
-        description: 'Your precious moment is preserved and shared.',
-      });
+      if (isVideo) {
+        toast({
+          title: 'Memory saved 🎬',
+          description: 'Your precious moment is preserved and shared.',
+        });
+      }
     } catch (error) {
       console.error('Save memory error:', error);
       toast({

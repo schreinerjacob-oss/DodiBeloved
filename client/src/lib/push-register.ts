@@ -1,8 +1,10 @@
 /**
  * Register this device's push subscription with the notify server.
  * Called after pairing when permission is granted, and on app load when already paired.
+ * On Capacitor native: uses FCM/APNs token and POSTs with platform; on web: uses Web Push subscription.
  */
 
+import { Capacitor } from '@capacitor/core';
 import { getOrCreatePushToken } from '@/lib/push-token';
 import { getNotificationPermission } from '@/lib/notifications';
 
@@ -30,13 +32,73 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
 }
 
 /**
+ * Register native (FCM/APNs) push token with the notify server.
+ */
+async function registerNativePushWithNotifyServer(): Promise<boolean> {
+  const baseUrl = getNotifyServerUrl();
+  if (!baseUrl) return false;
+
+  try {
+    const { PushNotifications } = await import('@capacitor/push-notifications');
+    const perm = await PushNotifications.requestPermissions();
+    if (perm.receive !== 'granted') return false;
+
+    const token = await getOrCreatePushToken();
+    const platform = Capacitor.getPlatform() as string;
+    if (platform !== 'ios' && platform !== 'android') {
+      console.warn('Push register: unknown native platform', platform);
+      return false;
+    }
+
+    return new Promise<boolean>((resolve) => {
+      const unlisten = async () => {
+        await PushNotifications.removeAllListeners().catch(() => {});
+      };
+      const handler = async (ev: { value: string }) => {
+        await unlisten();
+        try {
+          const res = await fetch(`${baseUrl.replace(/\/$/, '')}/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              token,
+              nativeToken: ev.value,
+              platform: platform as 'ios' | 'android',
+            }),
+          });
+          resolve(res.ok);
+        } catch {
+          resolve(false);
+        }
+      };
+      PushNotifications.addListener('registration', handler).catch(() => resolve(false));
+      PushNotifications.addListener('registrationError', () => {
+        unlisten();
+        resolve(false);
+      });
+      PushNotifications.register().catch(() => resolve(false));
+    });
+  } catch (e) {
+    console.warn('Native push register error:', e);
+    return false;
+  }
+}
+
+/**
  * Subscribe to push and register with the notify server.
  * No-op if notify server URL or VAPID key is missing, or permission not granted.
+ * On native: uses Capacitor Push Notifications and POSTs nativeToken + platform.
  */
 export async function registerPushWithNotifyServer(): Promise<boolean> {
   const baseUrl = getNotifyServerUrl();
+  if (!baseUrl) return false;
+
+  if (Capacitor.isNativePlatform()) {
+    return registerNativePushWithNotifyServer();
+  }
+
   const vapidKey = getVapidPublicKey();
-  if (!baseUrl || !vapidKey) return false;
+  if (!vapidKey) return false;
 
   const permission = await getNotificationPermission();
   if (permission !== 'granted') return false;

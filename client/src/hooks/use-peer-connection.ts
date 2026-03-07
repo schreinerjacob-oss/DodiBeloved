@@ -8,6 +8,7 @@ import { saveToOfflineQueue, getOfflineQueue, removeFromOfflineQueue, getOffline
 import { notifyQueueListeners, useOfflineQueueSize } from '@/hooks/use-offline-queue';
 import { getNotifyServerUrl } from '@/lib/push-register';
 import { getPartnerPushToken } from '@/lib/push-token';
+import { Capacitor } from '@capacitor/core';
 
 interface PeerConnectionState {
   connected: boolean;
@@ -920,7 +921,8 @@ export async function initializePeer(id: string, retries: number = 3): Promise<P
             iceServers: [
               { urls: 'stun:stun.l.google.com:19302' },
               { urls: 'stun:stun.stunprotocol.org:3478' }
-            ]
+            ],
+            ...(Capacitor.isNativePlatform() ? { iceTransportPolicy: 'all' as const } : {})
           }
         });
         
@@ -1304,38 +1306,49 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     };
   }, [userId, pairingStatus, peerReinitTrigger]);
 
-  // 2. CONNECT TO PARTNER whenever partnerId changes + Visibility triggers
+  // 2. CONNECT TO PARTNER whenever partnerId changes + Visibility / App state triggers
   useEffect(() => {
     // Only update when truthy; preserve previous ID when partnerId is null (e.g. during reconnect)
     if (partnerId != null) globalPartnerId = partnerId;
 
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && partnerId) {
-        visibilityGraceUntil = Date.now() + VISIBILITY_RECONNECT_GRACE_MS;
-        notifyListeners();
-        // Only reconnect if connection is actually down; delay to let connection state stabilize after tab becomes visible
-        setTimeout(() => {
-          if (!globalConn || !globalConn.open) {
-            console.log('👀 [P2P] App visible - connection down, triggering reconnect');
-            reconnectAttempt = 0;
-            connectToPartner(partnerId);
-          } else {
-            console.log('👀 [P2P] App visible - connection still active, no reconnect needed');
-          }
-        }, 500);
-      }
-      // When tab becomes hidden, don't immediately disconnect - let grace period handle it
-      // Connection stays alive for at least 5 minutes (handled by inactivity timer)
+    const onAppActive = (pid: string | null) => {
+      if (!pid) return;
+      visibilityGraceUntil = Date.now() + VISIBILITY_RECONNECT_GRACE_MS;
+      notifyListeners();
+      setTimeout(() => {
+        if (!globalConn || !globalConn.open) {
+          console.log('👀 [P2P] App active - connection down, triggering reconnect');
+          reconnectAttempt = 0;
+          connectToPartner(pid);
+        }
+      }, 500);
     };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && partnerId) onAppActive(partnerId);
+    };
+
+    if (Capacitor.isNativePlatform()) {
+      const listenerRef = { current: null as (() => void) | null };
+      import('@capacitor/app').then(({ App }) => {
+        App.addListener('appStateChange', ({ isActive }) => {
+          if (isActive && partnerId) onAppActive(partnerId);
+        }).then((listener) => { listenerRef.current = listener.remove; });
+      });
+      if (partnerId) {
+        console.log('🔗 partnerId changed, connecting to:', partnerId);
+        connectToPartner(partnerId);
+      }
+      return () => { listenerRef.current?.(); };
+    }
+
     document.addEventListener('visibilitychange', handleVisibility);
 
     if (!partnerId || !globalPeer || globalPeer.destroyed) {
       return () => document.removeEventListener('visibilitychange', handleVisibility);
     }
-    
     console.log('🔗 partnerId changed, connecting to:', partnerId);
     connectToPartner(partnerId);
-
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [partnerId]);
 

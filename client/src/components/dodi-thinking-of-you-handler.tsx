@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useDodi } from '@/contexts/DodiContext';
+import { hapticMedium } from '@/lib/haptics';
 
 /**
  * Global listener for 'thinking-of-you' P2P messages.
@@ -19,10 +20,7 @@ export function DodiThinkingOfYouHandler() {
       if (!msg || msg.type !== 'thinking-of-you') return;
       if (pairingStatus !== 'connected') return;
 
-      // Vibrate device
-      if ('vibrate' in navigator) {
-        navigator.vibrate([200, 100, 200]);
-      }
+      hapticMedium();
 
       // Flash gold overlay
       setShowFlash(true);

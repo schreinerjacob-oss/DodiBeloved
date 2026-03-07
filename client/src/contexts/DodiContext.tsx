@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { useLocation } from 'wouter';
 import { generatePassphrase, generateSalt, arrayBufferToBase64 } from '@/lib/crypto';
 import { saveSetting, getSetting, initDB, clearEncryptionCache } from '@/lib/storage-encrypted';
+import { isNativePlatform, clearNativeSettings } from '@/lib/capacitor-preferences';
 import { useInactivityTimer } from '@/hooks/use-inactivity-timer';
 import { nanoid } from 'nanoid';
 
@@ -38,6 +39,8 @@ interface DodiContextType {
   setInactivityMinutes: (minutes: number) => Promise<void>;
   logout: () => Promise<void>;
   isLoading: boolean;
+  /** True when running in reviewer demo mode (VITE_DEMO_MODE); no real P2P, read-only style. */
+  isDemoMode: boolean;
 }
 
 const DodiContext = createContext<DodiContextType | undefined>(undefined);
@@ -47,6 +50,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [passphrase, setPassphrase] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const [pairingStatus, setPairingStatus] = useState<PairingStatus>('unpaired');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isLocked, setIsLocked] = useState(() => {
@@ -136,6 +140,15 @@ export function DodiProvider({ children }: { children: ReactNode }) {
 
         if (storedIsPremium === 'true') {
           setIsPremium(true);
+        }
+
+        const demoMode = import.meta.env.VITE_DEMO_MODE === 'true' || import.meta.env.VITE_DEMO_MODE === true;
+        if (demoMode && (!storedUserId || storedPairingStatus !== 'connected')) {
+          setUserId('demo-user');
+          setDisplayName('Demo');
+          setPartnerId('demo-partner');
+          setPairingStatus('connected');
+          setIsDemoMode(true);
         }
       } catch (error) {
         console.error('Failed to load pairing data:', error);
@@ -315,11 +328,19 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     clearEncryptionCache();
     setPassphrase(null);
     const db = await initDB();
-    await Promise.all([
-      'settings', 'messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions',
-      'partnerDetails',
-      'messageMedia', 'memoryMedia', 'offlineQueue', 'offlineMediaQueue',
-    ].map(s => db.clear(s)));
+    const storeNames = Array.from(db.objectStoreNames);
+    await Promise.all(storeNames.map((name) => db.clear(name)));
+    if (typeof localStorage !== 'undefined') {
+      const keys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith('dodi-')) keys.push(k);
+      }
+      keys.forEach((k) => localStorage.removeItem(k));
+    }
+    if (isNativePlatform()) {
+      await clearNativeSettings();
+    }
     setUserId(null);
     setDisplayName(null);
     setPartnerId(null);
@@ -346,7 +367,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         completePairingAsCreator, setPartnerIdForCreator, onPeerConnected,
         setPIN: setPINHandler, skipPINSetup: () => setShowPinSetup(false),
         unlockWithPIN: unlockWithPINHandler, unlockWithPassphrase: unlockWithPassphraseHandler,
-        lockApp: lockAppHandler, setInactivityMinutes: setInactivityMinutesHandler, logout, isLoading,
+        lockApp: lockAppHandler, setInactivityMinutes: setInactivityMinutesHandler, logout, isLoading, isDemoMode,
       }}
     >
       {children}

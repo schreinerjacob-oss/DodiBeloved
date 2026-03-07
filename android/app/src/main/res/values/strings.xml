@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">dodi</string>
+    <string name="title_activity_main">dodi</string>
+    <string name="package_name">com.dodi.app</string>
+    <string name="custom_url_scheme">com.dodi.app</string>
+</resources>

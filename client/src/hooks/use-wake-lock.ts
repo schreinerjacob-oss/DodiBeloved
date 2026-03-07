@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+
+function useNativeKeepAwake(): boolean {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
+}
 
 function isWakeLockSupported(): boolean {
-  return typeof navigator !== 'undefined' && 'wakeLock' in navigator;
+  if (typeof navigator === 'undefined') return false;
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios') return true;
+  return 'wakeLock' in navigator;
 }
 
 export interface UseWakeLockReturn {
@@ -12,35 +19,51 @@ export interface UseWakeLockReturn {
 }
 
 /**
- * Screen Wake Lock: keeps the screen on and reduces tab throttling while the app
- * is in the foreground and enabled. Release when tab is hidden or when app locks.
+ * Screen Wake Lock: keeps the screen on. On iOS native uses @capacitor/keep-awake
+ * (navigator.wakeLock not supported); on web/Android uses navigator.wakeLock.
  */
 export function useWakeLock(enabled: boolean): UseWakeLockReturn {
   const sentinelRef = useRef<WakeLockSentinel | null>(null);
   const [active, setActive] = useState(false);
   const supported = isWakeLockSupported();
+  const useNative = useNativeKeepAwake();
 
   const releaseWakeLock = useCallback(async () => {
+    if (useNative) {
+      try {
+        const { KeepAwake } = await import('@capacitor/keep-awake');
+        await KeepAwake.allowSleep();
+      } catch {}
+      setActive(false);
+      return;
+    }
     if (!sentinelRef.current) return;
     try {
       await sentinelRef.current.release();
-    } catch (e) {
-      // Ignore if already released
-    }
+    } catch (e) {}
     sentinelRef.current = null;
     setActive(false);
-  }, []);
+  }, [useNative]);
 
   const requestWakeLock = useCallback(async () => {
     if (!supported || !enabled) return;
-    if (sentinelRef.current) return; // Already holding
+    if (useNative) {
+      try {
+        const { KeepAwake } = await import('@capacitor/keep-awake');
+        await KeepAwake.keepAwake();
+        setActive(true);
+      } catch (e) {
+        console.warn('KeepAwake failed:', e);
+      }
+      return;
+    }
+    if (sentinelRef.current) return;
     if (document.visibilityState !== 'visible') return;
 
     try {
       const sentinel = await navigator.wakeLock.request('screen');
       sentinelRef.current = sentinel;
       setActive(true);
-
       sentinel.addEventListener('release', () => {
         sentinelRef.current = null;
         setActive(false);
@@ -48,7 +71,7 @@ export function useWakeLock(enabled: boolean): UseWakeLockReturn {
     } catch (e) {
       console.warn('Wake Lock request failed:', e);
     }
-  }, [supported, enabled]);
+  }, [supported, enabled, useNative]);
 
   useEffect(() => {
     if (!enabled) {
@@ -56,12 +79,12 @@ export function useWakeLock(enabled: boolean): UseWakeLockReturn {
       return;
     }
 
-    if (document.visibilityState === 'visible') {
+    if (document.visibilityState === 'visible' || useNative) {
       requestWakeLock();
     }
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
+      if (document.visibilityState === 'hidden' && !useNative) {
         releaseWakeLock();
       } else if (document.visibilityState === 'visible' && enabled) {
         requestWakeLock();
@@ -74,7 +97,7 @@ export function useWakeLock(enabled: boolean): UseWakeLockReturn {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       releaseWakeLock();
     };
-  }, [enabled, requestWakeLock, releaseWakeLock]);
+  }, [enabled, requestWakeLock, releaseWakeLock, useNative]);
 
   return { active, requestWakeLock, releaseWakeLock, isSupported: supported };
 }

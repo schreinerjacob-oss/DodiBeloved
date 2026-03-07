@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Lock, LogOut, X, Check } from 'lucide-react';
+import { Lock, LogOut, X, Check, ScanFace } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Capacitor } from '@capacitor/core';
+import { getNativeSetting } from '@/lib/capacitor-preferences';
 
 export default function PinLockPage() {
   const { unlockWithPIN, unlockWithPassphrase, logout } = useDodi();
@@ -16,6 +18,14 @@ export default function PinLockPage() {
   const [error, setError] = useState('');
   const [showPassphrase, setShowPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState('');
+  const [biometryAvailable, setBiometryAvailable] = useState(false);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    import('@aparajita/capacitor-biometric-auth').then(({ BiometricAuth }) => {
+      BiometricAuth.checkBiometry().then((r) => setBiometryAvailable(r.isAvailable)).catch(() => {});
+    }).catch(() => {});
+  }, []);
 
   const handlePinChange = (value: string) => {
     const cleaned = value.replace(/\D/g, '').slice(0, 6);
@@ -67,6 +77,32 @@ export default function PinLockPage() {
 
   const handleLogout = async () => {
     await logout();
+  };
+
+  const handleBiometricUnlock = async () => {
+    if (!biometryAvailable) return;
+    setLoading(true);
+    setError('');
+    try {
+      const { BiometricAuth } = await import('@aparajita/capacitor-biometric-auth');
+      await BiometricAuth.authenticate({
+        reason: 'Unlock Dodi',
+        cancelTitle: 'Cancel',
+        allowDeviceCredential: true,
+      });
+      const storedPin = await getNativeSetting('pin');
+      if (storedPin && await unlockWithPIN(storedPin)) {
+        // Unlocked
+      } else {
+        setError('Could not unlock with biometrics');
+      }
+    } catch (e) {
+      if (e && typeof (e as { code?: string }).code === 'string' && (e as { code: string }).code !== 'userCancel') {
+        setError('Biometric authentication failed');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const isValidPin = pin.length >= 4 && pin.length <= 6;
@@ -216,6 +252,18 @@ export default function PinLockPage() {
         </div>
 
         <div className="space-y-2">
+          {biometryAvailable && (
+            <Button
+              onClick={handleBiometricUnlock}
+              disabled={loading}
+              className="w-full h-11"
+              variant="secondary"
+              data-testid="button-unlock-biometric"
+            >
+              <ScanFace className="w-4 h-4 mr-2" />
+              Use Face ID / Touch ID
+            </Button>
+          )}
           <Button
             onClick={handleUnlockPin}
             disabled={!isValidPin || loading}

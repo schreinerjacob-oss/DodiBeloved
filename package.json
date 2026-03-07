@@ -6,11 +6,25 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5000",
     "build": "vite build",
+    "build:cap": "vite build && npx cap sync",
     "start": "vite preview --host 0.0.0.0 --port 5000",
     "check": "tsc",
-    "notify-server": "tsx server/notify.ts"
+    "notify-server": "tsx server/notify.ts",
+    "open:ios": "npx cap open ios",
+    "open:android": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/haptics": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/push-notifications": "^7.0.0",
+    "@capacitor/preferences": "^7.0.0",
+    "@capacitor/splash-screen": "^7.0.0",
+    "@capacitor/keep-awake": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0",
+    "@aparajita/capacitor-biometric-auth": "^7.0.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
@@ -67,9 +81,11 @@
     "zod": "^3.24.2",
     "express": "^4.21.0",
     "web-push": "^3.6.7",
-    "@upstash/redis": "^1.36.0"
+    "@upstash/redis": "^1.36.0",
+    "firebase-admin": "^13.0.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
     "@replit/vite-plugin-cartographer": "^0.4.4",
     "@replit/vite-plugin-dev-banner": "^0.1.1",
     "@replit/vite-plugin-runtime-error-modal": "^0.0.3",

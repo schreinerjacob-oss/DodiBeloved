@@ -1,12 +1,14 @@
 import { useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { Capacitor } from "@capacitor/core";
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 /**
  * Registers the service worker, checks for updates on load and when returning
  * to the tab, and prompts the user to reload when a new version has taken over.
+ * In Capacitor native builds the service worker is not used; skip registration.
  */
 export function ServiceWorkerUpdateNotifier() {
   const { toast } = useToast();
@@ -14,6 +16,7 @@ export function ServiceWorkerUpdateNotifier() {
   const regRef = useRef<ServiceWorkerRegistration | null>(null);
 
   useEffect(() => {
+    if (Capacitor.isNativePlatform()) return;
     if (!("serviceWorker" in navigator)) return;
 
     let cancelled = false;

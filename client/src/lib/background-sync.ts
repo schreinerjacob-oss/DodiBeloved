@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core';
+
 const RECONNECT_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const PERIODIC_SYNC_TAG = 'dodi-reconnect';
 
@@ -5,6 +7,7 @@ let backgroundIntervalId: number | null = null;
 let reconnectCallback: (() => void) | null = null;
 let visibilityPollingSetup = false;
 let swMessageListenerSetup = false;
+let appStateListenerSetup = false;
 
 export function setReconnectCallback(callback: () => void): void {
   reconnectCallback = callback;
@@ -111,6 +114,24 @@ function setupServiceWorkerMessageListener(): void {
   console.log('✅ Service Worker message listener initialized');
 }
 
+function setupAppStatePolling(): void {
+  if (appStateListenerSetup) return;
+  appStateListenerSetup = true;
+
+  import('@capacitor/app').then(({ App }) => {
+    App.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) {
+        stopBackgroundPolling();
+        if (reconnectCallback) {
+          setTimeout(() => reconnectCallback(), 500);
+        }
+      } else {
+        startBackgroundPolling();
+      }
+    });
+  }).catch(() => {});
+}
+
 export async function initializeBackgroundSync(onReconnect: () => void): Promise<void> {
   setReconnectCallback(onReconnect);
   
@@ -120,6 +141,10 @@ export async function initializeBackgroundSync(onReconnect: () => void): Promise
   const periodicSyncRegistered = await registerPeriodicSync();
   
   if (!periodicSyncRegistered) {
-    setupVisibilityBasedPolling();
+    if (Capacitor.isNativePlatform()) {
+      setupAppStatePolling();
+    } else {
+      setupVisibilityBasedPolling();
+    }
   }
 }

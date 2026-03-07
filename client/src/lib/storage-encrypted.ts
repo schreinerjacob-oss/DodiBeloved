@@ -1,5 +1,6 @@
 import { encrypt, decrypt, deriveKey, base64ToArrayBuffer } from '@/lib/crypto';
 import { initDB as initDBRaw, getSetting as getSettingRaw, saveSetting as saveSettingRaw, saveMediaBlob, getMediaBlob, deleteMediaBlob, getMessages as getMessagesRaw, getMemories as getMemoriesRaw } from '@/lib/storage';
+import { setNativeSetting, isNativePlatform } from '@/lib/capacitor-preferences';
 import type { Message, Memory, CalendarEvent, DailyRitual, LoveLetter, FutureLetter, Prayer, Reaction, EncryptedData, PartnerDetail } from '@/types';
 
 let cachedKey: CryptoKey | null = null;
@@ -267,19 +268,16 @@ export async function savePIN(pin: string, passphrase: string): Promise<void> {
     
     // SECURITY NOTE: Keep plaintext passphrase in storage for message decryption
     // The encryptedPassphrase serves as a tamper check - if PIN is correct, it decrypts to match stored passphrase
+    const encPassStr = JSON.stringify(encryptedPassphrase);
+    const pinStr = JSON.stringify(encryptedPin);
     await Promise.all([
-      db.put('settings', { 
-        key: 'encryptedPassphrase', 
-        value: JSON.stringify(encryptedPassphrase)
-      }),
-      db.put('settings', { 
-        key: 'pin', 
-        value: JSON.stringify(encryptedPin)
-      }),
-      // NOTE: Do NOT delete plaintext passphrase - needed for getEncryptionKey() to decrypt messages
-      // Security is provided by PIN lock UI + inactivity timeout
+      db.put('settings', { key: 'encryptedPassphrase', value: encPassStr }),
+      db.put('settings', { key: 'pin', value: pinStr }),
     ]);
-    
+    if (isNativePlatform()) {
+      await setNativeSetting('encryptedPassphrase', encPassStr);
+      await setNativeSetting('pin', pinStr);
+    }
     console.log('✅ [KEY WRAPPING] Passphrase encrypted with PIN, PIN setup complete');
   } catch (error) {
     console.error('Failed to save PIN:', error);
@@ -291,10 +289,11 @@ export async function verifyPINAndGetPassphrase(pin: string): Promise<string | n
   try {
     const db = await initDB();
     const storedSalt = await getSettingRaw('salt');
-    const storedEncryptedPassphrase = await db.get('settings', 'encryptedPassphrase');
-    
-    if (!storedSalt || !storedEncryptedPassphrase) {
-      console.warn('⚠️ [STORAGE] Missing credentials for PIN verification', { hasSalt: !!storedSalt, hasEnc: !!storedEncryptedPassphrase });
+    // Use getSettingRaw so native Keychain/Preferences is read when on Capacitor
+    const storedEncryptedPassphraseValue = await getSettingRaw('encryptedPassphrase');
+
+    if (!storedSalt || !storedEncryptedPassphraseValue) {
+      console.warn('⚠️ [STORAGE] Missing credentials for PIN verification', { hasSalt: !!storedSalt, hasEnc: !!storedEncryptedPassphraseValue });
       return null;
     }
 
@@ -312,11 +311,12 @@ export async function verifyPINAndGetPassphrase(pin: string): Promise<string | n
     }
 
     const pinKey = await derivePINKey(pin, salt);
-    
+
     // Try to decrypt passphrase with PIN
     let encrypted: EncryptedData;
     try {
-      encrypted = JSON.parse(storedEncryptedPassphrase.value as string);
+      const valueStr = typeof storedEncryptedPassphraseValue === 'string' ? storedEncryptedPassphraseValue : (storedEncryptedPassphraseValue as any)?.value;
+      encrypted = JSON.parse(valueStr);
     } catch (e) {
       console.error('Failed to parse encrypted passphrase:', e);
       return null;

@@ -8,6 +8,7 @@ import { Phone, Video, PhoneOff, Mic, MicOff, Camera, CameraOff, SignalHigh, Sig
 import { useToast } from '@/hooks/use-toast';
 import SimplePeer from 'simple-peer';
 import { AudioEncoder, AudioDecoder, arrayBufferToBase64, base64ToArrayBuffer } from '@/lib/audio-codec';
+import { hapticCancel, hapticRing } from '@/lib/haptics';
 
 export default function CallsPage() {
   const { userId, partnerId } = useDodi();
@@ -256,9 +257,7 @@ export default function CallsPage() {
       }
       audioContextRef.current = null;
     }
-    if ('vibrate' in navigator) {
-      navigator.vibrate(0);
-    }
+    hapticCancel();
   };
 
   const playGentleRingtone = () => {
@@ -299,9 +298,7 @@ export default function CallsPage() {
 
       sequence();
 
-      if ('vibrate' in navigator) {
-        navigator.vibrate([500, 200, 500, 200, 500]);
-      }
+      hapticRing();
     } catch (e) {
       console.error('Error playing Web Audio ringtone:', e);
     }

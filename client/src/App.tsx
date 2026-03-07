@@ -26,6 +26,7 @@ import { PwaInstallBanner } from "@/components/pwa-install-banner";
 import { ServiceWorkerUpdateNotifier } from "@/components/service-worker-update";
 import { getNotifyServerUrl, registerPushWithNotifyServer } from "@/lib/push-register";
 import { getNotificationPermission } from "@/lib/notifications";
+import { Capacitor } from "@capacitor/core";
 
 const ChatPage = lazy(() => import("@/pages/chat"));
 const MemoriesPage = lazy(() => import("@/pages/memories"));
@@ -71,6 +72,24 @@ function MainApp() {
 
   // Screen Wake Lock: keep device from dimming/sleeping while app is in foreground and unlocked
   useWakeLock(!isLocked && pairingStatus === 'connected');
+
+  // Native: status bar and splash — set style once, hide splash when app ready (loading done)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const run = async () => {
+      const [{ StatusBar }, { SplashScreen }] = await Promise.all([
+        import('@capacitor/status-bar'),
+        import('@capacitor/splash-screen'),
+      ]);
+      try {
+        await StatusBar.setStyle({ style: 'DARK' });
+      } catch {}
+      if (!isLoading) {
+        await SplashScreen.hide();
+      }
+    };
+    run();
+  }, [isLoading]);
 
   // Register push subscription with notify server when paired and permission granted (and on load when already paired)
   useEffect(() => {
@@ -135,6 +154,7 @@ function MainApp() {
   }, [location]);
 
   const partnerActive = peerState?.connected || false;
+  const isDemoMode = dodi.isDemoMode ?? false;
 
   // Allow reset route before any authentication checks
   if (location === '/reset') {
@@ -183,6 +203,11 @@ function MainApp() {
 
   return (
     <div className="w-screen flex flex-col bg-background relative overflow-hidden h-screen" style={{ height: '100dvh' }}>
+      {isDemoMode && (
+        <div className="absolute top-0 left-0 right-0 z-30 bg-amber-500/90 text-amber-950 text-center py-1.5 text-xs font-medium">
+          Demo mode — for app review. No real pairing or data.
+        </div>
+      )}
       <GlobalSyncHandler />
       
       {/* Presence Glow & Vine Animation */}

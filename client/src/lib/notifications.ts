@@ -1,3 +1,5 @@
+import { hapticLight } from '@/lib/haptics';
+
 const NOTIFICATION_TAG = 'dodi-message';
 
 export type NotificationPermissionState = 'default' | 'granted' | 'denied';
@@ -109,9 +111,8 @@ export function playInAppMessageAlert(): void {
   if (now - lastInAppAlertAt < IN_APP_ALERT_COOLDOWN_MS) return;
   lastInAppAlertAt = now;
   try {
-    if ('vibrate' in navigator) {
-      navigator.vibrate([150, 80, 150]);
-    }
+    const { hapticLight } = require('@/lib/haptics');
+    hapticLight();
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
@@ -126,9 +127,7 @@ export function playInAppMessageAlert(): void {
     osc.start(now);
     osc.stop(now + 0.4);
   } catch (e) {
-    if ('vibrate' in navigator) {
-      navigator.vibrate(200);
-    }
+    hapticLight();
   }
 }
 

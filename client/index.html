@@ -58,12 +58,6 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(err => {
-          console.log('Service Worker registration failed:', err);
-        });
-      }
-    </script>
+    <!-- Service worker is registered from the app only when not running in Capacitor native (see ServiceWorkerUpdateNotifier and Capacitor guard). -->
   </body>
 </html>

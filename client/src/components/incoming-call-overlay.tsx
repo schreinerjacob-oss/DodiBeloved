@@ -3,6 +3,7 @@ import { useLocation } from 'wouter';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { Button } from '@/components/ui/button';
 import { Phone, PhoneOff } from 'lucide-react';
+import { hapticCancel, hapticRing } from '@/lib/haptics';
 
 const PENDING_ACCEPT_KEY = 'dodi-pending-accept';
 
@@ -26,7 +27,7 @@ export function IncomingCallOverlay() {
       audioContextRef.current?.close();
     }
     audioContextRef.current = null;
-    if ('vibrate' in navigator) navigator.vibrate(0);
+    hapticCancel();
   };
 
   const playGentleRingtone = () => {
@@ -59,7 +60,7 @@ export function IncomingCallOverlay() {
         setTimeout(sequence, 3000);
       };
       sequence();
-      if ('vibrate' in navigator) navigator.vibrate([500, 200, 500, 200, 500]);
+      hapticRing();
     } catch (e) {
       console.error('Error playing ringtone:', e);
     }
