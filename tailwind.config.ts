@@ -97,6 +97,15 @@ export default {
           "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        "shake": {
+          "0%, 100%": { transform: "translateX(0)" },
+          "15%": { transform: "translateX(-6px)" },
+          "30%": { transform: "translateX(6px)" },
+          "45%": { transform: "translateX(-6px)" },
+          "60%": { transform: "translateX(6px)" },
+          "75%": { transform: "translateX(-3px)" },
+          "90%": { transform: "translateX(3px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -104,6 +113,7 @@ export default {
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
         "gentle-bounce": "gentle-bounce 0.8s ease-in-out",
         "fade-in": "fade-in 0.4s ease-out",
+        "shake": "shake 0.45s ease-in-out",
       },
     },
   },

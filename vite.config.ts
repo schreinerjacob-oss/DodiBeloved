@@ -49,6 +49,20 @@ export default defineConfig(async () => ({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      // These Capacitor plugin packages are native-only — provided by the Capacitor
+      // bridge at runtime inside the WebView. Mark as external so Rollup doesn't try
+      // to bundle them (they're guarded by Capacitor.isNativePlatform() in app code).
+      external: [
+        '@capacitor/status-bar',
+        '@capacitor/splash-screen',
+        '@capacitor/haptics',
+        '@capacitor/keep-awake',
+        '@capacitor/push-notifications',
+        '@capacitor/app',
+        '@aparajita/capacitor-biometric-auth',
+      ],
+    },
   },
   server: {
     host: "0.0.0.0",

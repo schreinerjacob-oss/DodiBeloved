@@ -949,7 +949,7 @@ export default function CallsPage() {
             </div>
           </Card>
 
-          <div className="flex items-center justify-center gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-sm mx-auto">
             <Card className="p-8 space-y-4 hover-elevate cursor-pointer" data-testid="card-audio-call">
               <div className="w-16 h-16 mx-auto rounded-full bg-sage/20 flex items-center justify-center">
                 <Phone className="w-8 h-8 text-sage" />

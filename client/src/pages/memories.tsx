@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Camera, Lock, Calendar, Heart, X, ChevronUp, Trash2, Pencil, Plus, FileText, Bell } from 'lucide-react';
 import { getMemories, getMemoriesCount, saveMemory, deleteMemory, getSetting, saveSetting, getAllCalendarEvents, saveCalendarEvent, getPartnerDetailsByUserId } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
@@ -377,12 +378,19 @@ export default function MemoriesPage() {
 
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
+  const [confirmDeleteMemoryId, setConfirmDeleteMemoryId] = useState<string | null>(null);
   const [editingCaption, setEditingCaption] = useState('');
 
-  const handleDeleteMemory = async (memoryId: string, e: React.MouseEvent) => {
+  const handleDeleteMemory = (memoryId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!userId || !partnerId) return;
-    if (!window.confirm('Remove this memory? Your partner will no longer see it.')) return;
+    setConfirmDeleteMemoryId(memoryId);
+  };
+
+  const handleConfirmDeleteMemory = async () => {
+    const memoryId = confirmDeleteMemoryId;
+    if (!memoryId || !userId || !partnerId) return;
+    setConfirmDeleteMemoryId(null);
     try {
       await deleteMemory(memoryId);
       setMemories(prev => prev.filter(m => m.id !== memoryId));
@@ -833,6 +841,23 @@ export default function MemoriesPage() {
           }}
         />
       )}
+
+      <AlertDialog open={confirmDeleteMemoryId !== null} onOpenChange={(open) => { if (!open) setConfirmDeleteMemoryId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this memory?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This memory will be removed for both of you. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDeleteMemory} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

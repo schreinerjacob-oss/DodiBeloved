@@ -264,30 +264,18 @@ export default function SettingsPage() {
       <ScrollArea className="flex-1 min-h-0 w-full">
         <div className="w-full max-w-md mx-auto space-y-8 pb-24 px-4 sm:px-6 py-6">
           {/* Quick actions */}
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              variant="outline"
-              className="hover-elevate"
-              onClick={handleSyncNow}
-              disabled={isSyncing}
-              data-testid="button-sync-now-quick"
-            >
-              <Sparkles className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? 'Syncing…' : 'Sync now'}
-            </Button>
-            <Button
-              variant="outline"
-              className="hover-elevate"
-              onClick={() => {
-                toast({ title: 'Reloading…', description: 'Fetching latest version.' });
-                clearCachesAndReload();
-              }}
-              data-testid="button-get-latest"
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh app
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            className="w-full hover-elevate"
+            onClick={() => {
+              toast({ title: 'Reloading…', description: 'Fetching latest version.' });
+              clearCachesAndReload();
+            }}
+            data-testid="button-get-latest"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh app
+          </Button>
 
           {/* Support the Garden */}
           <Card className="p-6 space-y-4 border-accent/20 bg-accent/5">

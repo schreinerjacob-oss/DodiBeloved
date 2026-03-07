@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Lock, Check, X } from 'lucide-react';
+import { Lock, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { hapticLight } from '@/lib/haptics';
 
 interface PinSetupProps {
   onComplete: () => void;
@@ -13,69 +14,70 @@ interface PinSetupProps {
 export default function PinSetupPage({ onComplete }: PinSetupProps) {
   const { setPIN, skipPINSetup } = useDodi();
   const { toast } = useToast();
-  
+
   const [step, setStep] = useState<'entry' | 'confirm'>('entry');
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
-  console.log('🔐 [PIN SETUP] Page rendered');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [step]);
 
   const handlePinChange = (value: string) => {
     const cleaned = value.replace(/\D/g, '').slice(0, 6);
     if (step === 'entry') {
+      if (cleaned.length > pin.length) hapticLight();
       setPin(cleaned);
       setError('');
+      if (cleaned.length >= 4 && cleaned.length <= 6 && cleaned.length === 6) {
+        // Auto-advance to confirm on max length
+        setTimeout(() => advanceToConfirm(cleaned), 80);
+      }
     } else {
+      if (cleaned.length > confirmPin.length) hapticLight();
       setConfirmPin(cleaned);
       setError('');
+      if (cleaned.length >= 4 && cleaned.length <= 6 && cleaned.length === 6) {
+        setTimeout(() => submitConfirm(cleaned), 80);
+      }
     }
   };
 
-  const validatePin = (value: string): boolean => {
-    if (value.length < 4 || value.length > 6) {
-      setError('PIN must be 4-6 digits');
-      return false;
-    }
-    return true;
-  };
-
-  const handleNext = async () => {
-    if (!validatePin(pin)) return;
+  const advanceToConfirm = (value: string) => {
+    if (value.length < 4) { setError('PIN must be 4-6 digits'); return; }
     setStep('confirm');
     setConfirmPin('');
   };
 
-  const handleConfirm = async () => {
-    if (!validatePin(confirmPin)) return;
-    
-    if (pin !== confirmPin) {
+  const handleNext = () => {
+    advanceToConfirm(pin);
+  };
+
+  const submitConfirm = async (value: string) => {
+    if (value.length < 4) { setError('PIN must be 4-6 digits'); return; }
+    if (pin !== value) {
       setError('PINs do not match');
+      setConfirmPin('');
       return;
     }
-
     setLoading(true);
     try {
-      console.log('🔐 [PIN SETUP] Setting PIN...');
       await setPIN(pin);
-      console.log('✅ [PIN SETUP] PIN set successfully, calling onComplete');
-      toast({
-        title: 'PIN Set!',
-        description: 'Your app is now protected with a PIN.',
-      });
+      toast({ title: 'PIN Set!', description: 'Your app is now protected with a PIN.' });
       onComplete();
     } catch (err) {
-      console.error('❌ [PIN SETUP] Failed to set PIN:', err);
       setError(err instanceof Error ? err.message : 'Failed to set PIN');
-      toast({
-        title: 'Error',
-        description: 'Failed to set PIN. Please try again.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to set PIN. Please try again.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleConfirm = () => {
+    submitConfirm(confirmPin);
   };
 
   const handleSkip = () => {
@@ -90,6 +92,7 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
   };
 
   const isValidPin = (value: string) => value.length >= 4 && value.length <= 6;
+  const currentValue = step === 'entry' ? pin : confirmPin;
 
   return (
     <div className="flex flex-col items-center justify-center p-6 bg-background h-full w-full overflow-y-auto" style={{ minHeight: '100dvh' }}>
@@ -111,10 +114,13 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
             <label className="text-sm font-medium text-muted-foreground">
               {step === 'entry' ? 'Enter PIN' : 'Confirm PIN'}
             </label>
-            <div className="flex gap-1 mt-2">
+            {/* Dot grid — tapping it focuses the hidden input */}
+            <div
+              className="flex gap-1 mt-2 cursor-text"
+              onClick={() => inputRef.current?.focus()}
+            >
               {Array.from({ length: 6 }).map((_, i) => {
-                const value = step === 'entry' ? pin : confirmPin;
-                const digit = value[i] || '';
+                const digit = currentValue[i] || '';
                 return (
                   <div
                     key={i}
@@ -131,14 +137,21 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
               })}
             </div>
             <input
+              ref={inputRef}
               type="text"
               inputMode="numeric"
               maxLength={6}
-              placeholder="Enter PIN"
-              value={step === 'entry' ? pin : confirmPin}
+              value={currentValue}
               onChange={(e) => handlePinChange(e.target.value)}
-              className="w-full mt-3 text-center tracking-widest"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  step === 'entry' ? handleNext() : handleConfirm();
+                }
+              }}
+              className="w-full mt-2 text-center tracking-widest text-transparent caret-transparent select-none"
+              autoComplete="off"
               data-testid="input-pin"
+              disabled={loading}
               autoFocus
             />
           </div>
@@ -147,13 +160,6 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
             <div className="flex gap-2 text-sm text-destructive">
               <X className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>{error}</span>
-            </div>
-          )}
-
-          {(step === 'entry' ? isValidPin(pin) : isValidPin(confirmPin)) && (
-            <div className="flex gap-2 text-sm text-emerald-600 dark:text-emerald-400">
-              <Check className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>Valid PIN</span>
             </div>
           )}
         </div>
@@ -171,8 +177,8 @@ export default function PinSetupPage({ onComplete }: PinSetupProps) {
               </Button>
               <Button
                 onClick={handleSkip}
-                variant="outline"
-                className="w-full h-11"
+                variant="ghost"
+                className="w-full h-11 text-muted-foreground"
                 data-testid="button-pin-skip"
               >
                 Skip for now
