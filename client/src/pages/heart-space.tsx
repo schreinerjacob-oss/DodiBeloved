@@ -183,13 +183,8 @@ export default function HeartSpacePage() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-background">
-      <div className="px-6 py-5 border-b border-gold/20 bg-card/60 wood-grain flex items-center gap-4">
-        <img src={handsHeartLogo} alt="Heart Space" className="h-14 w-14 object-contain opacity-85 dark:opacity-60 flex-shrink-0" />
-        <div>
-          <h2 className="text-2xl font-heading font-semibold text-foreground leading-tight">Heart Space</h2>
-          <div className="gold-rule w-12 mt-1.5" />
-          <p className="text-xs text-muted-foreground mt-1.5">Your private sanctuary</p>
-        </div>
+      <div className="flex-shrink-0 h-14 flex items-center px-4 border-b border-gold/20 bg-card/60 wood-grain">
+        <h2 className="text-base font-heading font-semibold text-foreground">Heart Space</h2>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
@@ -219,6 +214,7 @@ export default function HeartSpacePage() {
               {!todayWhisperSent ? (
                 <Card className="p-6 space-y-5 border-primary/20">
                   <div className="text-center">
+                    <img src={handsHeartLogo} alt="" className="h-12 w-12 mx-auto mb-3 object-contain opacity-70 dark:opacity-40 mix-blend-multiply dark:mix-blend-normal" />
                     <h3 className="font-medium mb-1">How are you feeling?</h3>
                     <p className="text-xs text-muted-foreground">Tap to send a quick mood</p>
                   </div>

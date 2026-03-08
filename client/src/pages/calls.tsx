@@ -928,9 +928,8 @@ export default function CallsPage() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-background">
-      <div className="flex-shrink-0 px-6 py-4 border-b border-gold/20 bg-card/60 wood-grain">
-        <h2 className="text-xl font-heading font-semibold text-foreground">Voice & Video</h2>
-        <div className="gold-rule w-12 mt-2" />
+      <div className="flex-shrink-0 h-14 flex items-center px-4 border-b border-gold/20 bg-card/60 wood-grain">
+        <h2 className="text-base font-heading font-semibold text-foreground">Voice & Video</h2>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-6">
@@ -950,16 +949,19 @@ export default function CallsPage() {
             </div>
           </Card>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-sm mx-auto">
-            <Card className="p-8 space-y-4 hover-elevate cursor-pointer" data-testid="card-audio-call">
-              <div className="w-16 h-16 mx-auto rounded-full bg-sage/20 flex items-center justify-center">
-                <Phone className="w-8 h-8 text-sage" />
+          <div className="grid grid-cols-2 gap-3">
+            <Card className="p-5 flex flex-col items-center gap-3 hover-elevate cursor-pointer" data-testid="card-audio-call">
+              <div className="w-11 h-11 rounded-full bg-sage/20 flex items-center justify-center">
+                <Phone className="w-5 h-5 text-sage" />
               </div>
-              <h3 className="text-center font-medium">Audio Call</h3>
-              <p className="text-xs text-center text-muted-foreground">Voice only</p>
+              <div className="text-center">
+                <h3 className="font-medium text-sm">Audio Call</h3>
+                <p className="text-xs text-muted-foreground">Voice only</p>
+              </div>
               <Button
                 onClick={() => startCall('audio')}
                 disabled={!peerState.connected}
+                size="sm"
                 className="w-full"
                 data-testid="button-start-audio"
               >
@@ -967,15 +969,18 @@ export default function CallsPage() {
               </Button>
             </Card>
 
-            <Card className="p-8 space-y-4 hover-elevate cursor-pointer" data-testid="card-video-call">
-              <div className="w-16 h-16 mx-auto rounded-full bg-blush/20 flex items-center justify-center">
-                <Video className="w-8 h-8 text-blush" />
+            <Card className="p-5 flex flex-col items-center gap-3 hover-elevate cursor-pointer" data-testid="card-video-call">
+              <div className="w-11 h-11 rounded-full bg-blush/20 flex items-center justify-center">
+                <Video className="w-5 h-5 text-blush" />
               </div>
-              <h3 className="text-center font-medium">Video Call</h3>
-              <p className="text-xs text-center text-muted-foreground">See each other</p>
+              <div className="text-center">
+                <h3 className="font-medium text-sm">Video Call</h3>
+                <p className="text-xs text-muted-foreground">See each other</p>
+              </div>
               <Button
                 onClick={() => startCall('video')}
                 disabled={!peerState.connected}
+                size="sm"
                 className="w-full"
                 data-testid="button-start-video"
               >

@@ -667,7 +667,7 @@ export default function PairingPage() {
       
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-3">
-          <img src={dodiTypographyLogo} alt="dodi" className="h-20 mx-auto" data-testid="img-logo" />
+          <img src={dodiTypographyLogo} alt="dodi" className="h-20 mx-auto mix-blend-multiply dark:mix-blend-normal dark:invert dark:opacity-90" data-testid="img-logo" />
           <h1 className="text-4xl font-light tracking-wide text-foreground">dodi</h1>
           <p className="text-muted-foreground font-light text-sm italic">Your private garden. Nothing ever leaves your two devices.</p>
         </div>
@@ -1035,7 +1035,7 @@ export default function PairingPage() {
                   <div className="gold-rule w-16 mx-auto mt-2" />
                   <p className="text-sm text-muted-foreground mt-3 font-heading italic">Only you two hold the key.</p>
                 </div>
-                <img src={dodiTypographyLogo} alt="dodi" className="h-8 mx-auto opacity-40 dark:invert dark:opacity-30" />
+                <img src={dodiTypographyLogo} alt="dodi" className="h-8 mx-auto mix-blend-multiply dark:mix-blend-normal dark:invert dark:opacity-30" />
               </Card>
             </motion.div>
           )}

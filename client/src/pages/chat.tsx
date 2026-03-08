@@ -1145,12 +1145,9 @@ export default function ChatPage() {
   return (
     <div className="flex-1 min-h-0 min-w-0 flex flex-col bg-background">
       <MemoryResurfacing />
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gold/20 bg-card/60 wood-grain">
-        <div className="flex items-center gap-2.5">
-          <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-sage to-blush flex items-center justify-center flex-shrink-0 ${peerState.connected ? 'animate-gentle-pulse' : ''}`}>
-            <Heart className="w-4 h-4 text-white" />
-          </div>
-          <img src={dodiTypographyLogo} alt="dodi" className="h-7 dark:invert dark:opacity-70" />
+      <div className="flex-shrink-0 h-14 flex items-center justify-between px-4 border-b border-gold/20 bg-card/60 wood-grain">
+        <div className="flex items-center">
+          <img src={dodiTypographyLogo} alt="dodi" className="h-7 mix-blend-multiply dark:mix-blend-normal dark:invert dark:opacity-70" />
         </div>
 
         <div className="flex items-center gap-2">

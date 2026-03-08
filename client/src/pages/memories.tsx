@@ -522,21 +522,14 @@ export default function MemoriesPage() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-background">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gold/20 bg-card/60 wood-grain">
-        <div className="min-w-0">
-          <h2 className="text-2xl font-heading font-bold text-foreground">Our Story</h2>
-          <div className="gold-rule w-16 mt-2" />
-          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-            <Lock className="w-3 h-3" />
-            Memories, dates, and notes — your private garden
-          </p>
-        </div>
+      <div className="flex-shrink-0 h-14 flex items-center justify-between px-4 border-b border-gold/20 bg-card/60 wood-grain">
+        <h2 className="text-base font-heading font-semibold text-foreground">Our Story</h2>
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="button-add-memory">
-              <Camera className="w-4 h-4 mr-2" />
-              Add Memory
+            <Button size="sm" data-testid="button-add-memory">
+              <Camera className="w-4 h-4 mr-1.5" />
+              Add
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl">

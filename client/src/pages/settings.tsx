@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
 import { useDodi } from '@/contexts/DodiContext';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { Button } from '@/components/ui/button';
@@ -255,16 +254,8 @@ export default function SettingsPage() {
 
   return (
     <div className="flex-1 min-h-0 w-full flex flex-col bg-background overflow-hidden">
-      <div className="flex-shrink-0 px-4 sm:px-6 py-4 border-b border-gold/20 bg-card/60 wood-grain">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-heading font-semibold text-foreground">Settings</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Manage your private sanctuary
-            </p>
-          </div>
-          <img src={dodiTypographyLogo} alt="dodi" className="h-8 opacity-50 dark:invert dark:opacity-30" />
-        </div>
+      <div className="flex-shrink-0 h-14 flex items-center px-4 border-b border-gold/20 bg-card/60 wood-grain">
+        <h2 className="text-base font-heading font-semibold text-foreground">Settings</h2>
       </div>
 
       <ScrollArea className="flex-1 min-h-0 w-full">

@@ -15,8 +15,7 @@ import ResetPage from "@/pages/reset";
 import PinSetupPage from "@/pages/pin-setup";
 import PinLockPage from "@/pages/pin-lock";
 import OnboardingPage from "@/pages/onboarding";
-import { MessageSquare, Camera, Phone, Settings, Lock, Heart } from "lucide-react";
-import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
+import { MessageSquare, Camera, Phone, Settings, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConnectionStatus } from "@/components/connection-status";
 import { IncomingCallOverlay } from "@/components/incoming-call-overlay";
@@ -275,8 +274,6 @@ function MainApp() {
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mt-1">
           <Lock className="w-3 h-3 text-gold/70" />
           <span>Encrypted</span>
-          <div className="w-px h-3 bg-muted-foreground/30" />
-          <img src={dodiTypographyLogo} alt="dodi" className="h-4 opacity-40 dark:opacity-30" />
           <div className="w-px h-3 bg-muted-foreground/30" />
           <ConnectionStatus />
         </div>
