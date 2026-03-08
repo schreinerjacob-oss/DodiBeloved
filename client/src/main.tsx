@@ -3,6 +3,15 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
+// Strip cache-busting param after "Refresh app" so the URL bar stays clean
+if (typeof window !== "undefined") {
+  const u = new URL(window.location.href);
+  if (u.searchParams.has("_b")) {
+    u.searchParams.delete("_b");
+    window.history.replaceState(null, "", u.toString());
+  }
+}
+
 function normalizeError(thrown: unknown): { message: string; stack: string | null } {
   if (thrown instanceof Error) {
     return { message: thrown.message, stack: thrown.stack ?? null };

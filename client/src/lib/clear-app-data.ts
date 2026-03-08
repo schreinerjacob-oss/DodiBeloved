@@ -117,5 +117,8 @@ export async function clearCachesAndReload(): Promise<void> {
   } catch (e) {
     console.warn('Failed to clear caches:', e);
   }
-  window.location.reload();
+  // Reload with cache-busting query so the document and assets are re-fetched (avoids stale JS chunks)
+  const url = new URL(window.location.href);
+  url.searchParams.set('_b', String(Date.now()));
+  window.location.replace(url.toString());
 }

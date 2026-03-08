@@ -81,6 +81,8 @@ const CONNECTION_ATTEMPT_TIMEOUT_MS = 20000; // If connection doesn't open in 20
 
 let aggressiveReconnectInterval: NodeJS.Timeout | null = null;
 let aggressiveReconnectStartedAt: number | null = null;
+/** Guard: prevent concurrent dial attempts piling up in connectToPartner. */
+let isPendingDial = false;
 
 /** After tab becomes visible, suppress "Reconnecting" for this long so we don't flash it if signaling reconnects quickly. */
 const VISIBILITY_RECONNECT_GRACE_MS = 2000;
@@ -143,22 +145,24 @@ function clearHealthCheck() {
   }
 }
 
-function startHealthCheck(conn: DataConnection) {
+function startHealthCheck() {
   clearHealthCheck();
   lastPongReceived = Date.now();
-  
+
   healthCheckInterval = setInterval(() => {
-    if (conn.open) {
+    // Always use globalConn — avoids pinging a stale closed connection after reconnect
+    const activeConn = globalConn;
+    if (activeConn && activeConn.open) {
       console.log('📡 Sending health check ping...');
-      conn.send({ type: 'ping', timestamp: Date.now() });
-      
+      activeConn.send({ type: 'ping', timestamp: Date.now() });
+
       const timeSinceLastPong = Date.now() - lastPongReceived;
       if (timeSinceLastPong > PONG_TIMEOUT) {
         console.warn('⚠️ No pong received - triggering reconnect');
-        conn.close();
+        activeConn.close();
         startReconnecting();
       }
-    } else {
+    } else if (!activeConn || !activeConn.open) {
       clearHealthCheck();
     }
   }, PING_INTERVAL);
@@ -295,6 +299,11 @@ function connectToPartner(targetId: string) {
   if (!targetId || !globalPeer || globalPeer.destroyed) return;
   // If we think we're connected to this partner and connection is healthy, skip
   if (globalConn && globalConn.open && globalConn.peer === targetId && !isConnectionLikelyDead()) return;
+  // Prevent pile-up: if a dial is already in progress, don't create another set of connections
+  if (isPendingDial) {
+    console.log('⏳ [P2P] Dial already in progress, skipping duplicate attempt');
+    return;
+  }
   // Stale connection (no pong) - close and replace with fresh attempt
   if (globalConn && globalConn.peer === targetId && isConnectionLikelyDead()) {
     console.warn('⚠️ [P2P] Stale connection to partner - closing and re-dialing');
@@ -304,6 +313,7 @@ function connectToPartner(targetId: string) {
   }
 
   globalPartnerId = targetId;
+  isPendingDial = true;
   console.log('🔗 Dialing partner:', targetId);
   const conn = globalPeer.connect(targetId, {
     reliable: true,
@@ -378,7 +388,8 @@ async function sendMediaInternal(args: { mediaId: string; kind: 'message' | 'mem
     timestamp: Date.now(),
   });
 
-  // Chunk frames (ordered, reliable)
+  // Chunk frames (ordered, reliable) — yield every 8 chunks to avoid saturating
+  // the WebRTC data channel buffer and starving pings on the main channel.
   for (let i = 0; i < totalChunks; i++) {
     const start = i * MEDIA_CHUNK_SIZE;
     const end = Math.min(buffer.byteLength, start + MEDIA_CHUNK_SIZE);
@@ -391,6 +402,10 @@ async function sendMediaInternal(args: { mediaId: string; kind: 'message' | 'mem
       data: chunk,
       timestamp: Date.now(),
     });
+    // Yield to event loop every 8 chunks so pings and other messages can be processed
+    if (i % 8 === 7) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
   }
 
   globalMediaConn.send({
@@ -695,6 +710,7 @@ function setupConnection(conn: DataConnection) {
 
   conn.on('open', async () => {
     clearOpenTimeout();
+    isPendingDial = false; // Dial succeeded — allow future dials
     if (reconnectStartedAt != null) {
       const latency = Date.now() - reconnectStartedAt;
       console.log(`⏱️ [RECONNECT] Tunnel re-established in ${latency}ms`);
@@ -705,7 +721,7 @@ function setupConnection(conn: DataConnection) {
     globalSyncCancelled = false; // Reset cancellation on new connection
     clearReconnectTimeout();
     clearAggressiveReconnect();
-    startHealthCheck(conn);
+    startHealthCheck();
     notifyListeners();
     conn.send({ type: 'ping', timestamp: Date.now() });
     
@@ -751,7 +767,10 @@ function setupConnection(conn: DataConnection) {
 
   conn.on('data', async (data: any) => {
     console.log('📩 INCOMING:', data.type || 'unknown');
-    
+    // Any incoming data proves the connection is alive — reset pong timer so media
+    // transfers don't trigger a false "no pong" health-check timeout.
+    lastPongReceived = Date.now();
+
     if (data.timestamp && firstMessageSentAfterReconnect) {
       const latency = Date.now() - firstMessageSentAfterReconnect;
       console.log(`⏱️ [LATENCY] First message after reconnect: ${latency}ms`);
@@ -878,6 +897,7 @@ function setupConnection(conn: DataConnection) {
 
   conn.on('close', () => {
     clearOpenTimeout();
+    isPendingDial = false; // Dial ended — allow future dials
     console.log('XY Connection lost');
     if (globalConn === conn) globalConn = null;
     clearHealthCheck();
@@ -888,6 +908,7 @@ function setupConnection(conn: DataConnection) {
 
   conn.on('error', (err) => {
     clearOpenTimeout();
+    isPendingDial = false; // Dial failed — allow future dials
     console.error('Connection Error:', err);
     if (globalConn === conn) globalConn = null;
     globalState.error = err.message;
@@ -1418,6 +1439,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       reconnectAttempt = 0;
       reconnectStartedAt = null;
       aggressiveReconnectStartedAt = null;
+      isPendingDial = false;
       clearReconnectTimeout();
       clearAggressiveReconnect();
       clearHealthCheck();

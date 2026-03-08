@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Heart, Pen, Lock, Plus, MessageSquareHeart, ScrollText, HeartHandshake } from 'lucide-react';
+import { Heart, Pen, Lock, Plus, MessageSquareHeart, ScrollText, HeartHandshake, Sparkles } from 'lucide-react';
 import { getAllLoveLetters, saveLoveLetter, getAllPrayers, savePrayer } from '@/lib/storage-encrypted';
 import type { LoveLetter, Prayer } from '@/types';
 import { nanoid } from 'nanoid';
