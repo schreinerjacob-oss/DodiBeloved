@@ -219,7 +219,7 @@ export default function HeartSpacePage() {
               {!todayWhisperSent ? (
                 <Card className="p-6 space-y-5 border-primary/20">
                   <div className="text-center">
-                    <img src={handsHeartLogo} alt="" className="h-12 w-12 mx-auto mb-3 object-contain opacity-70 dark:opacity-40 mix-blend-multiply dark:mix-blend-normal" />
+                    <img src={handsHeartLogo} alt="" className="h-12 w-12 mx-auto mb-3 object-contain opacity-70 dark:opacity-40" />
                     <h3 className="font-medium mb-1">How are you feeling?</h3>
                     <p className="text-xs text-muted-foreground">Tap to send a quick mood</p>
                   </div>

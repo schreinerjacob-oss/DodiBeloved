@@ -209,7 +209,7 @@ export default function PinLockPage() {
       <Card className="w-full max-w-md p-8 space-y-6 border-sage/30">
         <div className="space-y-2 text-center">
           <div className="flex justify-center mb-4">
-            <img src={dodiTypographyLogo} alt="dodi" className="h-10 mix-blend-multiply dark:mix-blend-normal dark:invert dark:opacity-70" />
+            <img src={dodiTypographyLogo} alt="dodi" className="h-10" />
           </div>
           <div className="flex justify-center">
             <Lock className="w-5 h-5 text-gold/70 animate-pulse-glow" />

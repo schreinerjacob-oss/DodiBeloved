@@ -1147,7 +1147,7 @@ export default function ChatPage() {
       <MemoryResurfacing />
       <div className="flex-shrink-0 h-14 flex items-center justify-between px-4 border-b border-black/10 dark:border-white/8 bg-background/80 backdrop-blur-sm">
         <div className="flex items-center">
-          <img src={dodiTypographyLogo} alt="dodi" className="h-7 mix-blend-multiply dark:mix-blend-normal dark:invert dark:opacity-70" />
+          <img src={dodiTypographyLogo} alt="dodi" className="h-7" />
         </div>
 
         <div className="flex items-center gap-2">
@@ -1237,7 +1237,7 @@ export default function ChatPage() {
             <div className="flex flex-col items-center justify-center flex-1 min-h-[50vh] select-none">
               {messageFilter === 'all' ? (
                 <>
-                  <img src={dodiTypographyLogo} alt="dodi" className="h-20 opacity-[0.12] dark:opacity-[0.08] mix-blend-multiply dark:mix-blend-normal mb-6 pointer-events-none" />
+                  <img src={dodiTypographyLogo} alt="dodi" className="h-20 opacity-[0.12] dark:opacity-[0.08] mb-6 pointer-events-none" />
                   <p className="font-heading italic text-muted-foreground/60 text-sm">Write to your beloved...</p>
                 </>
               ) : (
