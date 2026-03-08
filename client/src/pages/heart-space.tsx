@@ -87,20 +87,30 @@ export default function HeartSpacePage() {
   }, [peerState?.connected, partnerId, userId]);
 
   const loadAllData = async () => {
-    const [allRituals, allLetters, allPrayers] = await Promise.all([
-      getAllDailyRituals(),
-      getAllLoveLetters(),
-      getAllPrayers()
-    ]);
+    try {
+      const [allRituals, allLetters, allPrayers] = await Promise.all([
+        getAllDailyRituals(),
+        getAllLoveLetters(),
+        getAllPrayers()
+      ]);
 
-    setWhispers(allRituals.sort((a, b) => new Date(b.ritualDate).getTime() - new Date(a.ritualDate).getTime()));
-    setTodayWhisperSent(allRituals.some(w => w.userId === userId && isToday(new Date(w.ritualDate))));
+      setWhispers(allRituals.sort((a, b) => new Date(b.ritualDate).getTime() - new Date(a.ritualDate).getTime()));
+      setTodayWhisperSent(allRituals.some(w => w.userId === userId && isToday(new Date(w.ritualDate))));
 
-    setNotes(allLetters.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      setNotes(allLetters.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 
-    setPrayers(allPrayers);
-    const today = format(new Date(), 'yyyy-MM-dd');
-    setTodayPrayerSubmitted(allPrayers.some(p => format(new Date(p.prayerDate), 'yyyy-MM-dd') === today && p.userId === userId));
+      setPrayers(allPrayers);
+      const today = format(new Date(), 'yyyy-MM-dd');
+      setTodayPrayerSubmitted(allPrayers.some(p => format(new Date(p.prayerDate), 'yyyy-MM-dd') === today && p.userId === userId));
+    } catch (e) {
+      console.error('Heart Space load failed:', e);
+      toast({
+        title: 'Could not load',
+        description: 'Something went wrong loading notes and prayers. Pull to refresh or try again later.',
+        variant: 'destructive',
+      });
+      setNotes([]);
+    }
   };
 
   const handleSendWhisper = async () => {
@@ -298,13 +308,19 @@ export default function HeartSpacePage() {
               </div>
               <div className="grid gap-4">
                 {notes.map((note) => (
-                  <Card key={note.id} className="p-5 hover-elevate cursor-pointer border-walnut/20 bg-linen/60 dark:bg-walnut/20" onClick={() => setSelectedNote(note)}>
+                  <Card
+                    key={note.id}
+                    className="p-5 hover-elevate cursor-pointer border-walnut/20 bg-linen/60 dark:bg-walnut/20"
+                    onClick={() => {
+                      if (note && note.id) setSelectedNote(note);
+                    }}
+                  >
                     <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-heading font-semibold">{note.title}</h4>
+                      <h4 className="font-heading font-semibold">{note.title ?? 'Untitled'}</h4>
                       {note.authorId === partnerId && <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent">From beloved</span>}
                     </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2 font-handwritten">{note.content}</p>
-                    <p className="text-[10px] text-stone dark:text-muted-foreground mt-2">{format(new Date(note.createdAt), 'MMM d, yyyy')}</p>
+                    <p className="text-sm text-muted-foreground line-clamp-2 font-handwritten">{note.content ?? ''}</p>
+                    <p className="text-[10px] text-stone dark:text-muted-foreground mt-2">{note.createdAt ? format(new Date(note.createdAt), 'MMM d, yyyy') : ''}</p>
                   </Card>
                 ))}
               </div>
@@ -402,11 +418,13 @@ export default function HeartSpacePage() {
       <Dialog open={!!selectedNote} onOpenChange={() => setSelectedNote(null)}>
         <DialogContent className="max-w-md bg-linen/90 dark:bg-walnut/30 border-walnut/20 dark:border-gold/20 paper-grain overflow-hidden">
           <DialogHeader>
-            <DialogTitle className="font-heading font-semibold">{selectedNote?.title}</DialogTitle>
-            <p className="text-xs text-stone dark:text-muted-foreground">{selectedNote && format(new Date(selectedNote.createdAt), 'MMMM d, yyyy')}</p>
+            <DialogTitle className="font-heading font-semibold">{selectedNote?.title ?? 'Untitled'}</DialogTitle>
+            <p className="text-xs text-stone dark:text-muted-foreground">
+              {selectedNote?.createdAt ? format(new Date(selectedNote.createdAt), 'MMMM d, yyyy') : ''}
+            </p>
           </DialogHeader>
           <div className="mt-4 p-6 bg-card/50 rounded-xl font-handwritten text-lg leading-relaxed whitespace-pre-wrap border border-walnut/10">
-            {selectedNote?.content}
+            {selectedNote?.content ?? 'Content unavailable.'}
           </div>
         </DialogContent>
       </Dialog>

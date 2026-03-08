@@ -4,11 +4,12 @@ import { useDodi } from '@/contexts/DodiContext';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Phone, Video, PhoneOff, Mic, MicOff, Camera, CameraOff, SignalHigh, SignalMedium, SignalLow, SignalZero, Wifi, WifiOff, Volume2 } from 'lucide-react';
+import { Phone, Video, PhoneOff, Mic, MicOff, Camera, CameraOff, SignalHigh, SignalMedium, SignalLow, SignalZero, Wifi, WifiOff, Volume2, SunDim } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import SimplePeer from 'simple-peer';
 import { AudioEncoder, AudioDecoder, arrayBufferToBase64, base64ToArrayBuffer } from '@/lib/audio-codec';
 import { hapticCancel, hapticRing } from '@/lib/haptics';
+import { useProximity } from '@/hooks/use-proximity';
 
 export default function CallsPage() {
   const { userId, partnerId } = useDodi();
@@ -26,6 +27,7 @@ export default function CallsPage() {
   const [isFallbackMode, setIsFallbackMode] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [remoteStreamVersion, setRemoteStreamVersion] = useState(0);
   const audioContextRef = useRef<AudioContext | null>(null);
   const ringtoneOscillatorsRef = useRef<OscillatorNode[]>([]);
   const mediaCallRef = useRef<SimplePeer.Instance | null>(null);
@@ -33,7 +35,11 @@ export default function CallsPage() {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
   const [speakerOn, setSpeakerOn] = useState(true);
+  const [manualDimScreen, setManualDimScreen] = useState(false);
+  const proximity = useProximity(!!callActive);
+  const isNearFace = callActive && (proximity.isNear || manualDimScreen);
   const speakerOnRef = useRef(true);
   const audioOutputDevicesRef = useRef<MediaDeviceInfo[]>([]);
   const audioEncoderRef = useRef<AudioEncoder | null>(null);
@@ -397,13 +403,18 @@ export default function CallsPage() {
 
   const attemptReconnect = async () => {
     if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      toast({
-        title: 'Connection lost',
-        description: 'Unable to reconnect after multiple attempts. Switching to fallback audio.',
-      });
       if (callType === 'audio') {
+        toast({
+          title: 'Connection lost',
+          description: 'Unable to reconnect after multiple attempts. Switching to fallback audio.',
+        });
         await startFallbackAudio();
       } else {
+        toast({
+          title: 'Connection lost',
+          description: 'Call ended. Unable to reconnect after multiple attempts.',
+          variant: 'destructive',
+        });
         endCall();
       }
       return;
@@ -461,10 +472,6 @@ export default function CallsPage() {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       localStreamRef.current = stream;
 
-      if (type === 'video' && localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-
       const peer = new SimplePeer({
         initiator: isInitiator,
         trickle: true,
@@ -494,6 +501,8 @@ export default function CallsPage() {
 
       peer.on('stream', (remoteStream: MediaStream) => {
         console.log('Remote stream received');
+        remoteStreamRef.current = remoteStream;
+        setRemoteStreamVersion((v) => v + 1);
         if (type === 'video' && remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStream;
           remoteVideoRef.current.muted = true;
@@ -637,6 +646,8 @@ export default function CallsPage() {
 
     const peer = await initiatePeerConnection(incomingCallType, false, offerSignal);
     if (!peer) {
+      setCallActive(false);
+      setCallType(null);
       sendP2P({
         type: 'call-end',
         data: {},
@@ -693,9 +704,12 @@ export default function CallsPage() {
       localStreamRef.current.getTracks().forEach(track => track.stop());
       localStreamRef.current = null;
     }
+    remoteStreamRef.current = null;
 
     setCallActive(false);
     setCallType(null);
+    setManualDimScreen(false);
+    setRemoteStreamVersion(0);
 
     // Notify partner through P2P data channel
     sendP2P({
@@ -755,6 +769,33 @@ export default function CallsPage() {
     if (callActive) applySpeakerSink(speakerOn);
   }, [callActive, speakerOn, applySpeakerSink]);
 
+  // Attach local video stream when overlay is mounted (refs may be null during initiatePeerConnection)
+  useEffect(() => {
+    if (!callActive || callType !== 'video') return;
+    const stream = localStreamRef.current;
+    const el = localVideoRef.current;
+    if (stream && el) {
+      el.srcObject = stream;
+      return () => {
+        el.srcObject = null;
+      };
+    }
+  }, [callActive, callType]);
+
+  // Attach remote video stream when overlay is mounted or when stream arrives
+  useEffect(() => {
+    if (!callActive || callType !== 'video') return;
+    const stream = remoteStreamRef.current;
+    const el = remoteVideoRef.current;
+    if (stream && el) {
+      el.srcObject = stream;
+      el.muted = true;
+      return () => {
+        el.srcObject = null;
+      };
+    }
+  }, [callActive, callType, remoteStreamVersion]);
+
   const incomingCallOverlay = incomingCall ? (
     <div
       className="fixed inset-0 z-[150] flex flex-col items-center justify-center bg-black text-white gap-6"
@@ -795,7 +836,13 @@ export default function CallsPage() {
       style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
         <audio ref={remoteAudioRef} autoPlay playsInline className="sr-only" aria-hidden />
-        <div className="flex-1 flex items-center justify-center gap-4 p-4 relative">
+        <div
+          className={`flex-1 flex items-center justify-center gap-4 p-4 relative ${isNearFace ? 'pointer-events-none' : ''}`}
+          aria-hidden={isNearFace}
+        >
+          {isNearFace && (
+            <div className="absolute inset-0 bg-black/80 z-[5]" aria-hidden />
+          )}
           {/* Prominent Call Timer Overlay */}
           <div className="absolute top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
             <div className="bg-white/10 backdrop-blur-xl px-8 py-3 rounded-2xl border border-white/20 shadow-2xl flex flex-col items-center gap-1 transition-all animate-in fade-in slide-in-from-top-4 duration-500">
@@ -811,7 +858,13 @@ export default function CallsPage() {
 
           {callType === 'video' && (
             <>
-              <div className="flex-1 max-w-md w-full aspect-video">
+              <div className="flex-1 max-w-md w-full aspect-video relative">
+                {remoteStreamVersion === 0 && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted/90 rounded-lg z-[2]">
+                    <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <p className="text-white/80 text-sm">Connecting video...</p>
+                  </div>
+                )}
                 <video
                   ref={remoteVideoRef}
                   autoPlay
@@ -863,10 +916,20 @@ export default function CallsPage() {
           )}
         </div>
 
-        <div className="border-t border-white/10 bg-white/5 p-4 flex-shrink-0">
+        <div className="border-t border-white/10 bg-white/5 p-4 flex-shrink-0 relative z-10 pointer-events-auto">
           <div className="flex flex-col items-center gap-4">
             <div className="flex items-center justify-center gap-3">
               <ConnectionIcon />
+              <Button
+                size="icon"
+                variant={isNearFace ? 'default' : 'secondary'}
+                onClick={() => setManualDimScreen((on) => !on)}
+                title={isNearFace ? 'Screen dimmed (tap to brighten)' : 'Dim screen (hold to face)'}
+                className="rounded-full"
+                data-testid="button-dim-screen"
+              >
+                <SunDim className="w-5 h-5" />
+              </Button>
               <Button
                 size="icon"
                 variant={micEnabled ? 'secondary' : 'destructive'}

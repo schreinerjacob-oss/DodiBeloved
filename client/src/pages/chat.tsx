@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toggle } from '@/components/ui/toggle';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Heart, Send, Image, Mic, MicOff, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter, Video, VideoOff, Circle, Square, Plus, FileText } from 'lucide-react';
+import { Heart, Send, Image, Mic, MicOff, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter, Video, VideoOff, Circle, Square, Plus, FileText, MessageCircle } from 'lucide-react';
 import { getMessages, saveMessage, deleteMessage, savePartnerDetail, getSetting, saveSetting } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { useOfflineQueueSize } from '@/hooks/use-offline-queue';
@@ -16,8 +16,7 @@ import { ImageFullscreenViewer } from '@/components/image-fullscreen-viewer';
 import { MessageMediaVoice } from '@/components/message-media-voice';
 import { MessageMediaVideo } from '@/components/message-media-video';
 import { MemoryResurfacing } from '@/components/resurfacing/memory-resurfacing';
-import { HeartWhisperCard } from '@/components/heart-whisper-card';
-import { getNextWhisper } from '@/lib/heart-whispers';
+import { MOODS, getMoodLabel, type MoodId } from '@/lib/moods';
 import { notifyNewMessage, notifyMessageQueued } from '@/lib/notifications';
 import type { Message, SyncMessage, PartnerDetail } from '@/types';
 import { nanoid } from 'nanoid';
@@ -30,6 +29,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -46,31 +46,23 @@ const MESSAGES_PER_PAGE = 50;
 export default function ChatPage() {
   const { userId, partnerId, isOnline, isPremium } = useDodi();
   const { toast } = useToast();
-  const { send: sendP2P, sendMedia, state: peerState } = usePeerConnection();
+  const { send: sendP2P, sendMedia, state: peerState, reconnect } = usePeerConnection();
   const pendingCount = useOfflineQueueSize();
-  const [heartWhisper, setHeartWhisper] = useState<{ id: string; text: string } | null>(null);
+  const [currentMood, setCurrentMood] = useState<MoodId | null>(null);
+  const [partnerMood, setPartnerMood] = useState<MoodId | null>(null);
 
+  // Load current mood from settings on mount
   useEffect(() => {
-    (async () => {
-      const [lastShown, lastId, dismissed, weekStart] = await Promise.all([
-        getSetting('lastWhisperShownAt'),
-        getSetting('lastWhisperId'),
-        getSetting('dismissedWhisperIds'),
-        getSetting('dismissedWhisperIdsWeekStart'),
-      ]);
-      const next = getNextWhisper({
-        lastWhisperShownAt: lastShown,
-        lastWhisperId: lastId || undefined,
-        dismissedWhisperIds: dismissed || undefined,
-        dismissedWhisperIdsWeekStart: weekStart || undefined,
-      });
-      if (next) {
-        setHeartWhisper(next);
-        saveSetting('lastWhisperShownAt', String(Date.now()));
-        saveSetting('lastWhisperId', next.id);
-      }
-    })();
+    getSetting('currentMood').then((v) => {
+      if (v && MOODS.some((m) => m.id === v)) setCurrentMood(v as MoodId);
+    });
   }, []);
+
+  // When connected, send current mood so partner sees it (on connect and when mood changes)
+  useEffect(() => {
+    if (!peerState.connected) return;
+    sendP2P({ type: 'mood-update', data: { moodId: currentMood }, timestamp: Date.now() });
+  }, [peerState.connected, currentMood]);
 
   useEffect(() => {
     const handleReconciliation = (event: any) => {
@@ -326,6 +318,13 @@ export default function ChatPage() {
             }
             return m;
           }));
+          return;
+        }
+
+        // Handle partner mood update (header whisper)
+        if (message.type === 'mood-update') {
+          const { moodId } = message.data as { moodId: MoodId | null };
+          setPartnerMood(moodId ?? null);
           return;
         }
         
@@ -1151,6 +1150,11 @@ export default function ChatPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {partnerMood && (
+            <span className="text-xs text-muted-foreground max-w-[120px] truncate" title={`Beloved is feeling ${getMoodLabel(partnerMood)}`}>
+              {getMoodLabel(partnerMood)}
+            </span>
+          )}
           {pendingCount > 0 && (
             <Badge 
               variant="outline" 
@@ -1161,6 +1165,42 @@ export default function ChatPage() {
               {pendingCount} pending
             </Badge>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="flex-shrink-0"
+                aria-label="Set your mood"
+                data-testid="button-mood"
+              >
+                <MessageCircle className="w-5 h-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[180px]">
+              {MOODS.map((mood) => (
+                <DropdownMenuItem
+                  key={mood.id}
+                  onClick={async () => {
+                    setCurrentMood(mood.id);
+                    await saveSetting('currentMood', mood.id);
+                  }}
+                >
+                  {currentMood === mood.id ? <Check className="w-4 h-4 mr-2" /> : <span className="w-4 mr-2" aria-hidden />}
+                  {mood.label}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={async () => {
+                  setCurrentMood(null);
+                  await saveSetting('currentMood', '');
+                }}
+              >
+                Clear mood
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             onClick={handleThinkingOfYou}
             size="icon"
@@ -1203,36 +1243,38 @@ export default function ChatPage() {
 
       {/* Offline / Reconnecting banner */}
       {!peerState.connected && (
-        <div className="flex-shrink-0 px-4 py-2 bg-amber-500/15 border-b border-amber-500/30 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm">
+        <div className="flex-shrink-0 px-4 py-2 bg-amber-500/15 border-b border-amber-500/30 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm flex-wrap">
           {peerState.isReconnecting ? (
             <>
               <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
-              <span>
-                Reconnecting to your partner… {pendingCount > 0 ? `${pendingCount} message${pendingCount === 1 ? '' : 's'} will send when connected.` : 'Messages will send when connected.'}
+              <span className="flex-1 min-w-0">
+                Reconnecting… {pendingCount > 0 ? `${pendingCount} message${pendingCount === 1 ? '' : 's'} will send when connected.` : 'Messages will send when connected.'}
               </span>
             </>
           ) : (
             <>
               <CloudOff className="w-4 h-4 shrink-0" />
-              <span>
+              <span className="flex-1 min-w-0">
                 {pendingCount > 0
                   ? `You're offline. ${pendingCount} message${pendingCount === 1 ? '' : 's'} will send when you're back online.`
                   : "You're offline. Messages will send when you're back online."}
               </span>
             </>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 border-amber-500/40 text-amber-800 dark:text-amber-200 hover:bg-amber-500/20"
+            onClick={() => reconnect(true)}
+            data-testid="button-reconnect"
+          >
+            Try again
+          </Button>
         </div>
       )}
 
       <div className="flex-1 overflow-y-auto p-6" ref={scrollRef}>
         <div className="space-y-4 max-w-3xl mx-auto">
-          {heartWhisper && (
-            <HeartWhisperCard
-              whisper={heartWhisper}
-              onDismiss={() => setHeartWhisper(null)}
-              onSavedOrDismissed={() => setHeartWhisper(null)}
-            />
-          )}
           {displayedMessages.length === 0 && (
             <div className="flex flex-col items-center justify-center flex-1 min-h-[50vh] select-none">
               {messageFilter === 'all' ? (

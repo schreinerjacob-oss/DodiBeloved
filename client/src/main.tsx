@@ -34,6 +34,23 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: unknown 
             {message}
           </pre>
           {stack && <p style={{ marginTop: 12, fontSize: 14 }}>{stack}</p>}
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            style={{
+              marginTop: 16,
+              padding: '10px 20px',
+              backgroundColor: '#b91c1c',
+              color: 'white',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Reload
+          </button>
         </div>
       );
     }

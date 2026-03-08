@@ -34,6 +34,8 @@ interface DodiContextType {
   enterDemoMode: () => Promise<void>;
   onPeerConnected: () => void;
   setPIN: (pin: string) => Promise<void>;
+  /** Call after saving PIN from Settings (first-time set) so lock activates without reload. */
+  enablePIN: () => Promise<void>;
   skipPINSetup: () => void;
   unlockWithPIN: (pin: string) => Promise<boolean>;
   unlockWithPassphrase: (passphrase: string) => Promise<boolean>;
@@ -316,6 +318,11 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const enablePINHandler = async () => {
+    await saveSetting('pinEnabled', 'true');
+    setPinEnabled(true);
+  };
+
   const unlockWithPINHandler = async (pin: string): Promise<boolean> => {
     try {
       const { verifyPINAndGetPassphrase } = await import('@/lib/storage-encrypted');
@@ -416,7 +423,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         hasPIN: pinEnabled,
         setAllowWakeUp, setPremiumStatus, initializeProfile, initializePairing, completePairingWithMasterKey,
         completePairingAsCreator, setPartnerIdForCreator, enterDemoMode, onPeerConnected,
-        setPIN: setPINHandler, skipPINSetup: () => setShowPinSetup(false),
+        setPIN: setPINHandler, enablePIN: enablePINHandler, skipPINSetup: () => setShowPinSetup(false),
         unlockWithPIN: unlockWithPINHandler, unlockWithPassphrase: unlockWithPassphraseHandler,
         lockApp: lockAppHandler, setInactivityMinutes: setInactivityMinutesHandler, logout, isLoading, isDemoMode,
       }}

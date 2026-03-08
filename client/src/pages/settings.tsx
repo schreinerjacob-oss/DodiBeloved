@@ -35,7 +35,7 @@ import { savePIN, verifyPINAndGetPassphrase, getSetting, saveSetting } from '@/l
 import { clearAndGoToPairing, clearCachesAndReload } from '@/lib/clear-app-data';
 
 export default function SettingsPage() {
-  const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp, isPaired, isPremium, setPremiumStatus, hasPIN } = useDodi();
+  const { userId, partnerId, passphrase, logout, isOnline, allowWakeUp, setAllowWakeUp, isPaired, isPremium, setPremiumStatus, hasPIN, enablePIN, lockApp } = useDodi();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const { reconnect } = usePeerConnection();
@@ -230,10 +230,21 @@ export default function SettingsPage() {
 
       // Save new PIN with the recovered passphrase
       await savePIN(newPin, activePassphrase);
-      toast({
-        title: hasPIN ? "PIN changed" : "PIN set",
-        description: "Your PIN has been updated successfully.",
-      });
+
+      // If first-time set (no PIN before), enable PIN in context so lock activates without reload
+      if (!hasPIN) {
+        await enablePIN();
+        lockApp();
+        toast({
+          title: "PIN set",
+          description: "Your PIN is active. Enter it to unlock.",
+        });
+      } else {
+        toast({
+          title: "PIN changed",
+          description: "Your PIN has been updated successfully.",
+        });
+      }
 
       // Clear form and close dialog
       setCurrentPin('');
