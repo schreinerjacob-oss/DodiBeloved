@@ -1145,7 +1145,7 @@ export default function ChatPage() {
   return (
     <div className="flex-1 min-h-0 min-w-0 flex flex-col bg-background">
       <MemoryResurfacing />
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b bg-card/50">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gold/20 bg-card/60 wood-grain">
         <div className="flex items-center gap-2.5">
           <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-sage to-blush flex items-center justify-center flex-shrink-0 ${peerState.connected ? 'animate-gentle-pulse' : ''}`}>
             <Heart className="w-4 h-4 text-white" />
@@ -1295,7 +1295,7 @@ export default function ChatPage() {
                       'cursor-pointer transition-transform active:scale-[0.98]',
                       isVideo ? 'max-w-[min(90vw,480px)]' : 'max-w-[70%]',
                       (isImage || isVoice || isVideo) ? 'p-0 overflow-hidden' : 'p-4',
-                      isSent ? 'bg-sage/30 border-sage/40' : 'bg-card border-card-border'
+                      isSent ? 'bg-gold/10 border-gold/20 dark:bg-gold/10 dark:border-gold/15' : 'bg-card border-card-border'
                     )}
                   >
                     {isImage ? (
@@ -1464,7 +1464,7 @@ export default function ChatPage() {
           {isPartnerTyping && (
             <div className="flex justify-start">
               <div className="flex items-center gap-1 px-4 py-2">
-                <span className="w-1.5 h-1.5 bg-sage rounded-full animate-bounce" />
+                <span className="w-1.5 h-1.5 bg-gold/60 rounded-full animate-bounce" />
                 <span className="w-1.5 h-1.5 bg-sage rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                 <span className="w-1.5 h-1.5 bg-sage rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
               </div>
@@ -1473,7 +1473,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="flex-shrink-0 border-t bg-card/50 p-4">
+      <div className="flex-shrink-0 border-t border-gold/20 bg-card/60 p-4">
         <div className="max-w-3xl mx-auto flex items-center gap-2">
           <input
             ref={fileInputRef}

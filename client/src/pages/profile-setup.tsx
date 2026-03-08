@@ -48,11 +48,11 @@ export default function ProfileSetupPage() {
   return (
     <div className="w-full flex flex-col items-center justify-center bg-background h-full overflow-y-auto" style={{ minHeight: '100dvh' }}>
       <div className="w-full max-w-sm px-6 py-12 space-y-8">
-        <div className="text-center space-y-4">
-          <img src={dodiTypographyLogo} alt="dodi" className="w-20 h-20 mx-auto" />
+        <div className="text-center space-y-6">
+          <img src={dodiTypographyLogo} alt="dodi" className="w-28 h-28 mx-auto dark:invert dark:opacity-90" />
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-foreground">Welcome</h1>
-            <p className="text-muted-foreground">Your whispers stay only between you two — forever</p>
+            <h1 className="text-3xl font-heading font-bold text-foreground">Welcome</h1>
+            <p className="text-muted-foreground font-heading font-normal text-lg">Your whispers stay only between you two — forever</p>
           </div>
         </div>
 

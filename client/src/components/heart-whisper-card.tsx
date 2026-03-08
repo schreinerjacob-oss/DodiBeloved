@@ -74,7 +74,7 @@ export function HeartWhisperCard({ whisper, onDismiss, onSavedOrDismissed }: Hea
   };
 
   return (
-    <Card className="p-4 border-sage/30 bg-gradient-to-br from-sage/10 to-blush/10">
+    <Card className="p-4 border-sage/30 bg-gradient-to-br from-sage/10 to-blush/10 paper-grain overflow-hidden">
       <div className="flex items-start gap-2">
         <Heart className="w-4 h-4 text-accent fill-accent shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">

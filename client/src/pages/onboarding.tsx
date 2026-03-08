@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { Button } from '@/components/ui/button';
 import { Heart, Lock, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 const screens = [
@@ -40,30 +41,42 @@ export default function OnboardingPage() {
 
   return (
     <div className="w-screen h-screen flex flex-col bg-gradient-to-b from-background to-card/30" style={{ minHeight: '100dvh' }}>
-      <div className="flex-1 flex flex-col items-center justify-center px-8 gap-8">
-        <div className={cn(
-          'w-28 h-28 rounded-full bg-card border-2 flex items-center justify-center animate-gentle-pulse',
-          current.iconColor
-        )}>
-          <Icon className="w-14 h-14" />
-        </div>
+      <div className="flex-1 flex flex-col items-center justify-center px-8 gap-8 overflow-hidden">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step}
+            initial={{ opacity: 0, x: 24 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -24 }}
+            transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="flex flex-col items-center gap-8 w-full max-w-sm"
+          >
+            <div className={cn(
+              'w-28 h-28 rounded-full bg-card border-2 flex items-center justify-center animate-gentle-pulse',
+              current.iconColor
+            )}>
+              <Icon className="w-14 h-14" />
+            </div>
 
-        <div className="text-center max-w-sm space-y-3">
-          <h1 className="text-3xl font-light text-foreground">{current.title}</h1>
-          <p className="text-lg text-primary font-medium">{current.subtitle}</p>
-          <p className="text-base text-muted-foreground leading-relaxed">
-            {current.description}
-          </p>
-        </div>
+            <div className="text-center space-y-3">
+              <h1 className="text-3xl font-heading font-semibold text-foreground">{current.title}</h1>
+              <p className="text-lg text-primary font-medium font-heading font-normal">{current.subtitle}</p>
+              <p className="text-base text-muted-foreground leading-relaxed">
+                {current.description}
+              </p>
+            </div>
+          </motion.div>
+        </AnimatePresence>
 
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           {screens.map((_, idx) => (
-            <div
+            <span
               key={idx}
               className={cn(
-                'h-2 rounded-full transition-all',
-                idx === step ? 'bg-primary w-8' : 'bg-muted w-2'
+                'inline-block h-0.5 transition-all duration-300',
+                idx === step ? 'bg-primary w-6' : 'bg-muted w-3 opacity-50'
               )}
+              aria-hidden
             />
           ))}
         </div>

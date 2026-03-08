@@ -928,8 +928,9 @@ export default function CallsPage() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-background">
-      <div className="flex-shrink-0 px-6 py-4 border-b bg-card/50">
-        <h2 className="text-xl font-light text-foreground">Voice & Video</h2>
+      <div className="flex-shrink-0 px-6 py-4 border-b border-gold/20 bg-card/60 wood-grain">
+        <h2 className="text-xl font-heading font-semibold text-foreground">Voice & Video</h2>
+        <div className="gold-rule w-12 mt-2" />
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-6">

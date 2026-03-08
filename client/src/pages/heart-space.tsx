@@ -22,6 +22,7 @@ import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { format, isToday } from 'date-fns';
 import { cn } from '@/lib/utils';
+import handsHeartLogo from '@assets/generated_images/dodi_couples_app_logo_with_heart_and_hands.png';
 
 const quickMoods = [
   { id: 'love', icon: Heart, label: 'Loved' },
@@ -182,12 +183,13 @@ export default function HeartSpacePage() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-background">
-      <div className="px-6 py-4 border-b bg-card/50">
-        <h2 className="text-[28px] font-heading font-semibold text-foreground flex items-center gap-2">
-          <Heart className="w-6 h-6 text-accent fill-accent" />
-          Heart Space
-        </h2>
-        <p className="text-xs text-muted-foreground mt-1">A sanctuary for your shared connection</p>
+      <div className="px-6 py-5 border-b border-gold/20 bg-card/60 wood-grain flex items-center gap-4">
+        <img src={handsHeartLogo} alt="Heart Space" className="h-14 w-14 object-contain opacity-85 dark:opacity-60 flex-shrink-0" />
+        <div>
+          <h2 className="text-2xl font-heading font-semibold text-foreground leading-tight">Heart Space</h2>
+          <div className="gold-rule w-12 mt-1.5" />
+          <p className="text-xs text-muted-foreground mt-1.5">Your private sanctuary</p>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
@@ -397,7 +399,7 @@ export default function HeartSpacePage() {
 
       {/* View Note Dialog */}
       <Dialog open={!!selectedNote} onOpenChange={() => setSelectedNote(null)}>
-        <DialogContent className="max-w-md bg-linen/90 dark:bg-walnut/30 border-walnut/20 dark:border-gold/20">
+        <DialogContent className="max-w-md bg-linen/90 dark:bg-walnut/30 border-walnut/20 dark:border-gold/20 paper-grain overflow-hidden">
           <DialogHeader>
             <DialogTitle className="font-heading font-semibold">{selectedNote?.title}</DialogTitle>
             <p className="text-xs text-stone dark:text-muted-foreground">{selectedNote && format(new Date(selectedNote.createdAt), 'MMMM d, yyyy')}</p>

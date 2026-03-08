@@ -255,7 +255,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex-1 min-h-0 w-full flex flex-col bg-background overflow-hidden">
-      <div className="flex-shrink-0 px-4 sm:px-6 py-4 border-b bg-card/50">
+      <div className="flex-shrink-0 px-4 sm:px-6 py-4 border-b border-gold/20 bg-card/60 wood-grain">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-heading font-semibold text-foreground">Settings</h2>
@@ -284,19 +284,19 @@ export default function SettingsPage() {
           </Button>
 
           {/* Support the Garden */}
-          <Card className="p-6 space-y-4 border-accent/20 bg-accent/5">
+          <Card className="relative p-6 space-y-4 border-walnut/30 dark:border-gold/20 bg-walnut/20 dark:bg-walnut/40 wood-grain overflow-hidden">
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Dodi is free. Optional support keeps it private and ad-free.</p>
-              <Button onClick={() => setPremiumStatus(true)} variant="outline" size="sm">Support the Garden</Button>
+              <p className="text-sm text-stone dark:text-muted-foreground">Dodi is free. Optional support keeps it private and ad-free.</p>
+              <Button onClick={() => setPremiumStatus(true)} variant="outline" size="sm" className="border-copper/50 text-copper hover:bg-copper/10">Support the Garden</Button>
             </div>
             {isPremium && (
-              <p className="text-xs text-accent">Thank you for supporting — you are an Eternal Guardian.</p>
+              <p className="text-xs text-copper">Thank you for supporting — you are an Eternal Guardian.</p>
             )}
           </Card>
 
           {/* Connection & Sync */}
           <div className="space-y-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">Connection</p>
+            <p className="text-[11px] uppercase tracking-wider text-stone dark:text-muted-foreground px-1">Connection</p>
 
             <Card className="p-6 space-y-4">
               <div className="flex items-center justify-between">
@@ -414,7 +414,7 @@ export default function SettingsPage() {
 
           {/* Privacy */}
           <div className="space-y-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">Privacy</p>
+            <p className="text-[11px] uppercase tracking-wider text-stone dark:text-muted-foreground px-1">Privacy</p>
 
             <Card className="p-6 space-y-4 border-accent/20 bg-accent/5">
               <div className="flex items-center justify-between">
@@ -781,9 +781,9 @@ export default function SettingsPage() {
 
           {/* Danger zone */}
           <div className="space-y-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">Danger zone</p>
+            <p className="text-[11px] uppercase tracking-wider text-stone dark:text-muted-foreground px-1">Danger zone</p>
 
-          <Card className="p-6 space-y-4">
+          <Card className="p-6 space-y-4 border-l-4 border-l-destructive">
             <div className="flex items-center gap-3">
               <LogOut className="w-5 h-5 text-destructive" />
               <div>
@@ -823,7 +823,7 @@ export default function SettingsPage() {
             </AlertDialog>
           </Card>
 
-          <Card className="p-6 space-y-4 border-destructive/20">
+          <Card className="p-6 space-y-4 border-destructive/20 border-l-4 border-l-destructive">
             <div className="flex items-center gap-3">
               <Trash2 className="w-5 h-5 text-destructive" />
               <div>

@@ -262,7 +262,7 @@ function MainApp() {
           </div>
       </div>
 
-      <nav className="border-t border-gold/20 bg-card/90 backdrop-blur-sm px-2 py-2 flex-shrink-0 relative z-20" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
+      <nav className="border-t border-gold/20 bg-card/90 backdrop-blur-sm px-2 py-2 flex-shrink-0 relative z-20 wood-grain" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
         <div className="flex items-center justify-around max-w-md mx-auto">
           {navItems.map((item) => (
             <NavItem

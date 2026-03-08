@@ -130,8 +130,8 @@ export default {
           "50%": { boxShadow: "0 0 0 3px rgba(220, 38, 38, 0.25)" },
         },
         "copper-ripple": {
-          "0%": { transform: "scale(1)", opacity: "0.7" },
-          "100%": { transform: "scale(2.8)", opacity: "0" },
+          "0%": { transform: "translate(-50%, -50%) scale(1)", opacity: "0.7" },
+          "100%": { transform: "translate(-50%, -50%) scale(2.8)", opacity: "0" },
         },
         "gold-sweep": {
           "0%, 100%": { opacity: "0.5" },

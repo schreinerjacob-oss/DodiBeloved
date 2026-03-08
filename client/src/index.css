@@ -51,7 +51,7 @@
   --walnut: 25 38% 24%;
   --walnut-light: 25 35% 35%;
   --walnut-dark: 25 40% 14%;
-  --linen: 35 28% 93%;
+  --linen: 36 42% 84%;
   --stone: 35 8% 52%;
   --radius: .5rem;
   --shadow-2xs: 0px 2px 0px 0px hsl(40 15% 20% / 0.00);
@@ -338,8 +338,8 @@
 
   /* Copper ripple for heart ping — single expanding ring */
   @keyframes copper-ripple {
-    0% { transform: scale(1); opacity: 0.7; }
-    100% { transform: scale(2.8); opacity: 0; }
+    0% { transform: translate(-50%, -50%) scale(1); opacity: 0.7; }
+    100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
   }
 
   /* Gold hairline sweep — for connection indicator and dividers */
@@ -386,13 +386,68 @@
 
   /* Gold hairline divider utility */
   .gold-rule {
-    height: 1px;
-    background: linear-gradient(to right, transparent, #D4AF37 30%, #D4AF37 70%, transparent);
-    opacity: 0.55;
+    height: 1.5px;
+    background: linear-gradient(to right, transparent, #D4AF37 20%, #D4AF37 80%, transparent);
+    opacity: 0.7;
   }
 
   /* Playfair Display heading utility */
   .font-heading {
     font-family: 'Playfair Display', serif;
+  }
+
+  /* Wood grain — subtle diagonal stripes for nav / headers (warmer, more visible) */
+  .wood-grain {
+    position: relative;
+  }
+  .wood-grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background: repeating-linear-gradient(
+      105deg,
+      transparent 0px,
+      transparent 3px,
+      hsl(25 40% 30% / 0.055) 3px,
+      hsl(25 40% 30% / 0.055) 5px,
+      transparent 7px,
+      transparent 15px,
+      hsl(25 45% 22% / 0.04) 15px,
+      hsl(25 45% 22% / 0.04) 17px,
+      transparent 19px,
+      transparent 28px
+    );
+  }
+
+  .dark .wood-grain::after {
+    background: repeating-linear-gradient(
+      105deg,
+      transparent 0px,
+      transparent 3px,
+      hsl(25 30% 8% / 0.08) 3px,
+      hsl(25 30% 8% / 0.08) 5px,
+      transparent 7px,
+      transparent 15px,
+      hsl(25 35% 5% / 0.06) 15px,
+      hsl(25 35% 5% / 0.06) 17px,
+      transparent 19px,
+      transparent 28px
+    );
+  }
+
+  /* Paper/linen grain — fine texture for cards (3–5% opacity) */
+  .paper-grain {
+    position: relative;
+  }
+  .paper-grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: 0.5;
   }
 }

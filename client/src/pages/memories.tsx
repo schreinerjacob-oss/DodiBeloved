@@ -522,9 +522,10 @@ export default function MemoriesPage() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-background">
-      <div className="flex items-center justify-between px-6 py-4 border-b bg-card/50">
-        <div>
-          <h2 className="text-xl font-light text-foreground">Our Story</h2>
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gold/20 bg-card/60 wood-grain">
+        <div className="min-w-0">
+          <h2 className="text-2xl font-heading font-bold text-foreground">Our Story</h2>
+          <div className="gold-rule w-16 mt-2" />
           <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
             <Lock className="w-3 h-3" />
             Memories, dates, and notes — your private garden
@@ -600,20 +601,20 @@ export default function MemoriesPage() {
           {/* Resurfaced: 1 match per day, dismiss hides for day */}
           {resurfacedMemory && resurfacedYearsAgo !== null && (
             <section>
-              <h3 className="text-sm font-medium text-muted-foreground mb-2">
+              <h3 className="text-sm font-medium text-stone dark:text-muted-foreground mb-2">
                 On this day, {resurfacedYearsAgo} {resurfacedYearsAgo === 1 ? 'year' : 'years'} ago
               </h3>
-              <Card className="p-4 border-sage/30 overflow-hidden">
+              <Card className="p-4 bg-walnut border-walnut-light overflow-hidden">
                 <div className="flex gap-4">
-                  <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
+                  <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 bg-walnut-light/80 border border-white/10">
                     <MemoryMediaImage memoryId={resurfacedMemory.id} mediaType={resurfacedMemory.mediaType} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm italic text-foreground">{resurfacedMemory.caption || 'A beautiful moment...'}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{format(resurfacedMemory.timestamp, 'MMMM d, yyyy')}</p>
+                    <p className="text-sm italic text-white/95">{resurfacedMemory.caption || 'A beautiful moment...'}</p>
+                    <p className="text-xs text-white/70 mt-1">{format(resurfacedMemory.timestamp, 'MMMM d, yyyy')}</p>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" className="mt-2" onClick={onResurfacedDismiss}>Later</Button>
+                <Button variant="ghost" size="sm" className="mt-2 text-white/90 hover:bg-white/10" onClick={onResurfacedDismiss}>Later</Button>
               </Card>
             </section>
           )}
@@ -622,14 +623,14 @@ export default function MemoriesPage() {
           <section>
             <h3 className="text-sm font-medium text-muted-foreground mb-2">Special dates</h3>
             {anniversary && (
-              <Card className="p-3 mb-2 border-accent/20">
+              <Card className="p-3 mb-2 border-copper/30 bg-copper/10">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <Heart className="w-4 h-4 text-accent shrink-0" />
+                    <Heart className="w-4 h-4 text-copper shrink-0" />
                     <span className="font-medium truncate">{anniversary.title}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-muted-foreground">{format(new Date(anniversary.eventDate), 'MMM d')}</span>
+                    <span className="text-xs px-2 py-0.5 rounded bg-copper/20 text-copper font-medium">{format(new Date(anniversary.eventDate), 'MMM d')}</span>
                     <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Bell className="w-3.5 h-3.5" />
                       <Switch
@@ -721,7 +722,7 @@ export default function MemoriesPage() {
             {memories.map((memory) => (
               <Card
                 key={memory.id}
-                className="group relative overflow-hidden aspect-square border-sage/30 hover-elevate cursor-pointer"
+                className="group relative overflow-hidden aspect-square border border-walnut/30 dark:border-walnut hover-elevate cursor-pointer"
                 data-testid={`memory-${memory.id}`}
                 onClick={() => {
                   setFullscreenMemoryId(memory.id);

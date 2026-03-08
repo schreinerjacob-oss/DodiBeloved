@@ -47,12 +47,11 @@ export function DodiThinkingOfYouHandler() {
   if (!showFlash) return null;
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[250] pointer-events-none flex items-center justify-center bg-gold/50 animate-in fade-in duration-200"
-      aria-live="polite"
-    >
-      <div className="text-center px-8 py-6 rounded-2xl bg-white/80 dark:bg-card/90 shadow-xl">
-        <p className="text-3xl font-serif text-foreground">You are loved</p>
+    <div className="fixed inset-0 z-[250] pointer-events-none flex items-center justify-center" aria-live="polite">
+      {/* Copper ripple — single expanding ring (water ripple); centering is in keyframes (translate(-50%, -50%)) */}
+      <div className="absolute top-1/2 left-1/2 w-32 h-32 rounded-full border-2 border-copper/80 animate-copper-ripple" style={{ transformOrigin: 'center' }} />
+      <div className="text-center px-8 py-6 rounded-2xl bg-white/90 dark:bg-card/90 shadow-xl relative z-10">
+        <p className="text-3xl font-heading font-semibold text-foreground">You are loved</p>
       </div>
     </div>,
     document.body

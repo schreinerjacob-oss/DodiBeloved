@@ -15,6 +15,7 @@ import { runCreatorTunnel, runJoinerTunnel } from '@/lib/tunnel-handshake';
 import { requestNotificationPermission } from '@/lib/notifications';
 import { clearAndGoToPairing } from '@/lib/clear-app-data';
 import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
+import handsHeartLogo from '@assets/generated_images/dodi_couples_app_logo_with_heart_and_hands.png';
 
 type Mode = 'choose' | 'pairing' | 'success-animation' | 'restore-mode' | 'restore-entry';
 
@@ -1020,21 +1021,21 @@ export default function PairingPage() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3 }}
             >
-              <Card className="p-8 space-y-6 border-walnut/30 dark:border-gold/20 shadow-lg text-center bg-linen/50 dark:bg-walnut/20">
-                <div className="gold-rule w-full max-w-[120px] mx-auto" />
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.2 }}
+              <Card className="p-8 space-y-5 border-walnut/30 dark:border-gold/20 shadow-lg text-center bg-linen/50 dark:bg-walnut/20">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
                   className="flex justify-center"
                 >
-                  <img src={dodiTypographyLogo} alt="dodi" className="h-14 dark:invert dark:opacity-80" />
+                  <img src={handsHeartLogo} alt="Connected" className="h-24 w-24 object-contain opacity-90 dark:opacity-60" />
                 </motion.div>
                 <div>
-                  <h2 className="text-xl font-heading font-semibold">Your garden is sealed.</h2>
-                  <p className="text-sm text-muted-foreground mt-1 font-heading">Only you two hold the key.</p>
+                  <h2 className="text-2xl font-heading font-semibold">Your garden is sealed.</h2>
+                  <div className="gold-rule w-16 mx-auto mt-2" />
+                  <p className="text-sm text-muted-foreground mt-3 font-heading italic">Only you two hold the key.</p>
                 </div>
-                <div className="gold-rule w-full max-w-[120px] mx-auto" />
+                <img src={dodiTypographyLogo} alt="dodi" className="h-8 mx-auto opacity-40 dark:invert dark:opacity-30" />
               </Card>
             </motion.div>
           )}
