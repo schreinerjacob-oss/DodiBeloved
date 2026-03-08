@@ -71,10 +71,28 @@ export default {
           light: "#FFFBF5",
           dark: "#EDE4D8",
         },
+        // Garden Architect palette additions
+        walnut: {
+          DEFAULT: "hsl(var(--walnut) / <alpha-value>)",
+          light: "hsl(var(--walnut-light) / <alpha-value>)",
+          dark: "hsl(var(--walnut-dark) / <alpha-value>)",
+        },
+        linen: {
+          DEFAULT: "hsl(var(--linen) / <alpha-value>)",
+        },
+        stone: {
+          DEFAULT: "hsl(var(--stone) / <alpha-value>)",
+        },
+        copper: {
+          DEFAULT: "#B87333",
+          light: "#D4956A",
+          dark: "#8B5A2B",
+        },
       },
       fontFamily: {
         sans: ["DM Sans", "var(--font-sans)"],
         handwritten: ["Architects Daughter", "cursive"],
+        heading: ["Playfair Display", "var(--font-heading)", "serif"],
       },
       keyframes: {
         "accordion-down": {
@@ -106,6 +124,23 @@ export default {
           "75%": { transform: "translateX(-3px)" },
           "90%": { transform: "translateX(3px)" },
         },
+        // Garden Architect animations
+        "error-pulse": {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(220, 38, 38, 0)" },
+          "50%": { boxShadow: "0 0 0 3px rgba(220, 38, 38, 0.25)" },
+        },
+        "copper-ripple": {
+          "0%": { transform: "scale(1)", opacity: "0.7" },
+          "100%": { transform: "scale(2.8)", opacity: "0" },
+        },
+        "gold-sweep": {
+          "0%, 100%": { opacity: "0.5" },
+          "50%": { opacity: "1" },
+        },
+        "gold-grow": {
+          "0%": { transform: "scaleX(0)", opacity: "0", transformOrigin: "left" },
+          "100%": { transform: "scaleX(1)", opacity: "1", transformOrigin: "left" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -114,6 +149,10 @@ export default {
         "gentle-bounce": "gentle-bounce 0.8s ease-in-out",
         "fade-in": "fade-in 0.4s ease-out",
         "shake": "shake 0.45s ease-in-out",
+        "error-pulse": "error-pulse 0.4s ease-in-out",
+        "copper-ripple": "copper-ripple 0.8s ease-out forwards",
+        "gold-sweep": "gold-sweep 2.5s ease-in-out infinite",
+        "gold-grow": "gold-grow 0.6s ease-out forwards",
       },
     },
   },

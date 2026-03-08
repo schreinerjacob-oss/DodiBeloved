@@ -16,6 +16,7 @@ import PinSetupPage from "@/pages/pin-setup";
 import PinLockPage from "@/pages/pin-lock";
 import OnboardingPage from "@/pages/onboarding";
 import { MessageSquare, Camera, Phone, Settings, Lock, Heart } from "lucide-react";
+import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
 import { cn } from "@/lib/utils";
 import { ConnectionStatus } from "@/components/connection-status";
 import { IncomingCallOverlay } from "@/components/incoming-call-overlay";
@@ -36,16 +37,19 @@ const SettingsPage = lazy(() => import("@/pages/settings"));
 
 function NavItem({ href, icon: Icon, label, active }: { href: string; icon: any; label: string; active: boolean }) {
   const [, setLocation] = useLocation();
-  
+
   return (
     <button
       onClick={() => setLocation(href)}
       className={cn(
-        "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all hover-elevate",
-        active ? "text-primary" : "text-muted-foreground"
+        "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all hover-elevate relative",
+        active ? "text-foreground" : "text-muted-foreground"
       )}
       data-testid={`nav-${label.toLowerCase().replace(' ', '-')}`}
     >
+      {active && (
+        <span className="absolute top-0 left-2 right-2 h-0.5 rounded-full bg-gold/70 animate-gold-grow" />
+      )}
       <Icon className={cn("w-5 h-5", active && "animate-gentle-bounce")} />
       <span className="text-xs font-medium">{label}</span>
     </button>
@@ -258,7 +262,7 @@ function MainApp() {
           </div>
       </div>
 
-      <nav className="border-t bg-card/80 backdrop-blur-sm px-2 py-2 flex-shrink-0 relative z-20" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
+      <nav className="border-t border-gold/20 bg-card/90 backdrop-blur-sm px-2 py-2 flex-shrink-0 relative z-20" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
         <div className="flex items-center justify-around max-w-md mx-auto">
           {navItems.map((item) => (
             <NavItem
@@ -269,8 +273,10 @@ function MainApp() {
           ))}
         </div>
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mt-1">
-          <Lock className="w-3 h-3" />
+          <Lock className="w-3 h-3 text-gold/70" />
           <span>Encrypted</span>
+          <div className="w-px h-3 bg-muted-foreground/30" />
+          <img src={dodiTypographyLogo} alt="dodi" className="h-4 opacity-40 dark:opacity-30" />
           <div className="w-px h-3 bg-muted-foreground/30" />
           <ConnectionStatus />
         </div>

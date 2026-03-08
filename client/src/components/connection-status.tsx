@@ -65,8 +65,8 @@ export function ConnectionStatus() {
     if (state.connected) {
       return {
         icon: Wifi,
-        color: 'text-accent',
-        bg: 'bg-accent/10',
+        color: 'text-gold',
+        bg: 'bg-gold/10',
         label: 'Connected',
         description: 'P2P secure connection active',
         pulse: true,
@@ -132,11 +132,7 @@ export function ConnectionStatus() {
           >
             <div className="relative">
               {config.pulse && (
-                <div className={cn(
-                  'absolute inset-0 rounded-full animate-pulse',
-                  config.color.replace('text-', 'bg-'),
-                  'opacity-50'
-                )} />
+                <div className="absolute inset-0 rounded-full bg-gold/25 animate-gold-sweep" />
               )}
               <Icon className={cn('w-4 h-4 relative z-10', config.color)} />
             </div>

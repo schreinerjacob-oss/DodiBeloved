@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
 import { useDodi } from '@/contexts/DodiContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -1145,11 +1146,11 @@ export default function ChatPage() {
     <div className="flex-1 min-h-0 min-w-0 flex flex-col bg-background">
       <MemoryResurfacing />
       <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b bg-card/50">
-        <div className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-sage to-blush flex items-center justify-center ${peerState.connected ? 'animate-gentle-pulse' : ''}`}>
+        <div className="flex items-center gap-2.5">
+          <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-sage to-blush flex items-center justify-center flex-shrink-0 ${peerState.connected ? 'animate-gentle-pulse' : ''}`}>
             <Heart className="w-4 h-4 text-white" />
           </div>
-          <h2 className="font-medium text-foreground">my beloved</h2>
+          <img src={dodiTypographyLogo} alt="dodi" className="h-7 dark:invert dark:opacity-70" />
         </div>
 
         <div className="flex items-center gap-2">
@@ -1552,7 +1553,7 @@ export default function ChatPage() {
             suppressContentEditableWarning
             role="textbox"
             aria-label="Message"
-            data-placeholder="Type a message..."
+            data-placeholder="Write to your beloved..."
             onInput={(e) => {
               const text = (e.target as HTMLDivElement).innerText || '';
               setNewMessage(text);

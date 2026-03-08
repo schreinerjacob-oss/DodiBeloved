@@ -46,6 +46,13 @@
   --font-sans: DM Sans, sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
+  --font-heading: 'Playfair Display', serif;
+  /* Garden Architect material tokens */
+  --walnut: 25 38% 24%;
+  --walnut-light: 25 35% 35%;
+  --walnut-dark: 25 40% 14%;
+  --linen: 35 28% 93%;
+  --stone: 35 8% 52%;
   --radius: .5rem;
   --shadow-2xs: 0px 2px 0px 0px hsl(40 15% 20% / 0.00);
   --shadow-xs: 0px 2px 0px 0px hsl(40 15% 20% / 0.00);
@@ -93,35 +100,42 @@
   --opaque-button-border-intensity: 9;
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
-  --background: 35 10% 10%;
-  --foreground: 35 8% 90%;
-  --border: 35 8% 20%;
-  --card: 35 10% 12%;
-  --card-foreground: 35 8% 88%;
-  --card-border: 35 8% 16%;
-  --sidebar: 35 10% 14%;
-  --sidebar-foreground: 35 8% 86%;
-  --sidebar-border: 35 8% 18%;
-  --sidebar-primary: 145 30% 65%;
+  /* Warm espresso/walnut dark mode — "candlelight, walnut shelves" */
+  --background: 28 14% 8%;
+  --foreground: 35 12% 87%;
+  --border: 28 12% 18%;
+  --card: 28 13% 11%;
+  --card-foreground: 35 10% 86%;
+  --card-border: 28 12% 15%;
+  --sidebar: 28 13% 13%;
+  --sidebar-foreground: 35 10% 84%;
+  --sidebar-border: 28 12% 17%;
+  --sidebar-primary: 145 28% 62%;
   --sidebar-primary-foreground: 145 5% 10%;
-  --sidebar-accent: 35 12% 18%;
-  --sidebar-accent-foreground: 35 8% 86%;
-  --sidebar-ring: 145 30% 65%;
-  --popover: 35 10% 16%;
-  --popover-foreground: 35 8% 86%;
-  --popover-border: 35 8% 20%;
-  --primary: 145 30% 65%;
+  --sidebar-accent: 28 14% 17%;
+  --sidebar-accent-foreground: 35 10% 84%;
+  --sidebar-ring: 145 28% 62%;
+  --popover: 28 13% 14%;
+  --popover-foreground: 35 10% 84%;
+  --popover-border: 28 12% 19%;
+  --primary: 145 28% 62%;
   --primary-foreground: 145 5% 10%;
-  --secondary: 35 12% 20%;
-  --secondary-foreground: 35 8% 84%;
-  --muted: 35 10% 19%;
-  --muted-foreground: 35 8% 60%;
-  --accent: 350 30% 25%;
+  --secondary: 28 14% 19%;
+  --secondary-foreground: 35 10% 82%;
+  --muted: 28 12% 18%;
+  --muted-foreground: 35 8% 58%;
+  --accent: 350 28% 24%;
   --accent-foreground: 350 8% 86%;
-  --destructive: 0 60% 50%;
+  --destructive: 0 58% 48%;
   --destructive-foreground: 0 5% 95%;
-  --input: 35 10% 28%;
-  --ring: 145 30% 65%;
+  --input: 28 13% 26%;
+  --ring: 145 28% 62%;
+  /* Garden Architect material tokens — dark mode */
+  --walnut: 25 42% 18%;
+  --walnut-light: 25 38% 28%;
+  --walnut-dark: 25 45% 10%;
+  --linen: 35 18% 16%;
+  --stone: 35 8% 48%;
   --chart-1: 145 35% 70%;
   --chart-2: 350 45% 75%;
   --chart-3: 45 55% 70%;
@@ -316,9 +330,34 @@
     animation: soft-fade-in-up 1.2s ease-out forwards;
   }
 
+  /* Copper/gold presence glow — replaces lime-green */
   @keyframes gentle-pulse-glow {
-    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(163, 230, 53, 0.1); }
-    50% { opacity: 0.95; box-shadow: 0 0 20px 10px rgba(163, 230, 53, 0); }
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(184, 115, 51, 0.15); }
+    50% { opacity: 0.95; box-shadow: 0 0 18px 8px rgba(212, 175, 55, 0.06); }
+  }
+
+  /* Copper ripple for heart ping — single expanding ring */
+  @keyframes copper-ripple {
+    0% { transform: scale(1); opacity: 0.7; }
+    100% { transform: scale(2.8); opacity: 0; }
+  }
+
+  /* Gold hairline sweep — for connection indicator and dividers */
+  @keyframes gold-sweep {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+
+  /* Gold grow — for success screen rule and active indicators */
+  @keyframes gold-grow {
+    0% { transform: scaleX(0); opacity: 0; transform-origin: left; }
+    100% { transform: scaleX(1); opacity: 1; transform-origin: left; }
+  }
+
+  /* Error border pulse — replaces aggressive shake */
+  @keyframes error-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    50% { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.25); }
   }
 
   .animate-celebrate {
@@ -326,6 +365,34 @@
   }
 
   .animate-gentle-pulse {
-    animation: gentle-pulse-glow 2s ease-in-out infinite;
+    animation: gentle-pulse-glow 2.5s ease-in-out infinite;
+  }
+
+  .animate-copper-ripple {
+    animation: copper-ripple 0.8s ease-out forwards;
+  }
+
+  .animate-gold-sweep {
+    animation: gold-sweep 2.5s ease-in-out infinite;
+  }
+
+  .animate-gold-grow {
+    animation: gold-grow 0.6s ease-out forwards;
+  }
+
+  .animate-error-pulse {
+    animation: error-pulse 0.4s ease-in-out;
+  }
+
+  /* Gold hairline divider utility */
+  .gold-rule {
+    height: 1px;
+    background: linear-gradient(to right, transparent, #D4AF37 30%, #D4AF37 70%, transparent);
+    opacity: 0.55;
+  }
+
+  /* Playfair Display heading utility */
+  .font-heading {
+    font-family: 'Playfair Display', serif;
   }
 }

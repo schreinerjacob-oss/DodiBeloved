@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Lock, LogOut, X, ScanFace } from 'lucide-react';
+import dodiTypographyLogo from '@assets/generated_images/hebrew_dodi_typography_logo.png';
 import { cn } from '@/lib/utils';
 import { Capacitor } from '@capacitor/core';
 import { getNativeSetting } from '@/lib/capacitor-preferences';
@@ -206,16 +207,19 @@ export default function PinLockPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-cream via-sage/10 to-blush/20 dark:from-background dark:via-card dark:to-secondary flex items-center justify-center p-6">
       <Card className="w-full max-w-md p-8 space-y-6 border-sage/30">
-        <div className="space-y-3 text-center">
-          <div className="flex justify-center mb-3">
-            <Lock className="w-12 h-12 text-gold animate-pulse-glow" />
+        <div className="space-y-2 text-center">
+          <div className="flex justify-center mb-4">
+            <img src={dodiTypographyLogo} alt="dodi" className="h-10 dark:invert dark:opacity-70" />
           </div>
-          <h1 className="text-2xl font-light tracking-wide">Your Private Space</h1>
+          <div className="flex justify-center">
+            <Lock className="w-5 h-5 text-gold/70 animate-pulse-glow" />
+          </div>
+          <h1 className="text-xl font-heading font-semibold tracking-wide">Your Private Space</h1>
           <p className="text-sm text-muted-foreground">Enter PIN to continue</p>
         </div>
 
         <div className="space-y-4">
-          <div className={cn(shake && 'animate-shake')}>
+          <div className={cn(shake && 'animate-error-pulse')}>
             {/* Dot grid — tapping focuses the hidden input */}
             <div
               className="flex gap-1 cursor-text"
