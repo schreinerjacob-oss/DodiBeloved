@@ -24,12 +24,12 @@ import { format, isToday } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 const quickMoods = [
-  { id: 'love', icon: Heart, label: 'Feeling loved', color: 'text-accent' },
-  { id: 'happy', icon: Sun, label: 'Happy', color: 'text-yellow-500' },
-  { id: 'grateful', icon: Star, label: 'Grateful', color: 'text-gold' },
-  { id: 'peaceful', icon: Moon, label: 'Peaceful', color: 'text-primary' },
-  { id: 'thinking', icon: Cloud, label: 'Thinking of you', color: 'text-blue-400' },
-  { id: 'missing', icon: Sparkles, label: 'Missing you', color: 'text-blush' },
+  { id: 'love', icon: Heart, label: 'Loved' },
+  { id: 'happy', icon: Sun, label: 'Happy' },
+  { id: 'grateful', icon: Star, label: 'Grateful' },
+  { id: 'peaceful', icon: Moon, label: 'Peaceful' },
+  { id: 'thinking', icon: Cloud, label: 'Thinking' },
+  { id: 'missing', icon: Sparkles, label: 'Missing you' },
 ];
 
 export default function HeartSpacePage() {
@@ -183,8 +183,8 @@ export default function HeartSpacePage() {
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-background">
       <div className="px-6 py-4 border-b bg-card/50">
-        <h2 className="text-xl font-light text-foreground flex items-center gap-2">
-          <Heart className="w-5 h-5 text-accent fill-accent" />
+        <h2 className="text-[28px] font-heading font-semibold text-foreground flex items-center gap-2">
+          <Heart className="w-6 h-6 text-accent fill-accent" />
           Heart Space
         </h2>
         <p className="text-xs text-muted-foreground mt-1">A sanctuary for your shared connection</p>
@@ -193,17 +193,20 @@ export default function HeartSpacePage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <div className="px-6 py-2 border-b bg-card/30">
           <TabsList className="grid grid-cols-3 w-full max-w-md mx-auto h-12 bg-muted/50 p-1">
-            <TabsTrigger value="whispers" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg flex gap-2 h-full">
+            <TabsTrigger value="whispers" className="relative data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-lg flex flex-col gap-0.5 justify-center h-full data-[state=active]:text-foreground">
               <Sparkles className="w-4 h-4" />
               <span className="text-xs">Whispers</span>
+              {activeTab === 'whispers' && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-gold/70" />}
             </TabsTrigger>
-            <TabsTrigger value="notes" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg flex gap-2 h-full">
+            <TabsTrigger value="notes" className="relative data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-lg flex flex-col gap-0.5 justify-center h-full data-[state=active]:text-foreground">
               <ScrollText className="w-4 h-4" />
               <span className="text-xs">Notes</span>
+              {activeTab === 'notes' && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-gold/70" />}
             </TabsTrigger>
-            <TabsTrigger value="prayers" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg flex gap-2 h-full">
+            <TabsTrigger value="prayers" className="relative data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-lg flex flex-col gap-0.5 justify-center h-full data-[state=active]:text-foreground">
               <HeartHandshake className="w-4 h-4" />
               <span className="text-xs">Prayers</span>
+              {activeTab === 'prayers' && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-gold/70" />}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -226,12 +229,13 @@ export default function HeartSpacePage() {
                           key={mood.id}
                           onClick={() => setSelectedMood(mood.id)}
                           className={cn(
-                            'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover-elevate',
-                            isSelected ? 'border-primary bg-primary/10' : 'border-border'
+                            'flex flex-col items-center gap-1.5 p-3 rounded-lg border transition-all hover-elevate relative',
+                            isSelected ? 'border-copper/50 text-foreground' : 'border-border text-muted-foreground'
                           )}
                         >
-                          <Icon className={cn('w-8 h-8', mood.color)} />
-                          <span className="text-[10px] text-center">{mood.label}</span>
+                          <Icon className="w-6 h-6" />
+                          <span className="text-xs text-center">{mood.label}</span>
+                          {isSelected && <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-copper" />}
                         </button>
                       );
                     })}
@@ -264,8 +268,8 @@ export default function HeartSpacePage() {
                   const isFromPartner = w.userId === partnerId;
                   return (
                     <Card key={w.id} className={cn('p-4 flex items-center gap-3', isFromPartner && 'bg-accent/5 border-accent/20')}>
-                      <div className={cn('w-10 h-10 rounded-full flex items-center justify-center', isFromPartner ? 'bg-accent/20' : 'bg-primary/20')}>
-                        <Icon className={cn('w-5 h-5', mood?.color)} />
+                      <div className={cn('w-10 h-10 rounded-full flex items-center justify-center', isFromPartner ? 'bg-accent/20 text-accent' : 'bg-primary/20 text-primary')}>
+                        <Icon className="w-5 h-5" />
                       </div>
                       <div className="flex-1">
                         <div className="flex justify-between items-center">
@@ -291,13 +295,13 @@ export default function HeartSpacePage() {
               </div>
               <div className="grid gap-4">
                 {notes.map((note) => (
-                  <Card key={note.id} className="p-5 hover-elevate cursor-pointer border-accent/20" onClick={() => setSelectedNote(note)}>
+                  <Card key={note.id} className="p-5 hover-elevate cursor-pointer border-walnut/20 bg-linen/60 dark:bg-walnut/20" onClick={() => setSelectedNote(note)}>
                     <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-medium">{note.title}</h4>
+                      <h4 className="font-heading font-semibold">{note.title}</h4>
                       {note.authorId === partnerId && <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent">From beloved</span>}
                     </div>
                     <p className="text-sm text-muted-foreground line-clamp-2 font-handwritten">{note.content}</p>
-                    <p className="text-[10px] text-muted-foreground mt-2">{format(new Date(note.createdAt), 'MMM d, yyyy')}</p>
+                    <p className="text-[10px] text-stone dark:text-muted-foreground mt-2">{format(new Date(note.createdAt), 'MMM d, yyyy')}</p>
                   </Card>
                 ))}
               </div>
@@ -326,9 +330,9 @@ export default function HeartSpacePage() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         {todayPrayers.map((p) => (
-                          <div key={p.id} className="p-3 rounded-lg bg-white/50 space-y-1">
-                            <span className="text-[10px] font-bold uppercase tracking-tighter text-muted-foreground">{p.userId === userId ? 'You' : 'Beloved'}</span>
-                            <p className="text-sm">{p.gratitudeEntry}</p>
+                          <div key={p.id} className="p-3 rounded-lg bg-white/50 dark:bg-card/50 border-l-4 border-l-stone dark:border-l-stone/80 space-y-1">
+                            <span className="text-[10px] font-bold uppercase tracking-tighter text-stone dark:text-muted-foreground">{p.userId === userId ? 'You' : 'Beloved'}</span>
+                            <p className="text-sm pl-1">{p.gratitudeEntry}</p>
                           </div>
                         ))}
                       </div>
@@ -347,12 +351,9 @@ export default function HeartSpacePage() {
               <div className="space-y-4">
                 <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Journey of Blessings</h3>
                 {revealedPrayers.map((p) => (
-                  <Card key={p.id} className="p-4 bg-sage/5 border-sage/10">
-                    <p className="text-[10px] text-muted-foreground mb-2">{format(new Date(p.prayerDate), 'MMM d, yyyy')}</p>
-                    <div className="flex gap-2 items-start">
-                      <div className="w-1.5 h-1.5 rounded-full bg-sage mt-1.5" />
-                      <p className="text-sm italic">{p.gratitudeEntry}</p>
-                    </div>
+                  <Card key={p.id} className="p-4 bg-sage/5 border-sage/10 border-l-4 border-l-stone dark:border-l-stone/80">
+                    <p className="text-[10px] text-stone dark:text-muted-foreground mb-2">{format(new Date(p.prayerDate), 'MMM d, yyyy')}</p>
+                    <p className="text-sm italic pl-1">{p.gratitudeEntry}</p>
                   </Card>
                 ))}
               </div>
@@ -396,12 +397,12 @@ export default function HeartSpacePage() {
 
       {/* View Note Dialog */}
       <Dialog open={!!selectedNote} onOpenChange={() => setSelectedNote(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md bg-linen/90 dark:bg-walnut/30 border-walnut/20 dark:border-gold/20">
           <DialogHeader>
-            <DialogTitle className="font-light">{selectedNote?.title}</DialogTitle>
-            <p className="text-xs text-muted-foreground">{selectedNote && format(new Date(selectedNote.createdAt), 'MMMM d, yyyy')}</p>
+            <DialogTitle className="font-heading font-semibold">{selectedNote?.title}</DialogTitle>
+            <p className="text-xs text-stone dark:text-muted-foreground">{selectedNote && format(new Date(selectedNote.createdAt), 'MMMM d, yyyy')}</p>
           </DialogHeader>
-          <div className="mt-4 p-6 bg-cream/30 rounded-xl font-handwritten text-xl leading-relaxed whitespace-pre-wrap">
+          <div className="mt-4 p-6 bg-card/50 rounded-xl font-handwritten text-lg leading-relaxed whitespace-pre-wrap border border-walnut/10">
             {selectedNote?.content}
           </div>
         </DialogContent>

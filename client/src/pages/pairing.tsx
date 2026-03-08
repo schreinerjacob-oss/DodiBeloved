@@ -455,10 +455,10 @@ export default function PairingPage() {
             transition={{ delay: 0.5 }}
             className="space-y-6"
           >
-            <div className="bg-sage/5 border border-sage/20 rounded-2xl p-6 space-y-4">
-              <p className="text-sm text-sage font-medium">Share this code with your partner:</p>
+            <div className="bg-linen/80 dark:bg-walnut/30 border border-walnut/30 dark:border-gold/20 rounded-2xl p-6 space-y-4">
+              <p className="text-sm text-stone dark:text-muted-foreground font-medium">Share this code with your partner:</p>
               <div className="flex items-center justify-center gap-3">
-                <code className="text-3xl font-mono tracking-widest text-foreground bg-white dark:bg-card px-4 py-2 rounded-lg border border-sage/10 shadow-sm">
+                <code className="text-3xl font-heading tracking-widest text-foreground bg-card/80 dark:bg-card px-4 py-3 rounded-lg border border-walnut/20 dark:border-gold/20 shadow-sm" data-testid="text-room-code">
                   {roomCode}
                 </code>
                 <Button 
@@ -828,8 +828,8 @@ export default function PairingPage() {
                       <p className="text-sm text-muted-foreground">Have your partner enter this code</p>
                     </div>
 
-                    <div className="text-center p-6 bg-sage/10 rounded-lg">
-                      <p className="text-6xl font-light tracking-widest text-sage font-mono" data-testid="text-room-code">
+                    <div className="text-center p-6 bg-linen/80 dark:bg-walnut/30 rounded-lg border border-walnut/20 dark:border-gold/20">
+                      <p className="text-5xl font-heading font-semibold tracking-widest text-foreground" data-testid="text-room-code">
                         {roomCode}
                       </p>
                     </div>
@@ -953,7 +953,7 @@ export default function PairingPage() {
                 <div className="text-center p-6 bg-sage/10 rounded-lg">
                   <div className="flex items-center justify-center gap-3">
                     {roomCode ? (
-                      <p className="text-4xl font-light tracking-widest text-sage font-mono" data-testid="text-restore-code">
+                      <p className="text-4xl font-heading font-semibold tracking-widest text-foreground" data-testid="text-restore-code">
                         {roomCode}
                       </p>
                     ) : (
@@ -1020,17 +1020,21 @@ export default function PairingPage() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3 }}
             >
-              <Card className="p-8 space-y-6 border-sage/30 shadow-lg text-center">
+              <Card className="p-8 space-y-6 border-walnut/30 dark:border-gold/20 shadow-lg text-center bg-linen/50 dark:bg-walnut/20">
+                <div className="gold-rule w-full max-w-[120px] mx-auto" />
                 <motion.div 
-                  animate={{ scale: [1, 1.05, 1] }} 
-                  transition={{ duration: 1.5, repeat: Infinity }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="flex justify-center"
                 >
-                  <Heart className="w-12 h-12 mx-auto text-blush" />
+                  <img src={dodiTypographyLogo} alt="dodi" className="h-14 dark:invert dark:opacity-80" />
                 </motion.div>
                 <div>
-                  <h2 className="text-xl font-light">Connected</h2>
-                  <p className="text-sm text-muted-foreground mt-1">Your gardens are eternally connected</p>
+                  <h2 className="text-xl font-heading font-semibold">Your garden is sealed.</h2>
+                  <p className="text-sm text-muted-foreground mt-1 font-heading">Only you two hold the key.</p>
                 </div>
+                <div className="gold-rule w-full max-w-[120px] mx-auto" />
               </Card>
             </motion.div>
           )}
