@@ -9,6 +9,7 @@ import { Lock, LogOut, Shield, Heart, Sparkles, AlertCircle, Copy, Check, Key, B
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { DeveloperDiagnostics } from '@/components/developer-diagnostics';
 import { PrivacyHealthCheck } from '@/components/privacy-health-check';
@@ -53,6 +54,13 @@ export default function SettingsPage() {
   const [peerState, setPeerState] = useState<any>(null);
   const [imageSendMode, setImageSendModeState] = useState<'aggressive' | 'balanced' | 'full'>('balanced');
   const [syncPrivateNotes, setSyncPrivateNotesState] = useState(true);
+  const [birthday, setBirthdayState] = useState('');
+
+  useEffect(() => {
+    getSetting('birthday').then((v) => {
+      if (v && typeof v === 'string') setBirthdayState(v.trim());
+    });
+  }, []);
 
   useEffect(() => {
     getSetting('imageSendMode').then((v) => {
@@ -476,6 +484,31 @@ export default function SettingsPage() {
               <ThemeToggle />
             </div>
           </Card>
+
+          {/* Profile */}
+          <div className="space-y-3">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">Profile</p>
+            <Card className="p-6 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="settings-birthday">Birthday</Label>
+                <Input
+                  id="settings-birthday"
+                  type="date"
+                  value={birthday}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setBirthdayState(v);
+                    saveSetting('birthday', v || '').then(() => {
+                      if (v) toast({ title: 'Birthday saved', description: 'Used in Our Story and special dates.' });
+                    });
+                  }}
+                  className="max-w-xs"
+                  data-testid="input-birthday"
+                />
+                <p className="text-xs text-muted-foreground">Used in Our Story and special dates. Optional.</p>
+              </div>
+            </Card>
+          </div>
 
           {/* Security */}
           <div className="space-y-3">

@@ -8,49 +8,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { 
-  Heart, Sparkles, Send, Smile, Star, Cloud, Sun, Moon, 
-  Pen, Lock, Plus, MessageSquareHeart, ScrollText, HeartHandshake
-} from 'lucide-react';
-import { 
-  getAllDailyRituals, saveDailyRitual, 
-  getAllLoveLetters, saveLoveLetter,
-  getAllPrayers, savePrayer
-} from '@/lib/storage-encrypted';
-import type { DailyRitual, LoveLetter, Prayer, SyncMessage } from '@/types';
+import { Heart, Pen, Lock, Plus, MessageSquareHeart, ScrollText, HeartHandshake } from 'lucide-react';
+import { getAllLoveLetters, saveLoveLetter, getAllPrayers, savePrayer } from '@/lib/storage-encrypted';
+import type { LoveLetter, Prayer } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
-import { format, isToday } from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import handsHeartLogo from '@assets/generated_images/dodi_couples_app_logo_with_heart_and_hands.png';
-
-const quickMoods = [
-  { id: 'love', icon: Heart, label: 'Loved' },
-  { id: 'happy', icon: Sun, label: 'Happy' },
-  { id: 'grateful', icon: Star, label: 'Grateful' },
-  { id: 'peaceful', icon: Moon, label: 'Peaceful' },
-  { id: 'thinking', icon: Cloud, label: 'Thinking' },
-  { id: 'missing', icon: Sparkles, label: 'Missing you' },
-];
-
 export default function HeartSpacePage() {
   const { userId, partnerId, isPremium } = useDodi();
   const { toast } = useToast();
   const { send: sendP2P, state: peerState } = usePeerConnection();
-  
-  type TabValue = 'whispers' | 'notes' | 'prayers';
-  const [activeTab, setActiveTab] = useState<TabValue>('whispers');
+
+  type TabValue = 'notes' | 'prayers';
+  const [activeTab, setActiveTab] = useState<TabValue>('notes');
   const handleTabChange = (value: string) => {
-    const next: TabValue = value === 'notes' || value === 'prayers' ? value : 'whispers';
+    const next: TabValue = value === 'prayers' ? 'prayers' : 'notes';
     setActiveTab(next);
   };
-  
-  // Whispers state
-  const [whispers, setWhispers] = useState<DailyRitual[]>([]);
-  const [selectedMood, setSelectedMood] = useState<string | null>(null);
-  const [gratitudeNote, setGratitudeNote] = useState('');
-  const [todayWhisperSent, setTodayWhisperSent] = useState(false);
-  
+
   // Love Notes state
   const [notes, setNotes] = useState<LoveLetter[]>([]);
   const [noteTitle, setNoteTitle] = useState('');
@@ -73,29 +49,23 @@ export default function HeartSpacePage() {
   useEffect(() => {
     const handleSync = async (event: CustomEvent) => {
       const message = event.detail as any;
-      if (message.type === 'daily_ritual') {
-        setWhispers(prev => prev.some(w => w.id === message.data.id) ? prev : [message.data, ...prev]);
-      } else if (message.type === 'love_letter') {
+      if (message.type === 'love_letter') {
         setNotes(prev => prev.some(n => n.id === message.data.id) ? prev : [message.data, ...prev]);
       } else if (message.type === 'prayer') {
         handleIncomingPrayer(message.data);
       }
     };
-    
+
     window.addEventListener('p2p-message', handleSync as unknown as EventListener);
     return () => window.removeEventListener('p2p-message', handleSync as unknown as EventListener);
   }, [peerState?.connected, partnerId, userId]);
 
   const loadAllData = async () => {
     try {
-      const [allRituals, allLetters, allPrayers] = await Promise.all([
-        getAllDailyRituals(),
+      const [allLetters, allPrayers] = await Promise.all([
         getAllLoveLetters(),
-        getAllPrayers()
+        getAllPrayers(),
       ]);
-
-      setWhispers(allRituals.sort((a, b) => new Date(b.ritualDate).getTime() - new Date(a.ritualDate).getTime()));
-      setTodayWhisperSent(allRituals.some(w => w.userId === userId && isToday(new Date(w.ritualDate))));
 
       setNotes(allLetters.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 
@@ -111,28 +81,6 @@ export default function HeartSpacePage() {
       });
       setNotes([]);
     }
-  };
-
-  const handleSendWhisper = async () => {
-    if (!selectedMood || !userId || !partnerId) return;
-    const whisper: DailyRitual = {
-      id: nanoid(),
-      userId,
-      partnerId,
-      emotion: selectedMood,
-      lovedMoment: '',
-      gratitude: gratitudeNote.trim(),
-      tomorrowNeed: '',
-      ritualDate: new Date(),
-      createdAt: new Date(),
-    };
-    await saveDailyRitual(whisper);
-    setWhispers(prev => [whisper, ...prev]);
-    setTodayWhisperSent(true);
-    sendP2P({ type: 'daily_ritual', data: whisper, timestamp: Date.now() });
-    setSelectedMood(null);
-    setGratitudeNote('');
-    toast({ title: "Whisper sent", description: "Your beloved will see your mood" });
   };
 
   const handleSaveNote = async () => {
@@ -156,16 +104,15 @@ export default function HeartSpacePage() {
 
   const handleIncomingPrayer = async (incoming: Prayer) => {
     await savePrayer(incoming);
-    setPrayers(prev => {
-      if (prev.some(p => p.id === incoming.id)) return prev;
-      return [...prev, incoming];
-    });
-    // Simplified check for both submitted
     const today = format(new Date(), 'yyyy-MM-dd');
-    const todayPrayers = [...prayers, incoming].filter(p => format(new Date(p.prayerDate), 'yyyy-MM-dd') === today);
-    if (todayPrayers.length === 2) {
-      toast({ title: "Sacred moment 🙏", description: "Your beloved's gratitude has been revealed." });
-    }
+    setPrayers(prev => {
+      const next = prev.some(p => p.id === incoming.id) ? prev : [...prev, incoming];
+      const todayPrayers = next.filter(p => format(new Date(p.prayerDate), 'yyyy-MM-dd') === today);
+      if (todayPrayers.length === 2) {
+        setTimeout(() => toast({ title: "Sacred moment 🙏", description: "Your beloved's gratitude and prayer have been revealed." }), 0);
+      }
+      return next;
+    });
   };
 
   const handlePrayerSubmit = async () => {
@@ -204,12 +151,7 @@ export default function HeartSpacePage() {
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">
         <div className="px-6 py-2 border-b border-black/8 dark:border-white/6 bg-background/60 backdrop-blur-sm">
-          <TabsList className="grid grid-cols-3 w-full max-w-md mx-auto h-12 bg-muted/50 p-1">
-            <TabsTrigger value="whispers" className="relative data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-lg flex flex-col gap-0.5 justify-center h-full data-[state=active]:text-foreground">
-              <Sparkles className="w-4 h-4" />
-              <span className="text-xs">Whispers</span>
-              {activeTab === 'whispers' && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-gold/70" />}
-            </TabsTrigger>
+          <TabsList className="grid grid-cols-2 w-full max-w-md mx-auto h-12 bg-muted/50 p-1">
             <TabsTrigger value="notes" className="relative data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-lg flex flex-col gap-0.5 justify-center h-full data-[state=active]:text-foreground">
               <ScrollText className="w-4 h-4" />
               <span className="text-xs">Notes</span>
@@ -217,7 +159,7 @@ export default function HeartSpacePage() {
             </TabsTrigger>
             <TabsTrigger value="prayers" className="relative data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-lg flex flex-col gap-0.5 justify-center h-full data-[state=active]:text-foreground">
               <HeartHandshake className="w-4 h-4" />
-              <span className="text-xs">Prayers</span>
+              <span className="text-xs">Prayers and Gratitude</span>
               {activeTab === 'prayers' && <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-gold/70" />}
             </TabsTrigger>
           </TabsList>
@@ -225,79 +167,6 @@ export default function HeartSpacePage() {
 
         <ScrollArea className="flex-1 min-h-0 p-6">
           <div className="max-w-2xl mx-auto">
-            <TabsContent value="whispers" className="mt-0 space-y-6 animate-in fade-in slide-in-from-bottom-2">
-              {!todayWhisperSent ? (
-                <Card className="p-6 space-y-5 border-primary/20">
-                  <div className="text-center">
-                    <img src={handsHeartLogo} alt="" className="h-12 w-12 mx-auto mb-3 object-contain opacity-70 dark:opacity-40" />
-                    <h3 className="font-medium mb-1">How are you feeling?</h3>
-                    <p className="text-xs text-muted-foreground">Tap to send a quick mood</p>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {quickMoods.map((mood) => {
-                      const Icon = mood.icon;
-                      const isSelected = selectedMood === mood.id;
-                      return (
-                        <button
-                          key={mood.id}
-                          onClick={() => setSelectedMood(mood.id)}
-                          className={cn(
-                            'flex flex-col items-center gap-1.5 p-3 rounded-lg border transition-all hover-elevate relative',
-                            isSelected ? 'border-copper/50 text-foreground' : 'border-border text-muted-foreground'
-                          )}
-                        >
-                          <Icon className="w-6 h-6" />
-                          <span className="text-xs text-center">{mood.label}</span>
-                          {isSelected && <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-copper" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <Input
-                    value={gratitudeNote}
-                    onChange={(e) => setGratitudeNote(e.target.value)}
-                    placeholder="One thing I'm grateful for..."
-                    maxLength={100}
-                  />
-                  <Button onClick={handleSendWhisper} disabled={!selectedMood} className="w-full">
-                    <Send className="w-4 h-4 mr-2" />
-                    Send Whisper
-                  </Button>
-                </Card>
-              ) : (
-                <Card className="p-6 bg-gradient-to-br from-primary/10 to-accent/10 border-primary/30 flex items-center gap-3">
-                  <Sparkles className="w-6 h-6 text-primary" />
-                  <div>
-                    <h3 className="font-medium">Today's whisper sent</h3>
-                    <p className="text-xs text-muted-foreground">Come back tomorrow to share your mood again</p>
-                  </div>
-                </Card>
-              )}
-              <div className="space-y-3">
-                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Recent Whispers</h3>
-                {whispers.map((w) => {
-                  const mood = quickMoods.find(m => m.id === w.emotion);
-                  const Icon = mood?.icon || Smile;
-                  const isFromPartner = w.userId === partnerId;
-                  return (
-                    <Card key={w.id} className={cn('p-4 flex items-center gap-3', isFromPartner && 'bg-accent/5 border-accent/20')}>
-                      <div className={cn('w-10 h-10 rounded-full flex items-center justify-center', isFromPartner ? 'bg-accent/20 text-accent' : 'bg-primary/20 text-primary')}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium">{isFromPartner ? 'Your beloved' : 'You'}</span>
-                          <span className="text-[10px] text-muted-foreground">{format(new Date(w.ritualDate), 'MMM d')}</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{mood?.label || w.emotion}</p>
-                        {w.gratitude && <p className="text-sm mt-1 text-foreground/80">"{w.gratitude}"</p>}
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </TabsContent>
-
             <TabsContent value="notes" className="mt-0 space-y-6 animate-in fade-in slide-in-from-bottom-2">
               <div className="flex justify-between items-center">
                 <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Love Letter Vault</h3>
@@ -352,6 +221,7 @@ export default function HeartSpacePage() {
                           <div key={p.id} className="p-3 rounded-lg bg-white/50 dark:bg-card/50 border-l-4 border-l-stone dark:border-l-stone/80 space-y-1">
                             <span className="text-[10px] font-bold uppercase tracking-tighter text-stone dark:text-muted-foreground">{p.userId === userId ? 'You' : 'Beloved'}</span>
                             <p className="text-sm pl-1">{p.gratitudeEntry}</p>
+                            {p.prayerEntry && <p className="text-sm pl-1 italic text-muted-foreground mt-1">— {p.prayerEntry}</p>}
                           </div>
                         ))}
                       </div>
@@ -373,6 +243,7 @@ export default function HeartSpacePage() {
                   <Card key={p.id} className="p-4 bg-sage/5 border-sage/10 border-l-4 border-l-stone dark:border-l-stone/80">
                     <p className="text-[10px] text-stone dark:text-muted-foreground mb-2">{format(new Date(p.prayerDate), 'MMM d, yyyy')}</p>
                     <p className="text-sm italic pl-1">{p.gratitudeEntry}</p>
+                    {p.prayerEntry && <p className="text-sm pl-1 italic text-muted-foreground mt-1">— {p.prayerEntry}</p>}
                   </Card>
                 ))}
               </div>

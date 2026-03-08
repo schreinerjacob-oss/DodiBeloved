@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { getMediaBlob } from '@/lib/storage';
 import { Button } from '@/components/ui/button';
 
@@ -96,11 +97,29 @@ export function ImageFullscreenViewer({ mediaId, kind, alt = 'Image', onClose, m
               autoPlay
             />
           ) : (
-            <img
-              src={mediaSrc}
-              alt={alt}
-              className="max-w-full max-h-[90vh] object-contain rounded-md"
-            />
+            <TransformWrapper
+              initialScale={1}
+              minScale={0.5}
+              maxScale={5}
+              doubleClick={{ mode: 'toggle', step: 0.7 }}
+              wheel={{ step: 0.1 }}
+              pinch={{ step: 5 }}
+              panning={{ velocityDisabled: true }}
+              style={{ width: '100%', height: '90vh', touchAction: 'none' }}
+            >
+              <TransformComponent
+                wrapperStyle={{ width: '100%', height: '100%' }}
+                contentStyle={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <img
+                  src={mediaSrc}
+                  alt={alt}
+                  className="max-w-full max-h-[90vh] object-contain rounded-md"
+                  draggable={false}
+                  style={{ touchAction: 'none' }}
+                />
+              </TransformComponent>
+            </TransformWrapper>
           )
         ) : (
           <div className="w-64 h-64 bg-muted animate-pulse rounded-md flex items-center justify-center text-muted-foreground">

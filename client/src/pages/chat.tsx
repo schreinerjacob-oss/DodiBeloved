@@ -8,7 +8,7 @@ import { Toggle } from '@/components/ui/toggle';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Heart, Send, Image, Mic, MicOff, Eye, EyeOff, ChevronUp, Check, CheckCheck, Loader2, Smile, ThumbsUp, Star, Clock, CloudOff, Filter, Video, VideoOff, Circle, Square, Plus, FileText, MessageCircle } from 'lucide-react';
-import { getMessages, saveMessage, deleteMessage, savePartnerDetail, getSetting, saveSetting } from '@/lib/storage-encrypted';
+import { getMessages, saveMessage, deleteMessage, savePartnerDetail, getSetting, saveSetting, saveMemory } from '@/lib/storage-encrypted';
 import { usePeerConnection } from '@/hooks/use-peer-connection';
 import { useOfflineQueueSize } from '@/hooks/use-offline-queue';
 import { MessageMediaImage } from '@/components/message-media-image';
@@ -18,12 +18,12 @@ import { MessageMediaVideo } from '@/components/message-media-video';
 import { MemoryResurfacing } from '@/components/resurfacing/memory-resurfacing';
 import { MOODS, getMoodLabel, type MoodId } from '@/lib/moods';
 import { notifyNewMessage, notifyMessageQueued } from '@/lib/notifications';
-import type { Message, SyncMessage, PartnerDetail } from '@/types';
+import type { Message, Memory, SyncMessage, PartnerDetail } from '@/types';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { sendImageFromFile } from '@/lib/send-image';
-import { saveMediaBlob } from '@/lib/storage';
+import { saveMediaBlob, getMediaBlob } from '@/lib/storage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -64,6 +64,23 @@ export default function ChatPage() {
     sendP2P({ type: 'mood-update', data: { moodId: currentMood }, timestamp: Date.now() });
   }, [peerState.connected, currentMood]);
 
+  // Keyboard / visualViewport: keep input visible when virtual keyboard opens (e.g. mobile)
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      const offset = Math.max(0, window.innerHeight - vv.height);
+      setKeyboardBottom(offset);
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
+
   useEffect(() => {
     const handleReconciliation = (event: any) => {
       const count = event.detail.count;
@@ -89,6 +106,7 @@ export default function ChatPage() {
   const [saveDetailContent, setSaveDetailContent] = useState('');
   const [messageFilter, setMessageFilter] = useState<'all' | 'media' | 'voice' | 'video'>('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('oldest');
+  const [keyboardBottom, setKeyboardBottom] = useState(0);
 
   const displayedMessages = useMemo(() => {
     let list = messages;
@@ -118,6 +136,9 @@ export default function ChatPage() {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const typingThrottleRef = useRef<NodeJS.Timeout | null>(null);
   const doubleTapRef = useRef<{ messageId: string; time: number } | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastLongPressMessageIdRef = useRef<string | null>(null);
+  const lastLongPressTimeRef = useRef<number>(0);
   const disappearingTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const readReceiptsSentRef = useRef<Set<string>>(new Set());
   const [fullscreenImageMessageId, setFullscreenImageMessageId] = useState<string | null>(null);
@@ -208,7 +229,10 @@ export default function ChatPage() {
     let cancelled = false;
     (async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
+          audio: true,
+        });
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
@@ -593,6 +617,12 @@ export default function ChatPage() {
   }, [userId, sendP2P]);
 
   const handleMessageTap = useCallback((messageId: string, isImage?: boolean) => {
+    // Only block tap for a short window after long-press to avoid accidental double action; allow deliberate tap (e.g. open image) shortly after
+    if (lastLongPressMessageIdRef.current === messageId && Date.now() - lastLongPressTimeRef.current < 80) {
+      lastLongPressMessageIdRef.current = null;
+      return;
+    }
+    lastLongPressMessageIdRef.current = null;
     const now = Date.now();
     if (doubleTapRef.current?.messageId === messageId && now - doubleTapRef.current.time < 300) {
       handleReaction(messageId, 'heart');
@@ -612,6 +642,40 @@ export default function ChatPage() {
     setSaveDetailContent(content);
     setShowReactionPicker(null);
   }, []);
+
+  const handleAddToMemories = useCallback(async (message: Message) => {
+    if (message.type !== 'image' && message.type !== 'video') return;
+    if (!userId || !partnerId) return;
+    setShowReactionPicker(null);
+    try {
+      const blob = await getMediaBlob(message.id, 'message');
+      if (!blob) {
+        toast({ title: 'Could not add to Our Story', description: 'Media not found.', variant: 'destructive' });
+        return;
+      }
+      const id = nanoid();
+      const now = new Date();
+      const memory: Memory = {
+        id,
+        userId,
+        partnerId,
+        imageData: '',
+        mediaUrl: null,
+        caption: null,
+        mediaType: message.type === 'video' ? 'video' : 'photo',
+        timestamp: now,
+        createdAt: now,
+      };
+      await saveMediaBlob(id, blob, 'memory', 'full');
+      await saveMemory(memory);
+      sendP2P({ type: 'memory', data: { ...memory, mediaUrl: null, imageData: '' }, timestamp: Date.now() });
+      await sendMedia({ mediaId: id, kind: 'memory', mime: blob.type || (message.type === 'video' ? 'video/webm' : 'image/jpeg') });
+      toast({ title: 'Added to Our Story' });
+    } catch (e) {
+      console.error('Add to memories error:', e);
+      toast({ title: 'Could not add to Our Story', variant: 'destructive' });
+    }
+  }, [userId, partnerId, sendP2P, sendMedia, toast, getMediaBlob, saveMediaBlob, saveMemory]);
 
   const handleSaveDetail = useCallback(async () => {
     if (!saveDetailMessage || !saveDetailContent.trim() || !userId || !partnerId) return;
@@ -911,7 +975,9 @@ export default function ChatPage() {
   const handleVideoCameraChange = useCallback(async (deviceId: string) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: deviceId ? { deviceId: { exact: deviceId } } : true,
+        video: deviceId
+          ? { deviceId: { exact: deviceId }, facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } }
+          : { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
         audio: true,
       });
       videoStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -983,7 +1049,9 @@ export default function ChatPage() {
     videoStreamRef.current = null;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: selectedVideoDeviceId ? { deviceId: { exact: selectedVideoDeviceId } } : true,
+        video: selectedVideoDeviceId
+          ? { deviceId: { exact: selectedVideoDeviceId }, facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } }
+          : { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
         audio: true,
       });
       videoStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -1326,6 +1394,28 @@ export default function ChatPage() {
                       e.preventDefault();
                       setShowReactionPicker(showReactionPicker === message.id ? null : message.id);
                     }}
+                    onTouchStart={() => {
+                      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                      longPressTimerRef.current = setTimeout(() => {
+                        longPressTimerRef.current = null;
+                        setShowReactionPicker((prev) => (prev === message.id ? null : message.id));
+                        lastLongPressMessageIdRef.current = message.id;
+                        lastLongPressTimeRef.current = Date.now();
+                        setTimeout(() => { lastLongPressMessageIdRef.current = null; }, 200);
+                      }, 450);
+                    }}
+                    onTouchEnd={() => {
+                      if (longPressTimerRef.current) {
+                        clearTimeout(longPressTimerRef.current);
+                        longPressTimerRef.current = null;
+                      }
+                    }}
+                    onTouchCancel={() => {
+                      if (longPressTimerRef.current) {
+                        clearTimeout(longPressTimerRef.current);
+                        longPressTimerRef.current = null;
+                      }
+                    }}
                     className={cn(
                       'cursor-pointer transition-transform active:scale-[0.98]',
                       isVideo ? 'max-w-[min(90vw,480px)]' : 'max-w-[70%]',
@@ -1430,15 +1520,15 @@ export default function ChatPage() {
                       isSent ? 'right-2' : 'left-2'
                     )}>
                       {(myReaction || partnerReaction) && (
-                        <span className="text-sm bg-card border rounded-full px-1.5 py-0.5 shadow-sm flex items-center gap-0.5">
-                          {myReaction === 'heart' && <Heart className="w-3 h-3 text-accent fill-current" />}
-                          {myReaction === 'like' && <ThumbsUp className="w-3 h-3 text-blue-400" />}
-                          {myReaction === 'star' && <Star className="w-3 h-3 text-yellow-400 fill-current" />}
+                        <span className="text-sm bg-card border rounded-full px-1.5 py-0.5 shadow-sm flex items-center gap-0.5 min-w-0">
+                          {myReaction === 'heart' && <Heart className="w-3 h-3 text-accent fill-current shrink-0" />}
+                          {myReaction === 'like' && <ThumbsUp className="w-3 h-3 text-blue-400 shrink-0" />}
+                          {myReaction === 'star' && <Star className="w-3 h-3 text-yellow-400 fill-current shrink-0" />}
                           {partnerReaction && partnerReaction !== myReaction && (
                             <>
-                              {partnerReaction === 'heart' && <Heart className="w-3 h-3 text-accent fill-current" />}
-                              {partnerReaction === 'like' && <ThumbsUp className="w-3 h-3 text-blue-400" />}
-                              {partnerReaction === 'star' && <Star className="w-3 h-3 text-yellow-400 fill-current" />}
+                              {partnerReaction === 'heart' && <Heart className="w-3 h-3 text-accent fill-current shrink-0" />}
+                              {partnerReaction === 'like' && <ThumbsUp className="w-3 h-3 text-blue-400 shrink-0" />}
+                              {partnerReaction === 'star' && <Star className="w-3 h-3 text-yellow-400 fill-current shrink-0" />}
                             </>
                           )}
                         </span>
@@ -1476,6 +1566,19 @@ export default function ChatPage() {
                           );
                         })}
                       </div>
+                      {(isImage || isVideo) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddToMemories(message);
+                          }}
+                          className="flex items-center gap-1.5 bg-card border rounded-full px-3 py-1.5 shadow-lg text-xs hover:bg-accent/10 whitespace-nowrap"
+                          data-testid={`add-to-memories-${message.id}`}
+                        >
+                          <Image className="w-3.5 h-3.5" />
+                          Add to Our Story
+                        </button>
+                      )}
                       {!isSent && (
                         <button
                           onClick={(e) => {
@@ -1508,7 +1611,15 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="flex-shrink-0 border-t border-black/10 dark:border-white/8 bg-background/80 backdrop-blur-sm p-4">
+      <div
+        className={cn(
+          'flex-shrink-0 border-t border-black/10 dark:border-white/8 bg-background/80 backdrop-blur-sm p-4',
+          keyboardBottom > 0
+            ? 'pb-[calc(1rem+var(--keyboard-bottom)+env(safe-area-inset-bottom,0px))]'
+            : 'pb-[max(1rem,env(safe-area-inset-bottom))]'
+        )}
+        style={keyboardBottom > 0 ? { ['--keyboard-bottom' as string]: `${keyboardBottom}px` } : undefined}
+      >
         <div className="max-w-3xl mx-auto flex items-center gap-2">
           <input
             ref={fileInputRef}
@@ -1589,6 +1700,9 @@ export default function ChatPage() {
             role="textbox"
             aria-label="Message"
             data-placeholder="Write to your beloved..."
+            onFocus={() => {
+              messageInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }}
             onInput={(e) => {
               const text = (e.target as HTMLDivElement).innerText || '';
               setNewMessage(text);
