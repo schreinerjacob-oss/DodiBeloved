@@ -81,20 +81,26 @@ Storage and encryption are **not** abstracted behind adapters in this phase. For
 
 ## Reviewer demo
 
-Apple/Google reviewers must be able to complete onboarding without a second device. Options implemented and documented:
+Apple/Google reviewers must be able to complete onboarding without a second device. **Demo mode is not advertised in the app**; it is documented here for App Review notes only.
 
-1. **Demo mode:** Set `VITE_DEMO_MODE=true` (or `DEMO_MODE`) so the app skips real pairing and shows a read-only demo state.
-2. **Test pairing code:** A specific pairing code can be documented here and shared in App Review notes so reviewers can complete pairing (e.g. with a test second device or internal tool).
+### Option A: In-app pairing code (no special build)
 
-Document the chosen option in the App Review notes. Apple may still request a **video walkthrough** of the app.
+1. **Flow:** After profile setup, on the pairing screen tap **Join with Code**. Enter the code **DEMO-MODE** (or **DEMOMODE**) and tap Join.
+2. **Behavior:** The app enters demo mode: main UI unlocks (Chat, Calls, Heart Space, Our Story, Settings) with a demo user and “connected” state. A banner appears: “Demo mode — for app review. No real pairing or data.” No second device or real P2P connection is used.
+3. **Review notes:** In App Store Connect / Play Console review notes, state: *“Reviewers can explore the app without a second device by entering the pairing code **DEMO-MODE** on the pairing screen (Join with Code). This is for review only and is not shown in the app UI.”*
 
-### How to enable demo mode
+### Option B: Build with demo mode env
 
-1. **Build with demo mode:** Set the env var when building, e.g.  
+1. **Build:** Set the env var when building, e.g.  
    `VITE_DEMO_MODE=true npm run build`  
    or in `.env`: `VITE_DEMO_MODE=true`
-2. **Behavior:** On first open (no existing pairing), the app shows the main UI (Chat, Memories, etc.) with a demo user and “connected” state, and a banner: “Demo mode — for app review. No real pairing or data.”
-3. **Review notes:** In App Store Connect / Play Console review notes, state that reviewers can use a build with `VITE_DEMO_MODE=true` to explore the app without a second device, or provide a test pairing code if you prefer. Apple may still request a **video walkthrough** of the full pairing flow.
+2. **Behavior:** On first open (no existing pairing), the app automatically shows the main UI in demo state with the same banner. No pairing step needed.
+3. **Review notes:** State that reviewers received a build with demo mode enabled so they can explore without a second device.
+
+### General
+
+- Document the chosen option (A or B) in the App Review notes. Apple may still request a **video walkthrough** of the app or pairing flow.
+- Demo mode is for review only; it is not advertised or surfaced to end users in the app.
 
 ---
 

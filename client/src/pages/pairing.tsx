@@ -19,8 +19,11 @@ import handsHeartLogo from '@assets/generated_images/dodi_couples_app_logo_with_
 
 type Mode = 'choose' | 'pairing' | 'success-animation' | 'restore-mode' | 'restore-entry';
 
+/** Normalized code that unlocks demo mode from "Join with Code" (user can type DEMO-MODE or DEMOMODE). */
+const DEMO_MODE_CODE = 'DEMOMODE';
+
 export default function PairingPage() {
-  const { completePairingWithMasterKey, completePairingAsCreator, onPeerConnected, pairingStatus, userId } = useDodi();
+  const { completePairingWithMasterKey, completePairingAsCreator, onPeerConnected, pairingStatus, userId, enterDemoMode } = useDodi();
   const { toast } = useToast();
   const [location] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
@@ -403,6 +406,22 @@ export default function PairingPage() {
   };
 
   const handleJoinRoom = async () => {
+    const normalCode = normalizeRoomCode(inputCode);
+    if (normalCode === DEMO_MODE_CODE) {
+      setLoading(true);
+      try {
+        await enterDemoMode();
+        toast({ title: 'Demo mode', description: 'Explore the app without pairing. No data is shared.' });
+        setShowSuccess(true);
+        setMode('success-animation');
+      } catch (e) {
+        console.error('Enter demo mode failed:', e);
+        toast({ title: 'Could not start demo', description: 'Try again.', variant: 'destructive' });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     if (!isValidRoomCode(inputCode)) {
       toast({ title: 'Invalid code', description: 'Enter the 8-character code from your partner (e.g. A7K9-P2M4).', variant: 'destructive' });
       return;
@@ -410,8 +429,6 @@ export default function PairingPage() {
     
     setLoading(true);
     setIsCreator(false);
-    const normalCode = normalizeRoomCode(inputCode);
-    // Keep roomCode in display format (XXXX-XXXX) for consistency with creator; use normalCode only for connection.
     setRoomCode(formatCodeWithDash(normalCode));
     setMode('pairing');
     retryCountRef.current = 0;

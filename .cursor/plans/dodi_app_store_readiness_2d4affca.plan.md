@@ -26,6 +26,29 @@ isProject: false
 
 ---
 
+## Design work completed (so far)
+
+- **Theme (Parchment Desk / Candlelight Study)** — [client/src/index.css](client/src/index.css)
+  - Light: "Parchment Desk, Daylight" — background = warm parchment desk (`--background: 34 32% 82%`), cards = white paper (`--card`). Primary accent changed from sage to gold-amber (`--primary: 43 68% 42%`).
+  - Dark: "Candlelight Study, Evening" — deep walnut background, warm cream text; primary = candlelight gold.
+  - New utility: `.shadcn-card` for paper-on-desk shadow (light and dark).
+- **App shell** — [client/src/App.tsx](client/src/App.tsx)
+  - Main container: `wood-grain` on root div; presence glow simplified to gold/copper blurs (removed vine orbs); nav bar: `border-black/10 dark:border-white/8`, `bg-background/92 backdrop-blur-md` (no wood-grain on nav).
+- **Page headers (all main tabs)** — Chat, Calls, Heart Space, Memories, Settings
+  - Page wrappers: `bg-transparent` so desk/background shows through.
+  - Headers: `border-black/10 dark:border-white/8`, `bg-background/80 backdrop-blur-sm`, title `text-xl font-heading font-semibold`.
+- **Chat** — [client/src/pages/chat.tsx](client/src/pages/chat.tsx)
+  - Empty state: dodi logo watermark, italic "Write to your beloved..."; filter-empty copy shortened (e.g. "No photos yet").
+  - Input area border aligned with new header style.
+- **Heart Space** — [client/src/pages/heart-space.tsx](client/src/pages/heart-space.tsx)
+  - Tab bar: `border-black/8 dark:border-white/6`, `bg-background/60 backdrop-blur-sm`; controlled tab state with `handleTabChange` so indicator stays in sync.
+- **Reviewer demo (design-related UX)** — not in-app advertised; documented in [docs/app-store-readiness.md](docs/app-store-readiness.md)
+  - In-app code **DEMO-MODE** (Join with Code) enters demo; `enterDemoMode()` uses `saveSetting` and clears PIN state so demo goes straight to main UI; logout clears `isDemoMode` so no auto re-entry.
+- **Resilience**
+  - Root [client/src/main.tsx](client/src/main.tsx): Error boundary with `normalizeError()` so non-Error throws still show a message.
+
+---
+
 ## Architecture: contracts for WebView and Flutter
 
 ```mermaid

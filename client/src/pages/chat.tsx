@@ -1143,9 +1143,9 @@ export default function ChatPage() {
   const isVideoRecordingActive = videoDialogOpen && videoStage === 'recording';
 
   return (
-    <div className="flex-1 min-h-0 min-w-0 flex flex-col bg-background">
+    <div className="flex-1 min-h-0 min-w-0 flex flex-col bg-transparent">
       <MemoryResurfacing />
-      <div className="flex-shrink-0 h-14 flex items-center justify-between px-4 border-b border-gold/20 bg-card/60 wood-grain">
+      <div className="flex-shrink-0 h-14 flex items-center justify-between px-4 border-b border-black/10 dark:border-white/8 bg-background/80 backdrop-blur-sm">
         <div className="flex items-center">
           <img src={dodiTypographyLogo} alt="dodi" className="h-7 mix-blend-multiply dark:mix-blend-normal dark:invert dark:opacity-70" />
         </div>
@@ -1234,21 +1234,17 @@ export default function ChatPage() {
             />
           )}
           {displayedMessages.length === 0 && (
-            <div className="text-center py-12 space-y-3">
-              <div className="w-16 h-16 mx-auto rounded-full bg-sage/20 flex items-center justify-center">
-                <Heart className="w-8 h-8 text-sage" />
-              </div>
-              <p className="text-muted-foreground">
-                {messageFilter === 'all'
-                  ? 'Start your first conversation'
-                  : messageFilter === 'media'
-                    ? 'No photos in loaded messages'
-                    : messageFilter === 'voice'
-                      ? 'No voice messages in loaded messages'
-                      : messageFilter === 'video'
-                        ? 'No video messages in loaded messages'
-                        : 'No messages'}
-              </p>
+            <div className="flex flex-col items-center justify-center flex-1 min-h-[50vh] select-none">
+              {messageFilter === 'all' ? (
+                <>
+                  <img src={dodiTypographyLogo} alt="dodi" className="h-20 opacity-[0.12] dark:opacity-[0.08] mix-blend-multiply dark:mix-blend-normal mb-6 pointer-events-none" />
+                  <p className="font-heading italic text-muted-foreground/60 text-sm">Write to your beloved...</p>
+                </>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  {messageFilter === 'media' ? 'No photos yet' : messageFilter === 'voice' ? 'No voice messages yet' : 'No video messages yet'}
+                </p>
+              )}
             </div>
           )}
 
@@ -1470,7 +1466,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="flex-shrink-0 border-t border-gold/20 bg-card/60 p-4">
+      <div className="flex-shrink-0 border-t border-black/10 dark:border-white/8 bg-background/80 backdrop-blur-sm p-4">
         <div className="max-w-3xl mx-auto flex items-center gap-2">
           <input
             ref={fileInputRef}

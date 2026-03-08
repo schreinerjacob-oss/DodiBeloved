@@ -30,6 +30,8 @@ interface DodiContextType {
   completePairingWithMasterKey: (masterKey: string, salt: string, creatorId: string) => Promise<void>;
   completePairingAsCreator: (masterKey: string, salt: string, joinerId: string) => Promise<void>;
   setPartnerIdForCreator: (newPartnerId: string) => Promise<void>;
+  /** Enter demo mode from pairing page (code DEMO-MODE). Unlocks app without real pairing. */
+  enterDemoMode: () => Promise<void>;
   onPeerConnected: () => void;
   setPIN: (pin: string) => Promise<void>;
   skipPINSetup: () => void;
@@ -96,7 +98,8 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           storedInactivityMinutes,
           storedIsPremium,
           storedAllowWakeUp,
-          storedSalt
+          storedSalt,
+          storedIsDemoMode
         ] = await Promise.all([
           getSetting('userId'),
           getSetting('displayName'),
@@ -107,7 +110,8 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           getSetting('inactivityMinutes'),
           getSetting('isPremium'),
           getSetting('allowWakeUp'),
-          getSetting('salt')
+          getSetting('salt'),
+          getSetting('isDemoMode')
         ]);
 
         if (storedUserId) setUserId(storedUserId);
@@ -142,8 +146,13 @@ export function DodiProvider({ children }: { children: ReactNode }) {
           setIsPremium(true);
         }
 
-        const demoMode = import.meta.env.VITE_DEMO_MODE === 'true' || import.meta.env.VITE_DEMO_MODE === true;
-        if (demoMode && (!storedUserId || storedPairingStatus !== 'connected')) {
+        if (storedIsDemoMode === 'true') {
+          setIsDemoMode(true);
+        }
+
+        const demoModeEnv = import.meta.env.VITE_DEMO_MODE === 'true' || import.meta.env.VITE_DEMO_MODE === true;
+        const demoModeStored = storedIsDemoMode === 'true';
+        if ((demoModeEnv || demoModeStored) && (!storedUserId || storedPairingStatus !== 'connected')) {
           setUserId('demo-user');
           setDisplayName('Demo');
           setPartnerId('demo-partner');
@@ -245,6 +254,31 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setPartnerId(newPartnerId);
   };
 
+  const enterDemoMode = async () => {
+    const demoUserId = userId || 'demo-user';
+    const demoPassphrase = 'demo-passphrase-not-for-real-use';
+    const demoSalt = arrayBufferToBase64(generateSalt());
+    await Promise.all([
+      saveSetting('isDemoMode', 'true'),
+      saveSetting('userId', demoUserId),
+      saveSetting('displayName', 'Demo'),
+      saveSetting('partnerId', 'demo-partner'),
+      saveSetting('passphrase', demoPassphrase),
+      saveSetting('salt', demoSalt),
+      saveSetting('pairingStatus', 'connected'),
+      saveSetting('pinEnabled', 'false'),
+    ]);
+    setUserId(demoUserId);
+    setDisplayName('Demo');
+    setPartnerId('demo-partner');
+    setPassphrase(demoPassphrase);
+    setPairingStatus('connected');
+    setIsDemoMode(true);
+    setPinEnabled(false);
+    setIsLocked(false);
+    setShowPinSetup(false);
+  };
+
   const onPeerConnected = useCallback(async () => {
     if (pairingStatus === 'waiting' || pairingStatus === 'unpaired') {
       setPairingStatus('connected');
@@ -327,6 +361,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     clearEncryptionCache();
     setPassphrase(null);
+    await saveSetting('isDemoMode', 'false');
     const db = await initDB();
     const storeNames = Array.from(db.objectStoreNames);
     await Promise.all(storeNames.map((name) => db.clear(name)));
@@ -345,6 +380,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setDisplayName(null);
     setPartnerId(null);
     setPairingStatus('unpaired');
+    setIsDemoMode(false);
   };
 
   const setAllowWakeUp = async (enabled: boolean) => {
@@ -364,7 +400,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         isLocked, pinEnabled, showPinSetup, inactivityMinutes, allowWakeUp, isPremium,
         hasPIN: pinEnabled,
         setAllowWakeUp, setPremiumStatus, initializeProfile, initializePairing, completePairingWithMasterKey,
-        completePairingAsCreator, setPartnerIdForCreator, onPeerConnected,
+        completePairingAsCreator, setPartnerIdForCreator, enterDemoMode, onPeerConnected,
         setPIN: setPINHandler, skipPINSetup: () => setShowPinSetup(false),
         unlockWithPIN: unlockWithPINHandler, unlockWithPassphrase: unlockWithPassphraseHandler,
         lockApp: lockAppHandler, setInactivityMinutes: setInactivityMinutesHandler, logout, isLoading, isDemoMode,

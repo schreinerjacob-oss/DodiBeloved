@@ -2,47 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
-/* LIGHT MODE - Dodi warm palette */
+/* LIGHT MODE — Parchment Desk, Daylight */
+/* Background = the warm walnut desk surface. Cards = white paper on it. */
 :root {
-  --button-outline: rgba(0,0,0, .10);
-  --badge-outline: rgba(0,0,0, .05);
+  --button-outline: rgba(0,0,0, .12);
+  --badge-outline: rgba(0,0,0, .06);
   --opaque-button-border-intensity: -8;
-  --elevate-1: rgba(0,0,0, .03);
-  --elevate-2: rgba(0,0,0, .08);
-  --background: 35 45% 96%;
-  --foreground: 35 15% 20%;
-  --border: 35 20% 88%;
-  --card: 35 45% 94%;
-  --card-foreground: 35 15% 22%;
-  --card-border: 35 20% 90%;
-  --sidebar: 35 45% 92%;
-  --sidebar-foreground: 35 15% 24%;
-  --sidebar-border: 35 20% 86%;
-  --sidebar-primary: 145 25% 60%;
-  --sidebar-primary-foreground: 145 10% 98%;
-  --sidebar-accent: 35 45% 87%;
-  --sidebar-accent-foreground: 35 15% 26%;
-  --sidebar-ring: 145 25% 60%;
-  --popover: 35 45% 90%;
-  --popover-foreground: 35 15% 24%;
-  --popover-border: 35 20% 84%;
-  --primary: 145 25% 60%;
-  --primary-foreground: 145 10% 98%;
-  --secondary: 35 45% 86%;
-  --secondary-foreground: 35 15% 26%;
-  --muted: 35 20% 88%;
-  --muted-foreground: 35 15% 45%;
-  --accent: 350 45% 86%;
-  --accent-foreground: 350 20% 30%;
-  --destructive: 0 65% 55%;
+  --elevate-1: rgba(0,0,0, .04);
+  --elevate-2: rgba(0,0,0, .10);
+  --background: 34 32% 82%;       /* warm parchment — the desk surface */
+  --foreground: 34 22% 12%;       /* deep ink */
+  --border: 34 22% 72%;           /* visible desk-grain border */
+  --card: 38 28% 97%;             /* white paper */
+  --card-foreground: 34 20% 13%;  /* ink on paper */
+  --card-border: 34 18% 86%;      /* subtle paper edge */
+  --sidebar: 34 28% 79%;
+  --sidebar-foreground: 34 20% 16%;
+  --sidebar-border: 34 22% 70%;
+  --sidebar-primary: 43 68% 42%;
+  --sidebar-primary-foreground: 43 10% 97%;
+  --sidebar-accent: 34 28% 84%;
+  --sidebar-accent-foreground: 34 20% 18%;
+  --sidebar-ring: 43 68% 42%;
+  --popover: 38 26% 96%;
+  --popover-foreground: 34 20% 13%;
+  --popover-border: 34 18% 84%;
+  --primary: 43 68% 42%;          /* gold-amber — send, connect, save */
+  --primary-foreground: 43 10% 97%; /* near-white on gold */
+  --secondary: 34 26% 87%;
+  --secondary-foreground: 34 18% 24%;
+  --muted: 34 22% 86%;
+  --muted-foreground: 34 14% 44%;
+  --accent: 350 38% 76%;          /* rose blush */
+  --accent-foreground: 350 22% 26%;
+  --destructive: 0 65% 52%;
   --destructive-foreground: 0 10% 98%;
-  --input: 35 20% 82%;
-  --ring: 145 25% 60%;
-  --chart-1: 145 30% 55%;
-  --chart-2: 350 40% 70%;
-  --chart-3: 45 60% 60%;
-  --chart-4: 35 45% 70%;
-  --chart-5: 145 20% 75%;
+  --input: 38 22% 93%;            /* paper-toned input */
+  --ring: 43 68% 42%;             /* gold focus ring */
+  --chart-1: 43 55% 50%;
+  --chart-2: 350 40% 65%;
+  --chart-3: 25 48% 38%;
+  --chart-4: 34 38% 62%;
+  --chart-5: 145 20% 55%;
   --font-sans: DM Sans, sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
@@ -100,47 +101,48 @@
   --opaque-button-border-intensity: 9;
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
-  /* Warm espresso/walnut dark mode — "candlelight, walnut shelves" */
-  --background: 28 14% 8%;
-  --foreground: 35 12% 87%;
-  --border: 28 12% 18%;
-  --card: 28 13% 11%;
-  --card-foreground: 35 10% 86%;
-  --card-border: 28 12% 15%;
-  --sidebar: 28 13% 13%;
-  --sidebar-foreground: 35 10% 84%;
-  --sidebar-border: 28 12% 17%;
-  --sidebar-primary: 145 28% 62%;
-  --sidebar-primary-foreground: 145 5% 10%;
-  --sidebar-accent: 28 14% 17%;
-  --sidebar-accent-foreground: 35 10% 84%;
-  --sidebar-ring: 145 28% 62%;
-  --popover: 28 13% 14%;
-  --popover-foreground: 35 10% 84%;
-  --popover-border: 28 12% 19%;
-  --primary: 145 28% 62%;
-  --primary-foreground: 145 5% 10%;
-  --secondary: 28 14% 19%;
-  --secondary-foreground: 35 10% 82%;
-  --muted: 28 12% 18%;
-  --muted-foreground: 35 8% 58%;
-  --accent: 350 28% 24%;
-  --accent-foreground: 350 8% 86%;
-  --destructive: 0 58% 48%;
+  /* DARK MODE — Candlelight Study, Evening */
+  /* Background = deep walnut. Cards = warm-lit objects on the desk. */
+  --background: 28 30% 8%;        /* deep walnut — the desk at night */
+  --foreground: 36 28% 86%;       /* warm cream — text by candlelight */
+  --border: 28 20% 19%;
+  --card: 28 24% 13%;             /* warm dark — slightly lit surface */
+  --card-foreground: 36 24% 84%;
+  --card-border: 28 20% 17%;
+  --sidebar: 28 24% 11%;
+  --sidebar-foreground: 36 22% 82%;
+  --sidebar-border: 28 20% 16%;
+  --sidebar-primary: 43 65% 54%;
+  --sidebar-primary-foreground: 43 15% 8%;
+  --sidebar-accent: 28 22% 17%;
+  --sidebar-accent-foreground: 36 22% 82%;
+  --sidebar-ring: 43 65% 54%;
+  --popover: 28 24% 14%;
+  --popover-foreground: 36 24% 84%;
+  --popover-border: 28 20% 20%;
+  --primary: 43 65% 54%;          /* bright candlelight gold */
+  --primary-foreground: 43 15% 8%; /* deep walnut on gold */
+  --secondary: 28 22% 18%;
+  --secondary-foreground: 36 20% 80%;
+  --muted: 28 18% 16%;
+  --muted-foreground: 35 10% 54%;
+  --accent: 350 24% 22%;
+  --accent-foreground: 350 12% 84%;
+  --destructive: 0 55% 46%;
   --destructive-foreground: 0 5% 95%;
-  --input: 28 13% 26%;
-  --ring: 145 28% 62%;
+  --input: 28 20% 20%;
+  --ring: 43 65% 54%;             /* gold focus ring */
   /* Garden Architect material tokens — dark mode */
   --walnut: 25 42% 18%;
   --walnut-light: 25 38% 28%;
   --walnut-dark: 25 45% 10%;
-  --linen: 35 18% 16%;
+  --linen: 35 20% 18%;
   --stone: 35 8% 48%;
-  --chart-1: 145 35% 70%;
-  --chart-2: 350 45% 75%;
-  --chart-3: 45 55% 70%;
-  --chart-4: 35 40% 65%;
-  --chart-5: 145 25% 70%;
+  --chart-1: 43 60% 62%;
+  --chart-2: 350 40% 68%;
+  --chart-3: 25 48% 52%;
+  --chart-4: 34 36% 58%;
+  --chart-5: 145 22% 58%;
   --shadow-2xs: 0px 2px 0px 0px hsl(40 6% 95% / 0.00);
   --shadow-xs: 0px 2px 0px 0px hsl(40 6% 95% / 0.00);
   --shadow-sm: 0px 2px 0px 0px hsl(40 6% 95% / 0.00), 0px 1px 2px -1px hsl(40 6% 95% / 0.00);
@@ -382,6 +384,18 @@
 
   .animate-error-pulse {
     animation: error-pulse 0.4s ease-in-out;
+  }
+
+  /* Paper on desk — cards lift off the background with warm shadow */
+  .shadcn-card {
+    box-shadow:
+      0 1px 2px hsl(25 40% 14% / 0.10),
+      0 3px 10px hsl(25 40% 14% / 0.07);
+  }
+  .dark .shadcn-card {
+    box-shadow:
+      0 1px 3px hsl(0 0% 0% / 0.35),
+      0 4px 14px hsl(0 0% 0% / 0.22);
   }
 
   /* Gold hairline divider utility */

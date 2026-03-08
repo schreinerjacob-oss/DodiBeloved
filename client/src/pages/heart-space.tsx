@@ -38,7 +38,12 @@ export default function HeartSpacePage() {
   const { toast } = useToast();
   const { send: sendP2P, state: peerState } = usePeerConnection();
   
-  const [activeTab, setActiveTab] = useState('whispers');
+  type TabValue = 'whispers' | 'notes' | 'prayers';
+  const [activeTab, setActiveTab] = useState<TabValue>('whispers');
+  const handleTabChange = (value: string) => {
+    const next: TabValue = value === 'notes' || value === 'prayers' ? value : 'whispers';
+    setActiveTab(next);
+  };
   
   // Whispers state
   const [whispers, setWhispers] = useState<DailyRitual[]>([]);
@@ -79,7 +84,7 @@ export default function HeartSpacePage() {
     
     window.addEventListener('p2p-message', handleSync as unknown as EventListener);
     return () => window.removeEventListener('p2p-message', handleSync as unknown as EventListener);
-  }, [peerState.connected, partnerId, userId]);
+  }, [peerState?.connected, partnerId, userId]);
 
   const loadAllData = async () => {
     const [allRituals, allLetters, allPrayers] = await Promise.all([
@@ -182,13 +187,13 @@ export default function HeartSpacePage() {
   const revealedPrayers = prayers.filter(p => (p.isRevealed || bothSubmittedToday) && format(new Date(p.prayerDate), 'yyyy-MM-dd') !== todayStr);
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col bg-background">
-      <div className="flex-shrink-0 h-14 flex items-center px-4 border-b border-gold/20 bg-card/60 wood-grain">
-        <h2 className="text-base font-heading font-semibold text-foreground">Heart Space</h2>
+    <div className="flex-1 min-h-0 flex flex-col bg-transparent">
+      <div className="flex-shrink-0 h-14 flex items-center px-4 border-b border-black/10 dark:border-white/8 bg-background/80 backdrop-blur-sm">
+        <h2 className="text-xl font-heading font-semibold text-foreground">Heart Space</h2>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <div className="px-6 py-2 border-b bg-card/30">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">
+        <div className="px-6 py-2 border-b border-black/8 dark:border-white/6 bg-background/60 backdrop-blur-sm">
           <TabsList className="grid grid-cols-3 w-full max-w-md mx-auto h-12 bg-muted/50 p-1">
             <TabsTrigger value="whispers" className="relative data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-lg flex flex-col gap-0.5 justify-center h-full data-[state=active]:text-foreground">
               <Sparkles className="w-4 h-4" />

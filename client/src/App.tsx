@@ -205,26 +205,19 @@ function MainApp() {
   const showChat = !otherContentPaths.includes(location);
 
   return (
-    <div className="w-screen flex flex-col bg-background relative overflow-hidden h-screen" style={{ height: '100dvh' }}>
+    <div className="w-screen flex flex-col bg-background wood-grain relative overflow-hidden h-screen" style={{ height: '100dvh' }}>
       {isDemoMode && (
         <div className="absolute top-0 left-0 right-0 z-30 bg-amber-500/90 text-amber-950 text-center py-1.5 text-xs font-medium">
           Demo mode — for app review. No real pairing or data.
         </div>
       )}
       <GlobalSyncHandler />
-      
-      {/* Presence Glow & Vine Animation */}
+
+      {/* Presence Glow — warm gold & copper when partner is online */}
       {partnerActive && (
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
-          {/* Main Background Glows */}
-          <div className="absolute -top-32 -left-32 w-96 h-96 bg-primary/15 rounded-full blur-[120px] animate-pulse" />
-          <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-accent/15 rounded-full blur-[120px] animate-pulse delay-700" />
-          
-          {/* Vine-like presence orbs */}
-          <div className="absolute top-1/4 -left-8 w-32 h-64 bg-sage/20 rounded-full blur-[60px] animate-gentle-bounce rotate-12 opacity-40" />
-          <div className="absolute bottom-1/4 -right-8 w-32 h-64 bg-sage/20 rounded-full blur-[60px] animate-gentle-bounce delay-1000 -rotate-12 opacity-40" />
-          
-          {/* Subtle sparkles */}
+          <div className="absolute -top-32 -left-32 w-96 h-96 bg-gold/10 rounded-full blur-[120px] animate-pulse" />
+          <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-copper/10 rounded-full blur-[120px] animate-pulse delay-700" />
           <div className="absolute top-20 right-20 w-1 h-1 bg-gold rounded-full blur-[1px] animate-pulse" />
           <div className="absolute bottom-40 left-10 w-1.5 h-1.5 bg-gold/50 rounded-full blur-[2px] animate-pulse delay-500" />
         </div>
@@ -261,7 +254,7 @@ function MainApp() {
           </div>
       </div>
 
-      <nav className="border-t border-gold/20 bg-card/90 backdrop-blur-sm px-2 py-2 flex-shrink-0 relative z-20 wood-grain" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
+      <nav className="border-t border-black/10 dark:border-white/8 bg-background/92 backdrop-blur-md px-2 py-2 flex-shrink-0 relative z-20" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
         <div className="flex items-center justify-around max-w-md mx-auto">
           {navItems.map((item) => (
             <NavItem

@@ -521,9 +521,9 @@ export default function MemoriesPage() {
   };
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col bg-background">
-      <div className="flex-shrink-0 h-14 flex items-center justify-between px-4 border-b border-gold/20 bg-card/60 wood-grain">
-        <h2 className="text-base font-heading font-semibold text-foreground">Our Story</h2>
+    <div className="flex-1 min-h-0 flex flex-col bg-transparent">
+      <div className="flex-shrink-0 h-14 flex items-center justify-between px-4 border-b border-black/10 dark:border-white/8 bg-background/80 backdrop-blur-sm">
+        <h2 className="text-xl font-heading font-semibold text-foreground">Our Story</h2>
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
