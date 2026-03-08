@@ -15,7 +15,7 @@ import ResetPage from "@/pages/reset";
 import PinSetupPage from "@/pages/pin-setup";
 import PinLockPage from "@/pages/pin-lock";
 import OnboardingPage from "@/pages/onboarding";
-import { MessageSquare, Camera, Phone, Settings, Lock } from "lucide-react";
+import { MessageSquare, Camera, Phone, Settings, Lock, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConnectionStatus } from "@/components/connection-status";
 import { IncomingCallOverlay } from "@/components/incoming-call-overlay";

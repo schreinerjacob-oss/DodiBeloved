@@ -258,6 +258,21 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     const demoUserId = userId || 'demo-user';
     const demoPassphrase = 'demo-passphrase-not-for-real-use';
     const demoSalt = arrayBufferToBase64(generateSalt());
+    clearEncryptionCache();
+    const db = await initDB();
+    const storeNames = Array.from(db.objectStoreNames);
+    await Promise.all(storeNames.map((name) => db.clear(name)));
+    if (typeof localStorage !== 'undefined') {
+      const keys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith('dodi-')) keys.push(k);
+      }
+      keys.forEach((k) => localStorage.removeItem(k));
+    }
+    if (isNativePlatform()) {
+      await clearNativeSettings();
+    }
     await Promise.all([
       saveSetting('isDemoMode', 'true'),
       saveSetting('userId', demoUserId),
