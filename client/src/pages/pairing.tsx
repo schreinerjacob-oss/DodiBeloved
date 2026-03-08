@@ -101,6 +101,11 @@ export default function PairingPage() {
   }, [toast]);
 
   const handleMasterKeyReceived = async (payload: any, isCreatorRole: boolean) => {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/d169ec0f-ae1d-4b1e-989c-ee0f67fbabdc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f33f75'},body:JSON.stringify({sessionId:'f33f75',location:'pairing.tsx:handleMasterKeyReceived',message:'entry',data:{isCreatorRole},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+    } catch (_) {}
+    // #endregion
     try {
       if (payload.essentials) {
         setIsRestoringEssentials(true);

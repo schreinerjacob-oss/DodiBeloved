@@ -654,13 +654,19 @@ function setupConnection(conn: DataConnection) {
   };
 
   async function handleReconcileInit(conn: DataConnection, partnerTimestamps: any) {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/d169ec0f-ae1d-4b1e-989c-ee0f67fbabdc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f33f75'},body:JSON.stringify({sessionId:'f33f75',location:'use-peer-connection.ts:handleReconcileInit',message:'entry',data:{timestampsDefined:partnerTimestamps!=null},timestamp:Date.now(),hypothesisId:'E'})}).catch(()=>{});
+    } catch (_) {}
+    // #endregion
+    const timestamps = partnerTimestamps && typeof partnerTimestamps === 'object' ? partnerTimestamps : {};
     try {
       const { getItemsSince } = await import('@/lib/storage-encrypted');
       const stores = ['messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions'] as const;
       const batch: any[] = [];
 
       for (const storeName of stores) {
-        const remoteLastSynced = partnerTimestamps[storeName] || 0;
+        const remoteLastSynced = timestamps[storeName] || 0;
         const localNewItems = await getItemsSince(storeName, remoteLastSynced);
         localNewItems.forEach(item => {
           batch.push({ store: storeName, data: item, timestamp: item.updatedAt || item.timestamp || Date.now() });
@@ -766,6 +772,12 @@ function setupConnection(conn: DataConnection) {
   });
 
   conn.on('data', async (data: any) => {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/d169ec0f-ae1d-4b1e-989c-ee0f67fbabdc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f33f75'},body:JSON.stringify({sessionId:'f33f75',location:'use-peer-connection.ts:data-handler',message:'incoming',data:{type:data?.type,hasTimestamps:data?.timestamps!=null},timestamp:Date.now(),hypothesisId:'A,E'})}).catch(()=>{});
+    } catch (_) {}
+    // #endregion
+    try {
     console.log('📩 INCOMING:', data.type || 'unknown');
     // Any incoming data proves the connection is alive — reset pong timer so media
     // transfers don't trigger a false "no pong" health-check timeout.
@@ -807,7 +819,10 @@ function setupConnection(conn: DataConnection) {
 
     // Handle Reconciliation Protocol
     if (data.type === 'reconcile-init') {
-      await handleReconcileInit(conn, data.timestamps);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/d169ec0f-ae1d-4b1e-989c-ee0f67fbabdc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f33f75'},body:JSON.stringify({sessionId:'f33f75',location:'use-peer-connection.ts:reconcile-init',message:'before handleReconcileInit',data:{timestampsDefined:data?.timestamps!=null},timestamp:Date.now(),hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
+      await handleReconcileInit(conn, data.timestamps ?? {});
       return;
     }
     if (data.type === 'reconcile-data') {
@@ -832,14 +847,17 @@ function setupConnection(conn: DataConnection) {
     }
 
     if (data.type === 'restore-batch-init') {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/d169ec0f-ae1d-4b1e-989c-ee0f67fbabdc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f33f75'},body:JSON.stringify({sessionId:'f33f75',location:'use-peer-connection.ts:restore-batch-init',message:'before getBatchForRestore',data:{timestampsDefined:data?.timestamps!=null},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       const { getBatchForRestore } = await import('@/lib/storage-encrypted');
       const stores = ['messages', 'memories', 'calendarEvents', 'dailyRituals', 'loveLetters', 'futureLetters', 'prayers', 'reactions'] as const;
       
       const processNextBatch = async () => {
-        const batch = await getBatchForRestore(stores, data.timestamps, 50);
+        const batch = await getBatchForRestore(stores, data.timestamps ?? {}, 50);
         if (batch.length > 0) {
           console.log('📤 Sending older data batch:', batch.length);
-          conn.send({ type: 'restore-batch-data', batch, timestamps: data.timestamps });
+          conn.send({ type: 'restore-batch-data', batch, timestamps: data.timestamps ?? {} });
         } else {
           console.log('✅ Background restoration complete');
           conn.send({ type: 'restore-batch-complete' });
@@ -873,7 +891,7 @@ function setupConnection(conn: DataConnection) {
       // Request next batch after 500ms delay, unless cancelled
       setTimeout(() => {
         if (conn.open && !globalSyncCancelled) {
-          conn.send({ type: 'restore-batch-init', timestamps: data.timestamps });
+          conn.send({ type: 'restore-batch-init', timestamps: data.timestamps ?? {} });
         } else if (globalSyncCancelled) {
           console.log('🛑 [SYNC] Batch request skipped due to cancellation');
         }
@@ -893,6 +911,13 @@ function setupConnection(conn: DataConnection) {
     }
 
     window.dispatchEvent(new CustomEvent('p2p-message', { detail: data }));
+    } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/d169ec0f-ae1d-4b1e-989c-ee0f67fbabdc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f33f75'},body:JSON.stringify({sessionId:'f33f75',location:'use-peer-connection.ts:data-handler-catch',message:'throw in data handler',data:{error: String(err), type: data?.type},timestamp:Date.now(),hypothesisId:'A,E'})}).catch(()=>{});
+      // #endregion
+      console.error('P2P data handler error:', err);
+      throw err;
+    }
   });
 
   conn.on('close', () => {

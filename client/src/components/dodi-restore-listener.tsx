@@ -18,6 +18,12 @@ export function DodiRestoreListener() {
 
   const handleRestorePayload = useCallback(
     async (e: CustomEvent) => {
+      // #region agent log
+      try {
+        const p = e.detail;
+        fetch('http://127.0.0.1:7242/ingest/d169ec0f-ae1d-4b1e-989c-ee0f67fbabdc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f33f75'},body:JSON.stringify({sessionId:'f33f75',location:'dodi-restore-listener.tsx:handleRestorePayload',message:'entry',data:{hasJoinerId:!!p?.joinerId,hasCreatorId:!!p?.creatorId},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+      } catch (_) {}
+      // #endregion
       const payload = e.detail;
       if (!payload?.masterKey || !payload?.salt) return;
       if (!userId) {

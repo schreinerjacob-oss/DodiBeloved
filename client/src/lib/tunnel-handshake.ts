@@ -269,10 +269,15 @@ export async function runCreatorTunnel(conn: any, creatorId: string): Promise<Ma
           };
           
           if (isRestore) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/d169ec0f-ae1d-4b1e-989c-ee0f67fbabdc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f33f75'},body:JSON.stringify({sessionId:'f33f75',location:'tunnel-handshake.ts:restore-path',message:'before getEssentials',data:{},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             console.log('♾️ [RESTORE] Sending restoration payload to joiner');
             const { getEssentials } = await import('./storage-encrypted');
             const essentials = await getEssentials();
-            
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/d169ec0f-ae1d-4b1e-989c-ee0f67fbabdc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f33f75'},body:JSON.stringify({sessionId:'f33f75',location:'tunnel-handshake.ts:restore-path',message:'after getEssentials',data:{keys: essentials ? Object.keys(essentials) : []},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             const restorePayload = { ...payload, essentials } as any;
             const keyMsg = await createTunnelKeyMessage(restorePayload, sharedKey);
             conn.send({ ...keyMsg, type: 'restore-key' });
