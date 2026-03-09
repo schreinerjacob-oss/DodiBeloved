@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "791137198620",
+    "project_id": "dodi-beloved",
+    "storage_bucket": "dodi-beloved.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:791137198620:android:6eb2a73057cf7bcca5b5d9",
+        "android_client_info": {
+          "package_name": "com.dodi.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyByV_cH4OpK0bC8QtQbB1XRxDtOj_iVYaQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
