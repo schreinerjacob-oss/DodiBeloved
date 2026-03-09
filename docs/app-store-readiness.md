@@ -109,10 +109,10 @@ Apple/Google reviewers must be able to complete onboarding without a second devi
 After this repo is in good shape, Replit completes:
 
 - **Firebase:** Project, iOS/Android apps, `GoogleService-Info.plist` / `google-services.json`, service account key, env for notify API.
-- **iOS:** Xcode signing, Push + Background Modes, Info.plist usage strings (camera, mic, photo library, Face ID), PrivacyInfo.xcprivacy, APNs.
+- **iOS:** No Mac required. Configure in browser (developer.apple.com, appstoreconnect.apple.com); build/upload via cloud service (Codemagic, Bitrise, or GitHub Actions). See [apple-ios-no-mac.md](apple-ios-no-mac.md). Push + Background Modes, Info.plist usage strings (camera, mic, photo library, Face ID), PrivacyInfo.xcprivacy, APNs.
 - **Android:** Manifest permissions, `google-services.json`, signing keystore.
 - **Assets:** 1024×1024 icon, splash; generate with `npx @capacitor/assets generate` (or equivalent).
 - **Store listing:** Use store copy above; screenshots; Data Safety / App Privacy (IP for PeerJS).
-- **Build & submit:** Archive (iOS), bundle (Android), TestFlight / Play Console, submit for review.
+- **Build & submit:** Archive (iOS) via cloud build, bundle (Android), TestFlight / Play Console, submit for review.
 
 Run `npx cap doctor`, `npm run build:cap`, and open ios/android to verify before handoff.

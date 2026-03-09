@@ -132,7 +132,8 @@ All chat, media, calls, and shared data go over WebRTC data channels directly be
 ### Before App Store submission
 - **Payment / IAP** — Beta runs **free**: Garden Mode is a local toggle only. Real billing still needs StoreKit (iOS), Google Play Billing (Android), or Stripe (web) before a paid launch.
 - **Firebase setup** — `google-services.json` (Android) and `GoogleService-Info.plist` (iOS) need to be added to the native projects for FCM/APNs push to work. Requires a Firebase project.
-- **App signing** — Xcode signing (Apple Developer account) and Android keystore not yet configured.
+- **App signing** — iOS: use App Store Connect + a cloud build service (no Mac required); see [docs/apple-ios-no-mac.md](docs/apple-ios-no-mac.md). Android keystore not yet configured.
+- **iOS (no Mac):** All Apple setup in browser (developer.apple.com, appstoreconnect.apple.com); build/upload via Codemagic, Bitrise, or GitHub Actions on a Mac runner — see docs/apple-ios-no-mac.md.
 - **Store assets** — Screenshots, feature graphic, and App Store preview videos not yet created.
 - **Privacy policy hosting** — Ensure the privacy policy is reachable at a stable public HTTPS URL (e.g. `/privacy`) for store submission.
 
