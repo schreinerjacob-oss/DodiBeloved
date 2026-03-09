@@ -7,12 +7,16 @@
 import 'dotenv/config';
 import express, { type Request, type Response } from 'express';
 import webpush from 'web-push';
+import * as admin from 'firebase-admin';
 
 const app = express();
 app.use(express.json({ limit: '10kb' }));
 
 // In-memory: token -> array of PushSubscription (JSON objects)
 const tokenToSubscriptions = new Map<string, webpush.PushSubscription[]>();
+// In-memory: token -> array of native push registrations (FCM/APNs)
+type NativeRegistration = { nativeToken: string; platform: 'ios' | 'android' };
+const tokenToNativeRegistrations = new Map<string, NativeRegistration[]>();
 
 const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
@@ -23,6 +27,25 @@ if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
 }
 
 webpush.setVapidDetails('mailto:dodi@local', VAPID_PUBLIC, VAPID_PRIVATE);
+
+// Firebase Admin (optional, for native push). Initialize once at startup to avoid race conditions.
+const FIREBASE_JSON = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+let firebaseMessaging: admin.messaging.Messaging | null = null;
+
+if (FIREBASE_JSON) {
+  try {
+    const creds = JSON.parse(FIREBASE_JSON);
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert(creds),
+      });
+    }
+    firebaseMessaging = admin.messaging();
+  } catch (err) {
+    console.error('Failed to initialize Firebase Admin from FIREBASE_SERVICE_ACCOUNT_JSON', err);
+    firebaseMessaging = null;
+  }
+}
 
 // Optional: log only non-notify requests (do not log POST /notify at all)
 function accessLogSkipNotify(req: Request, res: Response, next: () => void) {
@@ -37,25 +60,52 @@ function accessLogSkipNotify(req: Request, res: Response, next: () => void) {
 }
 app.use(accessLogSkipNotify);
 
-// POST /register — store token -> subscription(s). Optional generic log only.
+// POST /register — store token -> subscription(s) and/or native tokens. Optional generic log only.
 app.post('/register', (req: Request, res: Response) => {
-  const { token, subscription } = req.body as { token?: string; subscription?: webpush.PushSubscription };
-  if (!token || typeof token !== 'string' || !subscription || typeof subscription !== 'object') {
-    res.status(400).json({ error: 'token and subscription required' });
+  const { token, subscription, nativeToken, platform } = req.body as {
+    token?: string;
+    subscription?: webpush.PushSubscription;
+    nativeToken?: string;
+    platform?: 'ios' | 'android' | string;
+  };
+
+  if (!token || typeof token !== 'string') {
+    res.status(400).json({ error: 'token required' });
     return;
   }
-  const subs = tokenToSubscriptions.get(token) ?? [];
-  const key = subscription.endpoint;
-  const idx = subs.findIndex(s => s.endpoint === key);
-  if (idx >= 0) subs[idx] = subscription;
-  else subs.push(subscription);
-  tokenToSubscriptions.set(token, subs);
+
+  const hasWeb = subscription && typeof subscription === 'object';
+  const hasNative = typeof nativeToken === 'string' && (platform === 'ios' || platform === 'android');
+
+  if (!hasWeb && !hasNative) {
+    res.status(400).json({ error: 'subscription or nativeToken+platform required' });
+    return;
+  }
+
+  if (hasWeb) {
+    const subs = tokenToSubscriptions.get(token) ?? [];
+    const key = subscription!.endpoint;
+    const idx = subs.findIndex((s) => s.endpoint === key);
+    if (idx >= 0) subs[idx] = subscription!;
+    else subs.push(subscription!);
+    tokenToSubscriptions.set(token, subs);
+  }
+
+  if (hasNative) {
+    const current = tokenToNativeRegistrations.get(token) ?? [];
+    // Avoid simple duplicates for the same nativeToken+platform
+    if (!current.some((r) => r.nativeToken === nativeToken && r.platform === platform)) {
+      current.push({ nativeToken: nativeToken!, platform: platform as 'ios' | 'android' });
+      tokenToNativeRegistrations.set(token, current);
+    }
+  }
+
   // Optional: generic log only (no token value)
   // console.log('Registration received');
   res.status(204).end();
 });
 
-// POST /notify — send push to token's subscription(s). No log, no persist.
+// POST /notify — send push to token's subscription(s) and native tokens. No log, no persist.
 app.post('/notify', (req: Request, res: Response) => {
   const { token, type } = req.body as { token?: string; type?: 'call' | 'message' };
   if (!token || typeof token !== 'string') {
@@ -63,7 +113,8 @@ app.post('/notify', (req: Request, res: Response) => {
     return;
   }
   const subs = tokenToSubscriptions.get(token);
-  if (!subs || subs.length === 0) {
+  const natives = tokenToNativeRegistrations.get(token);
+  if ((!subs || subs.length === 0) && (!natives || natives.length === 0)) {
     res.status(404).json({ error: 'unknown token' });
     return;
   }
@@ -73,17 +124,41 @@ app.post('/notify', (req: Request, res: Response) => {
     : 'New message from your partner';
   const tag = type === 'call' ? 'dodi-call' : 'dodi-message';
   const payload = JSON.stringify({ type: 'notify', title, body, tag });
-  Promise.all(
-    subs.map(sub =>
-      webpush.sendNotification(sub, payload).catch(err => {
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          // Subscription expired or invalid — could remove from map (optional, no log of token)
-          return;
-        }
-        throw err;
-      })
-    )
-  )
+
+  const webPromise = subs && subs.length > 0
+    ? Promise.all(
+        subs.map((sub) =>
+          webpush.sendNotification(sub, payload).catch((err) => {
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              // Subscription expired or invalid — could remove from map (optional, no log of token)
+              return;
+            }
+            throw err;
+          }),
+        ),
+      )
+    : Promise.resolve();
+
+  const nativePromise =
+    natives && natives.length > 0 && firebaseMessaging
+      ? (async () => {
+          await Promise.all(
+            natives.map((reg) =>
+              firebaseMessaging!
+                .send({
+                  token: reg.nativeToken,
+                  notification: { title, body },
+                  data: { type: type ?? 'message' },
+                })
+                .catch(() => {
+                  // Do not crash notify endpoint on individual native failures.
+                }),
+            ),
+          );
+        })()
+      : Promise.resolve();
+
+  Promise.all([webPromise, nativePromise])
     .then(() => {
       res.status(200).end();
     })

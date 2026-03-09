@@ -79,6 +79,18 @@ export function DodiProvider({ children }: { children: ReactNode }) {
 
   const isPaired = pairingStatus === 'connected';
 
+  const mirrorPinEnabledToLocalStorage = useCallback((enabled: boolean) => {
+    try {
+      if (enabled) {
+        localStorage.setItem('dodi-pinEnabled', 'true');
+      } else {
+        localStorage.removeItem('dodi-pinEnabled');
+      }
+    } catch {
+      // Ignore localStorage failures; IndexedDB remains the source of truth.
+    }
+  }, []);
+
   useEffect(() => {
     const VALID_PAIRING_STATUSES: PairingStatus[] = ['unpaired', 'waiting', 'connected'];
     const LOAD_TIMEOUT_MS = 12_000;
@@ -125,14 +137,23 @@ export function DodiProvider({ children }: { children: ReactNode }) {
         }
 
         if (storedPinEnabled === 'true') {
-          console.log('🔐 [CONTEXT] App is PIN enabled, locking...');
+          console.log('🔐 [CONTEXT] App is PIN enabled, locking (from settings)...');
           setPinEnabled(true);
           setIsLocked(true);
+          mirrorPinEnabledToLocalStorage(true);
           // If locked, we don't set the passphrase in memory until unlocked
           setPassphrase(null);
         } else if (storedPassphrase) {
           console.log('🔑 [CONTEXT] Found passphrase, app unlocked');
           setPassphrase(storedPassphrase);
+          setIsLocked(false);
+          setPinEnabled(false);
+          mirrorPinEnabledToLocalStorage(false);
+        } else {
+          // No PIN and no passphrase in storage – ensure unlocked baseline
+          setIsLocked(false);
+          setPinEnabled(false);
+          mirrorPinEnabledToLocalStorage(false);
         }
 
         if (storedAllowWakeUp === 'true') {
@@ -186,7 +207,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [mirrorPinEnabledToLocalStorage]);
 
   const initializePairing = async () => {
     if (!userId) {
@@ -311,6 +332,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
       await savePIN(pin, passphrase);
       await saveSetting('pinEnabled', 'true');
       setPinEnabled(true);
+      mirrorPinEnabledToLocalStorage(true);
       setShowPinSetup(false);
     } catch (error: any) {
       console.error('PIN setup failed:', error);
@@ -321,6 +343,7 @@ export function DodiProvider({ children }: { children: ReactNode }) {
   const enablePINHandler = async () => {
     await saveSetting('pinEnabled', 'true');
     setPinEnabled(true);
+    mirrorPinEnabledToLocalStorage(true);
   };
 
   const unlockWithPINHandler = async (pin: string): Promise<boolean> => {
@@ -403,6 +426,9 @@ export function DodiProvider({ children }: { children: ReactNode }) {
     setPartnerId(null);
     setPairingStatus('unpaired');
     setIsDemoMode(false);
+    setPinEnabled(false);
+    setIsLocked(false);
+    mirrorPinEnabledToLocalStorage(false);
   };
 
   const setAllowWakeUp = async (enabled: boolean) => {

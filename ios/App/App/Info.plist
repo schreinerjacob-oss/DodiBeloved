@@ -33,8 +33,6 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
@@ -53,5 +51,9 @@
 	<string>Dodi uses your photo library so you can choose photos and videos to share with your partner.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Dodi can use Face ID / Touch ID to unlock the app securely.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

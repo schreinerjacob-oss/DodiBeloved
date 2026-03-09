@@ -10,9 +10,12 @@ import { getNotifyServerUrl } from '@/lib/push-register';
 import { getPartnerPushToken } from '@/lib/push-token';
 import { Capacitor } from '@capacitor/core';
 
-// Dev-only logger — stripped from production builds by Vite/Rollup dead-code elimination.
-const log = import.meta.env.DEV
-  ? (...args: unknown[]) => log(...args)
+// Dev-only logger — small wrapper around console.log, stripped from production builds.
+const log: (...args: unknown[]) => void = import.meta.env.DEV
+  ? (...args: unknown[]) => {
+      // eslint-disable-next-line no-console
+      console.log(...args);
+    }
   : () => {};
 
 interface PeerConnectionState {

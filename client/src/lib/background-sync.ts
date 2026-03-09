@@ -18,6 +18,10 @@ export function isPeriodicSyncSupported(): boolean {
 }
 
 export async function registerPeriodicSync(): Promise<boolean> {
+  if (Capacitor.isNativePlatform()) {
+    // Native apps do not rely on service worker periodic sync.
+    return false;
+  }
   if (!isPeriodicSyncSupported()) {
     console.log('⏰ Periodic Sync not supported, using fallback');
     return false;
@@ -98,6 +102,7 @@ export function setupVisibilityBasedPolling(): void {
 }
 
 function setupServiceWorkerMessageListener(): void {
+  if (Capacitor.isNativePlatform()) return;
   if (!('serviceWorker' in navigator)) return;
   if (swMessageListenerSetup) return;
   swMessageListenerSetup = true;
