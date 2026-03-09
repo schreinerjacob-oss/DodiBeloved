@@ -1,0 +1,125 @@
+workflows:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # iOS – builds a signed IPA and uploads to App Store Connect (TestFlight)
+  # ─────────────────────────────────────────────────────────────────────────────
+  ios-release:
+    name: dodi iOS Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.dodi.app
+      groups:
+        - app_store_credentials   # Add in Codemagic UI: APP_STORE_CONNECT_KEY_IDENTIFIER, APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_PRIVATE_KEY
+      vars:
+        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_SCHEME: App
+        BUNDLE_ID: com.dodi.app
+        APP_STORE_APPLE_ID: ""   # Fill in your numeric Apple ID from App Store Connect (App Information → Apple ID)
+      node: 20
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: "v*"
+          include: true
+
+    scripts:
+      - name: Install Node dependencies
+        script: npm ci
+
+      - name: Build web assets
+        script: npm run build
+
+      - name: Capacitor sync iOS
+        script: npx cap sync ios
+
+      - name: Install CocoaPods
+        script: |
+          cd ios/App
+          pod install
+
+      - name: Set up code signing
+        script: xcode-project use-profiles
+
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - App Store Connect Users
+        submit_to_app_store: false   # Change to true when ready for public release
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Android – builds a signed AAB and uploads to Google Play (internal track)
+  # ─────────────────────────────────────────────────────────────────────────────
+  android-release:
+    name: dodi Android Release
+    max_build_duration: 60
+    instance_type: linux_x2
+
+    environment:
+      android_signing:
+        - dodi_keystore   # Create in Codemagic UI: Teams → Code signing → Android keystores → Generate or upload
+      groups:
+        - google_play     # Add in Codemagic UI: GCLOUD_SERVICE_ACCOUNT_CREDENTIALS (from Google Play Console service account)
+      vars:
+        PACKAGE_NAME: com.dodi.app
+      node: 20
+      java: 17
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: "v*"
+          include: true
+
+    scripts:
+      - name: Install Node dependencies
+        script: npm ci
+
+      - name: Build web assets
+        script: npm run build
+
+      - name: Capacitor sync Android
+        script: npx cap sync android
+
+      - name: Build Android AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease
+
+      - name: Sign AAB
+        script: |
+          android-app-bundle sign \
+            --ks $CM_KEYSTORE_PATH \
+            --ks-key-alias $CM_KEY_ALIAS \
+            --ks-pass $CM_KEYSTORE_PASSWORD \
+            --key-pass $CM_KEY_PASSWORD \
+            --in android/app/build/outputs/bundle/release/app-release.aab \
+            --out android/app/build/outputs/bundle/release/app-release-signed.aab
+
+    artifacts:
+      - android/app/build/outputs/bundle/release/app-release-signed.aab
+      - android/app/build/outputs/apk/release/*.apk
+
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal   # Promotes to: internal → alpha → beta → production
+        submit_as_draft: true
