@@ -57,7 +57,7 @@ export default defineConfig(async () => ({
         '@capacitor/status-bar',
         '@capacitor/splash-screen',
         '@capacitor/haptics',
-        '@capacitor/keep-awake',
+        '@capacitor-community/keep-awake',
         '@capacitor/push-notifications',
         '@capacitor/app',
         '@aparajita/capacitor-biometric-auth',

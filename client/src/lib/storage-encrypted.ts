@@ -634,11 +634,6 @@ export async function savePrayer(prayer: Prayer): Promise<void> {
 // REMOVED DUPLICATE getAllPrayers
 
 export async function getBatchForRestore(stores: readonly StoreName[], partnerTimestamps: Record<string, number>, batchSize: number): Promise<any[]> {
-  // #region agent log
-  try {
-    fetch('http://127.0.0.1:7242/ingest/d169ec0f-ae1d-4b1e-989c-ee0f67fbabdc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f33f75'},body:JSON.stringify({sessionId:'f33f75',location:'storage-encrypted.ts:getBatchForRestore',message:'entry',data:{timestampsDefined:partnerTimestamps!=null,typeof: typeof partnerTimestamps},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-  } catch (_) {}
-  // #endregion
   const timestamps = partnerTimestamps && typeof partnerTimestamps === 'object' ? partnerTimestamps : {};
   const db = await initDBRaw();
   const batch: any[] = [];

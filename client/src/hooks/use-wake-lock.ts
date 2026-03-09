@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 
 function isWakeLockSupported(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -19,35 +20,76 @@ export interface UseWakeLockReturn {
  */
 export function useWakeLock(enabled: boolean): UseWakeLockReturn {
   const sentinelRef = useRef<WakeLockSentinel | null>(null);
+  const usingNativeRef = useRef(false);
   const [active, setActive] = useState(false);
   const supported = isWakeLockSupported();
 
+  const allowNativeSleep = useCallback(async () => {
+    if (!Capacitor.isNativePlatform()) return;
+    try {
+      const { KeepAwake } = await import('@capacitor-community/keep-awake');
+      const { isSupported } = await KeepAwake.isSupported();
+      if (!isSupported) return;
+      await KeepAwake.allowSleep();
+    } catch {}
+  }, []);
+
+  const keepNativeAwake = useCallback(async () => {
+    if (!Capacitor.isNativePlatform()) return;
+    try {
+      const { KeepAwake } = await import('@capacitor-community/keep-awake');
+      const { isSupported } = await KeepAwake.isSupported();
+      if (!isSupported) return;
+      await KeepAwake.keepAwake();
+    } catch {}
+  }, []);
+
   const releaseWakeLock = useCallback(async () => {
+    if (usingNativeRef.current) {
+      usingNativeRef.current = false;
+      await allowNativeSleep();
+      setActive(false);
+      return;
+    }
+
     if (!sentinelRef.current) return;
     try {
       await sentinelRef.current.release();
     } catch (e) {}
     sentinelRef.current = null;
     setActive(false);
-  }, []);
+  }, [allowNativeSleep]);
 
   const requestWakeLock = useCallback(async () => {
-    if (!supported || !enabled) return;
-    if (sentinelRef.current) return;
-    if (document.visibilityState !== 'visible') return;
+    if (!enabled) return;
 
-    try {
-      const sentinel = await navigator.wakeLock.request('screen');
-      sentinelRef.current = sentinel;
-      setActive(true);
-      sentinel.addEventListener('release', () => {
-        sentinelRef.current = null;
-        setActive(false);
-      });
-    } catch (e) {
-      console.warn('Wake Lock request failed:', e);
+    // Web / Android Chromium etc.
+    if (supported) {
+      if (sentinelRef.current) return;
+      if (document.visibilityState !== 'visible') return;
+
+      try {
+        const sentinel = await navigator.wakeLock.request('screen');
+        sentinelRef.current = sentinel;
+        setActive(true);
+        sentinel.addEventListener('release', () => {
+          sentinelRef.current = null;
+          setActive(false);
+        });
+      } catch (e) {
+        console.warn('Wake Lock request failed:', e);
+      }
+      return;
     }
-  }, [supported, enabled]);
+
+    // iOS (native WebView) fallback: native keep-awake plugin.
+    if (Capacitor.isNativePlatform()) {
+      if (usingNativeRef.current) return;
+      await keepNativeAwake();
+      usingNativeRef.current = true;
+      setActive(true);
+    }
+  }, [supported, enabled, keepNativeAwake]);
 
   useEffect(() => {
     if (!enabled) {

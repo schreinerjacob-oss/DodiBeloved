@@ -6,7 +6,7 @@ import { Capacitor } from '@capacitor/core';
 
 export function hapticLight(): void {
   if (Capacitor.isNativePlatform()) {
-    import('@capacitor/haptics').then(({ Haptics }) => Haptics.impact({ style: 'light' }).catch(() => {}));
+    import('@capacitor/haptics').then(({ Haptics, ImpactStyle }) => Haptics.impact({ style: ImpactStyle.Light }).catch(() => {}));
   } else if ('vibrate' in navigator) {
     navigator.vibrate([150, 80, 150]);
   }
@@ -14,7 +14,7 @@ export function hapticLight(): void {
 
 export function hapticMedium(): void {
   if (Capacitor.isNativePlatform()) {
-    import('@capacitor/haptics').then(({ Haptics }) => Haptics.impact({ style: 'medium' }).catch(() => {}));
+    import('@capacitor/haptics').then(({ Haptics, ImpactStyle }) => Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {}));
   } else if ('vibrate' in navigator) {
     navigator.vibrate([200, 100, 200]);
   }
@@ -23,7 +23,7 @@ export function hapticMedium(): void {
 /** Ring pattern (e.g. incoming call). */
 export function hapticRing(): void {
   if (Capacitor.isNativePlatform()) {
-    import('@capacitor/haptics').then(({ Haptics }) => Haptics.impact({ style: 'heavy' }).catch(() => {}));
+    import('@capacitor/haptics').then(({ Haptics, ImpactStyle }) => Haptics.impact({ style: ImpactStyle.Heavy }).catch(() => {}));
   } else if ('vibrate' in navigator) {
     navigator.vibrate([500, 200, 500, 200, 500]);
   }

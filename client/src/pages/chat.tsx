@@ -15,6 +15,7 @@ import { MessageMediaImage } from '@/components/message-media-image';
 import { ImageFullscreenViewer } from '@/components/image-fullscreen-viewer';
 import { MessageMediaVoice } from '@/components/message-media-voice';
 import { MessageMediaVideo } from '@/components/message-media-video';
+import { MessageStatus, type MessageStatusValue } from '@/components/message-status';
 import { MemoryResurfacing } from '@/components/resurfacing/memory-resurfacing';
 import { MOODS, getMoodLabel, type MoodId } from '@/lib/moods';
 import { notifyNewMessage, notifyMessageQueued } from '@/lib/notifications';
@@ -85,7 +86,7 @@ export default function ChatPage() {
     const handleReconciliation = (event: any) => {
       const count = event.detail.count;
       toast({
-        title: "Gardens Synced",
+        title: "Messages synced",
         description: `Reconciled ${count} missing messages from partner`,
       });
     };
@@ -181,6 +182,13 @@ export default function ChatPage() {
   const videoRecorderRef = useRef<MediaRecorder | null>(null);
   const videoStreamRef = useRef<MediaStream | null>(null);
   const videoChunksRef = useRef<Blob[]>([]);
+
+  const stopStreamTracks = useCallback((stream: MediaStream | null) => {
+    if (!stream) return;
+    for (const track of stream.getTracks()) {
+      track.stop();
+    }
+  }, []);
 
   useEffect(() => {
     loadMessages();
@@ -1022,7 +1030,7 @@ export default function ChatPage() {
       setRecordedBlobUrl(url);
       setVideoStage('review');
       setVideoRecordingError(null);
-      videoStreamRef.current?.getTracks().forEach((t) => t?.stop());
+      stopStreamTracks(videoStreamRef.current);
       videoStreamRef.current = null;
       setStreamForPreview(null);
     };
@@ -1045,7 +1053,7 @@ export default function ChatPage() {
     setRecordedBlobUrl(null);
     setVideoStage('preview');
     setVideoRecordingError(null);
-    videoStreamRef.current?.getTracks().forEach((t) => t?.stop());
+    stopStreamTracks(videoStreamRef.current);
     videoStreamRef.current = null;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -1054,13 +1062,13 @@ export default function ChatPage() {
           : { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
         audio: true,
       });
-      videoStreamRef.current?.getTracks().forEach((t) => t?.stop());
+      stopStreamTracks(videoStreamRef.current);
       videoStreamRef.current = stream;
       setStreamForPreview(stream);
     } catch (e) {
       setVideoRecordingError('Could not reopen camera. Close and try again.');
     }
-  }, [recordedBlobUrl, selectedVideoDeviceId]);
+  }, [recordedBlobUrl, selectedVideoDeviceId, stopStreamTracks]);
 
   const handleVideoSend = useCallback(async () => {
     if (!recordedBlob || !userId || !partnerId) return;
@@ -1428,19 +1436,18 @@ export default function ChatPage() {
                         <MessageMediaImage messageId={message.id} fileName={message.content} />
                         <div className="flex items-center justify-between px-3 pb-2">
                           <div className="flex items-center gap-1.5">
-                            {message.isDisappearing && <EyeOff className="w-3 h-3 text-muted-foreground shrink-0" title="Disappearing message" />}
+                            {message.isDisappearing && (
+                              <span title="Disappearing message" className="shrink-0">
+                                <EyeOff className="w-3 h-3 text-muted-foreground" />
+                              </span>
+                            )}
                             <p className="text-xs text-muted-foreground">
                               {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>
                           </div>
                           {isSent && (
                             <div className="ml-2">
-                              {message.status === 'queued' && <Clock className="w-3 h-3 text-amber-500" />}
-                              {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
-                              {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
-                              {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
-                              {message.status === 'read' && <CheckCheck className="w-3 h-3 text-accent" />}
-                              {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
+                              <MessageStatus status={message.status as MessageStatusValue} />
                             </div>
                           )}
                         </div>
@@ -1450,19 +1457,18 @@ export default function ChatPage() {
                         <MessageMediaVoice messageId={message.id} />
                         <div className="flex items-center justify-between px-2 pb-1">
                           <div className="flex items-center gap-1.5">
-                            {message.isDisappearing && <EyeOff className="w-3 h-3 text-muted-foreground shrink-0" title="Disappearing message" />}
+                            {message.isDisappearing && (
+                              <span title="Disappearing message" className="shrink-0">
+                                <EyeOff className="w-3 h-3 text-muted-foreground" />
+                              </span>
+                            )}
                             <p className="text-xs text-muted-foreground">
                               {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>
                           </div>
                           {isSent && (
                             <div className="ml-2">
-                              {message.status === 'queued' && <Clock className="w-3 h-3 text-amber-500" />}
-                              {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
-                              {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
-                              {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
-                              {message.status === 'read' && <CheckCheck className="w-3 h-3 text-accent" />}
-                              {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
+                              <MessageStatus status={message.status as MessageStatusValue} />
                             </div>
                           )}
                         </div>
@@ -1472,19 +1478,18 @@ export default function ChatPage() {
                         <MessageMediaVideo messageId={message.id} />
                         <div className="flex items-center justify-between px-2 pb-1">
                           <div className="flex items-center gap-1.5">
-                            {message.isDisappearing && <EyeOff className="w-3 h-3 text-muted-foreground shrink-0" title="Disappearing message" />}
+                            {message.isDisappearing && (
+                              <span title="Disappearing message" className="shrink-0">
+                                <EyeOff className="w-3 h-3 text-muted-foreground" />
+                              </span>
+                            )}
                             <p className="text-xs text-muted-foreground">
                               {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>
                           </div>
                           {isSent && (
                             <div className="ml-2">
-                              {message.status === 'queued' && <Clock className="w-3 h-3 text-amber-500" />}
-                              {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
-                              {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
-                              {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
-                              {message.status === 'read' && <CheckCheck className="w-3 h-3 text-accent" />}
-                              {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
+                              <MessageStatus status={message.status as MessageStatusValue} />
                             </div>
                           )}
                         </div>
@@ -1494,19 +1499,18 @@ export default function ChatPage() {
                         <p className="text-sm leading-relaxed">{message.content}</p>
                         <div className="flex items-center justify-between mt-2 gap-2">
                           <div className="flex items-center gap-1.5">
-                            {message.isDisappearing && <EyeOff className="w-3 h-3 text-muted-foreground shrink-0" title="Disappearing message" />}
+                            {message.isDisappearing && (
+                              <span title="Disappearing message" className="shrink-0">
+                                <EyeOff className="w-3 h-3 text-muted-foreground" />
+                              </span>
+                            )}
                             <p className="text-xs text-muted-foreground">
                               {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>
                           </div>
                           {isSent && (
                             <div className="ml-2">
-                              {message.status === 'queued' && <Clock className="w-3 h-3 text-amber-500" />}
-                              {message.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
-                              {message.status === 'sent' && <Check className="w-3 h-3 text-muted-foreground" />}
-                              {message.status === 'delivered' && <CheckCheck className="w-3 h-3 text-blue-400" />}
-                              {message.status === 'read' && <CheckCheck className="w-3 h-3 text-accent" />}
-                              {!message.status && <Check className="w-3 h-3 text-muted-foreground" />}
+                              <MessageStatus status={message.status as MessageStatusValue} />
                             </div>
                           )}
                         </div>

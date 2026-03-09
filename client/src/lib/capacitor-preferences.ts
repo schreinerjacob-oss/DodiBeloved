@@ -5,6 +5,7 @@
  */
 
 import { Capacitor } from '@capacitor/core';
+import type { PreferencesPlugin } from '@capacitor/preferences';
 
 const CRITICAL_KEYS = new Set([
   'passphrase',
@@ -18,9 +19,9 @@ const CRITICAL_KEYS = new Set([
   'pairingStatus',
 ]);
 
-let Preferences: { get: (opts: { key: string }) => Promise<{ value: string }>; set: (opts: { key: string; value: string }) => Promise<void> } | null = null;
+let Preferences: PreferencesPlugin | null = null;
 
-async function getPreferences(): Promise<typeof Preferences> {
+async function getPreferences(): Promise<PreferencesPlugin | null> {
   if (Preferences != null) return Preferences;
   try {
     const prefs = await import('@capacitor/preferences');

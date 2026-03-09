@@ -15,7 +15,7 @@ This doc summarizes what was done locally (Capacitor, plugins, contracts) and wh
 | Splash | `@capacitor/splash-screen` | Hidden when DodiContext `isLoading` is false |
 | Haptics | `@capacitor/haptics` | Replaces `navigator.vibrate()` when native |
 | App lifecycle | `@capacitor/app` | `appStateChange` for background/reconnect |
-| Keep-awake (iOS) | `@capacitor/keep-awake` | Used when native + iOS (navigator.wakeLock not supported) |
+| Keep-awake (iOS) | `@capacitor-community/keep-awake` | Used when native + iOS (navigator.wakeLock not supported) |
 | Biometric | `@aparajita/capacitor-biometric-auth` | Face ID / Touch ID on lock screen; optional |
 
 ---
@@ -72,7 +72,7 @@ Storage and encryption are **not** abstracted behind adapters in this phase. For
 - **App name:** dodi - my beloved  
 - **Subtitle:** A Private Space for Two  
 - **Short description:** End-to-end encrypted private messaging, memories & more for couples.  
-- **Full description:** Cover privacy, P2P pairing, features, subscription (e.g. 30-day trial, $2.99/mo or $29.99/yr or $79 lifetime).  
+- **Full description:** Cover privacy, P2P pairing, and features. **Beta note:** “All features are free during beta; no charges.” (Do not mention subscriptions/IAP until billing is implemented.)  
 - **Categories:** iOS Social Networking / Lifestyle; Android Communication.  
 - **Age:** 12+ (iOS), Teen (Android).  
 - **Keywords (iOS, 100 chars):** couples,private,encrypted,p2p,secure,chat,messaging,memories,calendar,love,relationship  

@@ -1,13 +1,13 @@
 # dodi - An Ultra-Private Encrypted Space for Two
 
 ## Total Privacy Promise
-Dodi is built on one unbreakable promise: total privacy. Nothing ever touches a server after pairing. Your shared space is end-to-end encrypted and synchronizes directly between your two devices via Peer-to-Peer (P2P) technology. No central server, no data collection, no leaks possible.
+Dodi is built on one unbreakable promise: total privacy. **Message and media content never touches a server.** Your shared space is end-to-end encrypted and synchronizes directly between your two devices via Peer-to-Peer (P2P) technology. The only optional server component is a tiny **push notification relay** that stores push tokens (not content) to wake the other device.
 
 ## Overview
 
 dodi (Hebrew for "my beloved") is an intimate, privacy-focused mobile web application designed exclusively for couples. It provides a secure, encrypted sanctuary for real-time messaging, shared memories, calendar events, daily emotional rituals, and love letters. The application emphasizes warmth, privacy, and meaningful connection with a "handwritten-love-note meets secret garden" aesthetic. Key capabilities include secure pairing, end-to-end encrypted communication, a private memory vault, a shared calendar, daily emotional check-ins, and a love letter exchange system. It also features disappearing messages and an offline-first architecture.
 
-**CRITICAL ARCHITECTURE DECISION:** This is a **PURE CLIENT-SIDE PWA** with **ZERO BACKEND**. All data is stored locally in encrypted IndexedDB. Sync between devices happens via WebRTC peer-to-peer connections with no server relay.
+**CRITICAL ARCHITECTURE DECISION:** This is a **P2P-first** app: all user content is stored locally (encrypted IndexedDB) and syncs device-to-device over WebRTC. A minimal backend exists only for **push notifications** (`api/register.ts`, `api/notify.ts`) and never handles message content.
 
 ## User Preferences
 
@@ -17,12 +17,13 @@ Preferred communication style: Simple, everyday language.
 
 ### Pure Client-Side Architecture
 
-dodi is a **Progressive Web App (PWA)** that runs entirely in the browser with no backend server dependency:
+dodi is a **Progressive Web App (PWA)** that runs primarily in the browser:
 
-- **NO server-side code** - All logic runs client-side
-- **NO database server** - All data stored in encrypted IndexedDB
-- **NO WebSocket relay server** - Sync via WebRTC P2P
-- **NO user accounts on server** - Pairing via Signal-style tunnel handshake
+- **NO server for content** - All message/memory/call content stays on-device and P2P
+- **NO database server for user data** - All content stored in encrypted IndexedDB
+- **NO WebSocket message relay** - Real-time sync via WebRTC data channels
+- **NO accounts** - Pairing is device-to-device (tunnel handshake + QR/code)
+- **Optional push relay** - Only for notification tokens (no message content)
 
 ### Frontend Stack
 
@@ -159,11 +160,9 @@ client/
 │   │   ├── pairing.tsx            # Code-based tunnel pairing
 │   │   ├── chat.tsx               # Main chat interface
 │   │   ├── memories.tsx           # Photo memories
-│   │   ├── our-moments.tsx        # Shared calendar / moments
 │   │   ├── heart-space.tsx        # Whispers, Love Letter Vault, Journey of Blessings
 │   │   ├── calls.tsx              # Voice/video calls
 │   │   ├── settings.tsx           # App settings
-│   │   └── subscription.tsx       # Trial/subscription
 │   └── components/
 │       └── ui/                    # shadcn components
 ├── public/
@@ -181,6 +180,14 @@ npm run dev
 ```
 
 Runs Vite dev server on port 5000 (Replit-friendly). `npm run build` produces static files; `npm run start` serves them with `vite preview`.
+
+### Environment variables (optional for local dev)
+
+Push notifications are optional in dev. If you want to test them, copy `.env.example` to `.env` and set:
+
+- `VITE_NOTIFY_SERVER_URL`, `VITE_VAPID_PUBLIC_KEY` (client)
+- `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (server)
+- `FIREBASE_SERVICE_ACCOUNT_JSON` (native push)
 
 ### Key Development Notes
 

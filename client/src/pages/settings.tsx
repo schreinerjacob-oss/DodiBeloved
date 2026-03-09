@@ -296,11 +296,21 @@ export default function SettingsPage() {
           {/* Support the Garden */}
           <Card className="relative p-6 space-y-4 border-walnut/30 dark:border-gold/20 bg-walnut/20 dark:bg-walnut/40 wood-grain overflow-hidden">
             <div className="space-y-2">
-              <p className="text-sm text-stone dark:text-muted-foreground">Dodi is free. Optional support keeps it private and ad-free.</p>
-              <Button onClick={() => setPremiumStatus(true)} variant="outline" size="sm" className="border-copper/50 text-copper hover:bg-copper/10">Support the Garden</Button>
+              <p className="text-sm text-stone dark:text-muted-foreground">
+                Beta: Garden Mode is free while we test. No charges during beta.
+              </p>
+              <Button
+                onClick={() => setPremiumStatus(!isPremium)}
+                variant="outline"
+                size="sm"
+                className="border-copper/50 text-copper hover:bg-copper/10"
+                data-testid="button-garden-mode"
+              >
+                {isPremium ? 'Disable Garden Mode' : 'Enable Garden Mode (beta — free)'}
+              </Button>
             </div>
             {isPremium && (
-              <p className="text-xs text-copper">Thank you for supporting — you are an Eternal Guardian.</p>
+              <p className="text-xs text-copper">Garden Mode enabled (beta).</p>
             )}
           </Card>
 
@@ -471,6 +481,15 @@ export default function SettingsPage() {
             </Card>
 
             <PrivacyHealthCheck />
+
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setLocation('/privacy')}
+              data-testid="button-view-privacy-policy"
+            >
+              View privacy policy
+            </Button>
           </div>
 
           <Card className="p-6 space-y-4">

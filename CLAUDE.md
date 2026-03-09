@@ -111,7 +111,7 @@ All chat, media, calls, and shared data go over WebRTC data channels directly be
 - Capacitor wrapper: iOS + Android native projects added
 - Native Keychain/SharedPreferences mirror for passphrase/PIN (survives WKWebView eviction)
 - Status bar + splash screen theming (native)
-- Screen wake lock (navigator.wakeLock on web/Android, @capacitor/keep-awake on iOS)
+- Screen wake lock (navigator.wakeLock on web/Android, `@capacitor-community/keep-awake` fallback on iOS native)
 - Haptic feedback on native
 - Demo mode for App Review (no real pairing required)
 - Privacy policy page (`/privacy`)
@@ -130,12 +130,11 @@ All chat, media, calls, and shared data go over WebRTC data channels directly be
 ## What Remains / Known Issues
 
 ### Before App Store submission
-- **Payment / IAP** — "Support the Garden" button in Settings instantly grants premium with no payment (`setPremiumStatus(true)`). Needs StoreKit (iOS), Google Play Billing (Android), or Stripe (web). This is the biggest remaining feature.
-- **`@capacitor/keep-awake` wrong package** — `package.json` lists `@capacitor/keep-awake` which does not exist on npm. The correct community package is `@capacitor-community/keep-awake`. The package is externalized in vite.config.ts (so web build passes), but the native build will need this fixed before `cap sync`.
+- **Payment / IAP** — Beta runs **free**: Garden Mode is a local toggle only. Real billing still needs StoreKit (iOS), Google Play Billing (Android), or Stripe (web) before a paid launch.
 - **Firebase setup** — `google-services.json` (Android) and `GoogleService-Info.plist` (iOS) need to be added to the native projects for FCM/APNs push to work. Requires a Firebase project.
 - **App signing** — Xcode signing (Apple Developer account) and Android keystore not yet configured.
 - **Store assets** — Screenshots, feature graphic, and App Store preview videos not yet created.
-- **Privacy policy hosting** — `/privacy` page exists in the app; needs a publicly accessible URL for store submission.
+- **Privacy policy hosting** — Ensure the privacy policy is reachable at a stable public HTTPS URL (e.g. `/privacy`) for store submission.
 
 ### Nice to have / polish
 - GIF keyboard support — Gboard GIFs paste via clipboard HTML fallback (works), but native GIF picker requires a Capacitor plugin or share intent bridge

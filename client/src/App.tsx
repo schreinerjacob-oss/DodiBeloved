@@ -12,6 +12,7 @@ import ProfileSetupPage from "@/pages/profile-setup";
 import PairingPage from "@/pages/pairing";
 import RedundancyPage from "@/pages/redundancy";
 import ResetPage from "@/pages/reset";
+import PrivacyPage from "@/pages/privacy";
 import PinSetupPage from "@/pages/pin-setup";
 import PinLockPage from "@/pages/pin-lock";
 import OnboardingPage from "@/pages/onboarding";
@@ -22,6 +23,7 @@ import { IncomingCallOverlay } from "@/components/incoming-call-overlay";
 import { GlobalSyncHandler } from "@/components/global-sync-handler";
 import { DodiRestoreListener } from "@/components/dodi-restore-listener";
 import { DodiThinkingOfYouHandler } from "@/components/dodi-thinking-of-you-handler";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { PwaInstallBanner } from "@/components/pwa-install-banner";
 import { ServiceWorkerUpdateNotifier } from "@/components/service-worker-update";
 import { getNotifyServerUrl, registerPushWithNotifyServer } from "@/lib/push-register";
@@ -80,12 +82,12 @@ function MainApp() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const run = async () => {
-      const [{ StatusBar }, { SplashScreen }] = await Promise.all([
+      const [{ StatusBar, Style: StatusBarStyle }, { SplashScreen }] = await Promise.all([
         import('@capacitor/status-bar'),
         import('@capacitor/splash-screen'),
       ]);
       try {
-        await StatusBar.setStyle({ style: 'DARK' });
+        await StatusBar.setStyle({ style: StatusBarStyle.Dark });
       } catch {}
       if (!isLoading) {
         await SplashScreen.hide();
@@ -162,6 +164,11 @@ function MainApp() {
   // Allow reset route before any authentication checks
   if (location === '/reset') {
     return <ResetPage />;
+  }
+
+  // Allow privacy policy route without pairing/auth
+  if (location === '/privacy') {
+    return <PrivacyPage />;
   }
 
   if (isLoading) {
@@ -287,7 +294,9 @@ export default function App() {
           <DodiThinkingOfYouHandler />
           <ServiceWorkerUpdateNotifier />
           <OnboardingProvider>
-            <MainApp />
+            <ErrorBoundary>
+              <MainApp />
+            </ErrorBoundary>
             <Toaster />
           </OnboardingProvider>
         </DodiProvider>

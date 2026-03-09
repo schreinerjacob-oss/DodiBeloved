@@ -42,13 +42,14 @@ export function GlobalSyncHandler() {
             if (incomingMemory.mediaUrl) {
               try {
                 const { saveMediaBlob } = await import('@/lib/storage');
-                if (typeof incomingMemory.mediaUrl === 'string' && incomingMemory.mediaUrl.startsWith('data:image')) {
-                  const response = await fetch(incomingMemory.mediaUrl);
+                const mediaUrl = (incomingMemory as any).mediaUrl as unknown;
+                if (typeof mediaUrl === 'string' && mediaUrl.startsWith('data:image')) {
+                  const response = await fetch(mediaUrl);
                   const blob = await response.blob();
                   await saveMediaBlob(incomingMemory.id, blob, 'memory');
                   window.dispatchEvent(new CustomEvent('dodi-media-ready', { detail: { mediaId: incomingMemory.id, kind: 'memory' } }));
-                } else if (incomingMemory.mediaUrl instanceof ArrayBuffer) {
-                  const blob = new Blob([incomingMemory.mediaUrl], { type: 'image/jpeg' });
+                } else if (mediaUrl instanceof ArrayBuffer) {
+                  const blob = new Blob([mediaUrl], { type: 'image/jpeg' });
                   await saveMediaBlob(incomingMemory.id, blob, 'memory');
                   window.dispatchEvent(new CustomEvent('dodi-media-ready', { detail: { mediaId: incomingMemory.id, kind: 'memory' } }));
                 }

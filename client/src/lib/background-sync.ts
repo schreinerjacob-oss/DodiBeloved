@@ -88,7 +88,7 @@ export function setupVisibilityBasedPolling(): void {
         console.log('👁️ App visible - checking connection status');
         // Small delay to allow connection state to stabilize after tab becomes visible
         setTimeout(() => {
-          reconnectCallback();
+          reconnectCallback?.();
         }, 500);
       }
     }
@@ -123,7 +123,7 @@ function setupAppStatePolling(): void {
       if (isActive) {
         stopBackgroundPolling();
         if (reconnectCallback) {
-          setTimeout(() => reconnectCallback(), 500);
+          setTimeout(() => reconnectCallback?.(), 500);
         }
       } else {
         startBackgroundPolling();
