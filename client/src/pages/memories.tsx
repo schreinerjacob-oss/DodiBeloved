@@ -226,8 +226,14 @@ export default function MemoriesPage() {
     }
   };
 
-  const handleDeleteDate = async (event: CalendarEvent) => {
-    if (!window.confirm(`Remove "${event.title}"?`)) return;
+  const handleDeleteDate = (event: CalendarEvent) => {
+    setConfirmDeleteDate(event);
+  };
+
+  const handleConfirmDeleteDate = async () => {
+    const event = confirmDeleteDate;
+    setConfirmDeleteDate(null);
+    if (!event) return;
     const { deleteCalendarEvent } = await import('@/lib/storage-encrypted');
     await deleteCalendarEvent(event.id);
     sendP2P({ type: 'calendar_event_delete', data: { id: event.id }, timestamp: Date.now() });
@@ -379,6 +385,7 @@ export default function MemoriesPage() {
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
   const [confirmDeleteMemoryId, setConfirmDeleteMemoryId] = useState<string | null>(null);
+  const [confirmDeleteDate, setConfirmDeleteDate] = useState<CalendarEvent | null>(null);
   const [editingCaption, setEditingCaption] = useState('');
 
   const handleDeleteMemory = (memoryId: string, e: React.MouseEvent) => {
@@ -835,6 +842,23 @@ export default function MemoriesPage() {
           }}
         />
       )}
+
+      <AlertDialog open={confirmDeleteDate !== null} onOpenChange={(open) => { if (!open) setConfirmDeleteDate(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this date?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{confirmDeleteDate?.title}&rdquo; will be removed for both of you.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDeleteDate} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmDeleteMemoryId !== null} onOpenChange={(open) => { if (!open) setConfirmDeleteMemoryId(null); }}>
         <AlertDialogContent>

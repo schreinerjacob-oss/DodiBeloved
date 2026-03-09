@@ -10,6 +10,11 @@ import { getNotifyServerUrl } from '@/lib/push-register';
 import { getPartnerPushToken } from '@/lib/push-token';
 import { Capacitor } from '@capacitor/core';
 
+// Dev-only logger — stripped from production builds by Vite/Rollup dead-code elimination.
+const log = import.meta.env.DEV
+  ? (...args: unknown[]) => log(...args)
+  : () => {};
+
 interface PeerConnectionState {
   connected: boolean;
   error: string | null;
@@ -99,7 +104,7 @@ function clearAggressiveReconnect() {
 function startAggressiveReconnect() {
   if (aggressiveReconnectInterval) return;
   aggressiveReconnectStartedAt = Date.now();
-  console.log('💓 [P2P] Starting aggressive reconnect heartbeat');
+  log('💓 [P2P] Starting aggressive reconnect heartbeat');
   aggressiveReconnectInterval = setInterval(() => {
     if (globalConn && globalConn.open) {
       clearAggressiveReconnect();
@@ -108,7 +113,7 @@ function startAggressiveReconnect() {
     if (!globalPartnerId) return;
     // After 30s of failed reconnect, force full peer re-init (like refresh)
     if (aggressiveReconnectStartedAt != null && Date.now() - aggressiveReconnectStartedAt > 30000) {
-      console.log('🔄 [P2P] Reconnect stuck 30s - forcing full peer re-init (like refresh)');
+      log('🔄 [P2P] Reconnect stuck 30s - forcing full peer re-init (like refresh)');
       clearAggressiveReconnect();
       // Always clear reconnecting state and notify so UI does not stay stuck
       reconnectAttempt = 0;
@@ -126,7 +131,7 @@ function startAggressiveReconnect() {
       notifyListeners();
       return;
     }
-    console.log('💓 [P2P] Aggressive reconnect heartbeat...');
+    log('💓 [P2P] Aggressive reconnect heartbeat...');
     connectToPartner(globalPartnerId);
   }, AGGRESSIVE_RECONNECT_INTERVAL);
 }
@@ -153,7 +158,7 @@ function startHealthCheck() {
     // Always use globalConn — avoids pinging a stale closed connection after reconnect
     const activeConn = globalConn;
     if (activeConn && activeConn.open) {
-      console.log('📡 Sending health check ping...');
+      log('📡 Sending health check ping...');
       activeConn.send({ type: 'ping', timestamp: Date.now() });
 
       const timeSinceLastPong = Date.now() - lastPongReceived;
@@ -202,7 +207,7 @@ function startReconnecting() {
   notifyListeners(); // So UI shows "Reconnecting" immediately
 
   const backoff = Math.min(Math.pow(2, reconnectAttempt) * 1000, MAX_BACKOFF);
-  console.log(`📡 Reconnecting in ${backoff / 1000}s (Attempt ${reconnectAttempt + 1}) [backoff: 1s→2s→4s→8s…]`);
+  log(`📡 Reconnecting in ${backoff / 1000}s (Attempt ${reconnectAttempt + 1}) [backoff: 1s→2s→4s→8s…]`);
   
   firstMessageSentAfterReconnect = null;
   clearReconnectTimeout();
@@ -241,7 +246,7 @@ async function loadPersistentQueue() {
   try {
     const items = await getOfflineQueue();
     if (items.length > 0) {
-      console.log('📥 Loaded', items.length, 'messages from persistent queue');
+      log('📥 Loaded', items.length, 'messages from persistent queue');
       offlineQueue = items.map(item => item.message as SyncMessage);
       notifyQueueListeners(offlineQueue.length);
     } else {
@@ -301,7 +306,7 @@ function connectToPartner(targetId: string) {
   if (globalConn && globalConn.open && globalConn.peer === targetId && !isConnectionLikelyDead()) return;
   // Prevent pile-up: if a dial is already in progress, don't create another set of connections
   if (isPendingDial) {
-    console.log('⏳ [P2P] Dial already in progress, skipping duplicate attempt');
+    log('⏳ [P2P] Dial already in progress, skipping duplicate attempt');
     return;
   }
   // Stale connection (no pong) - close and replace with fresh attempt
@@ -314,7 +319,7 @@ function connectToPartner(targetId: string) {
 
   globalPartnerId = targetId;
   isPendingDial = true;
-  console.log('🔗 Dialing partner:', targetId);
+  log('🔗 Dialing partner:', targetId);
   const conn = globalPeer.connect(targetId, {
     reliable: true,
     serialization: 'json',
@@ -340,7 +345,7 @@ async function flushOfflineMediaQueue() {
     const queued = await getOfflineMediaQueue();
     if (queued.length === 0) return;
 
-    console.log('🖼️ [MEDIA] Flushing offline media queue:', queued.length);
+    log('🖼️ [MEDIA] Flushing offline media queue:', queued.length);
     for (const item of queued) {
       try {
         const cacheKey = `${item.mediaId}-${item.variant}`;
@@ -425,7 +430,7 @@ function setupMediaConnection(conn: DataConnection) {
   globalMediaConn = conn;
 
   conn.on('open', async () => {
-    console.log('🖼️ [MEDIA] Binary channel established with:', conn.peer);
+    log('🖼️ [MEDIA] Binary channel established with:', conn.peer);
     // New connection: allow resend attempts for pending media
     inFlightMedia.clear();
     // Flush queued media on connect
@@ -436,7 +441,7 @@ function setupMediaConnection(conn: DataConnection) {
     // ACK from receiver → mark synced
     if (data?.type === 'media-ack' && data.mediaId) {
       const variant = (data.variant === 'full' ? 'full' : 'preview') as MediaVariant;
-      console.log('✅ [MEDIA] Image synced:', data.mediaId, variant);
+      log('✅ [MEDIA] Image synced:', data.mediaId, variant);
       try {
         await removeFromOfflineMediaQueue(data.mediaId, variant);
       } catch {}
@@ -484,7 +489,7 @@ function setupMediaConnection(conn: DataConnection) {
       try {
         const blob = new Blob(entry.chunks, { type: entry.mime });
         await saveMediaBlob(data.mediaId, blob, entry.kind, entry.variant);
-        console.log('📥 [MEDIA] Image stored locally:', data.mediaId, entry.variant);
+        log('📥 [MEDIA] Image stored locally:', data.mediaId, entry.variant);
         window.dispatchEvent(new CustomEvent('dodi-media-ready', { detail: { mediaId: data.mediaId, kind: entry.kind, variant: entry.variant } }));
 
         // Send ACK to sender
@@ -517,7 +522,7 @@ const WAKE_UP_PING_TIMEOUT_MS = 2000;
 function safeClose(conn: DataConnection, label: string): void {
   try {
     conn.close();
-    console.log('✅ Wake-up ping:', label);
+    log('✅ Wake-up ping:', label);
   } catch (e) {
     // close() may throw if already closed or in bad state (e.g. some mobile browsers)
     console.warn('Wake-up ping close (ignored):', e);
@@ -527,8 +532,8 @@ function safeClose(conn: DataConnection, label: string): void {
 // Send a tiny wake-up signal via signaling server (Relay)
 function sendWakeUpPing(partnerId: string) {
   if (!globalPeer || globalPeer.destroyed || globalPeer.disconnected) return;
-  console.log('Wake-up ping sent');
-  console.log('📡 Sending wake-up ping to partner via relay:', partnerId);
+  log('Wake-up ping sent');
+  log('📡 Sending wake-up ping to partner via relay:', partnerId);
 
   const conn = globalPeer.connect(partnerId, {
     reliable: false,
@@ -580,7 +585,7 @@ async function flushOfflineQueue(conn: DataConnection) {
   
   queueFlushInProgress = true;
   const queueSize = offlineQueue.length;
-  console.log('🔄 Flushing offline queue:', queueSize, 'messages');
+  log('🔄 Flushing offline queue:', queueSize, 'messages');
   
   const toSend = [...offlineQueue];
   const sentIds: string[] = [];
@@ -593,7 +598,7 @@ async function flushOfflineQueue(conn: DataConnection) {
     
     try {
       conn.send(msg);
-      console.log('📤 Queued message sent:', msg.type, msgId);
+      log('📤 Queued message sent:', msg.type, msgId);
       sentIds.push(msgId);
       
       // Remove from persistent storage after successful send
@@ -616,7 +621,7 @@ async function flushOfflineQueue(conn: DataConnection) {
     queueIntendedForPartnerId = null;
   }
   queueFlushInProgress = false;
-  console.log(`✅ Offline queue flushed: ${sentIds.length} sent, ${failedCount} failed`);
+  log(`✅ Offline queue flushed: ${sentIds.length} sent, ${failedCount} failed`);
   
   // Notify user that queued messages were delivered
   if (sentIds.length > 0) {
@@ -629,7 +634,7 @@ function setupConnection(conn: DataConnection) {
   // If we already have an open connection to the same peer, don't overwrite it
   // unless the new one is actually open and the old one isn't.
   if (globalConn && globalConn.open && globalConn.peer === conn.peer && globalConn !== conn) {
-    console.log('🚫 Connection already open for', conn.peer, '- closing redundant connection');
+    log('🚫 Connection already open for', conn.peer, '- closing redundant connection');
     conn.close();
     return;
   }
@@ -669,10 +674,10 @@ function setupConnection(conn: DataConnection) {
       }
 
       if (batch.length > 0) {
-        console.log('📤 Sending reconciliation batch:', batch.length);
+        log('📤 Sending reconciliation batch:', batch.length);
         conn.send({ type: 'reconcile-data', batch });
       } else {
-        console.log('✨ [SYNC] No new items to sync to partner.');
+        log('✨ [SYNC] No new items to sync to partner.');
       }
     } catch (e) {
       console.error('Reconciliation push failed:', e);
@@ -680,7 +685,7 @@ function setupConnection(conn: DataConnection) {
   }
 
   async function handleReconcileData(batch: any[]) {
-    console.log('📥 Processing reconciliation batch:', batch.length);
+    log('📥 Processing reconciliation batch:', batch.length);
     const { setLastSynced, saveIncomingItems } = await import('@/lib/storage-encrypted');
     
     const itemsByStore: Record<string, any[]> = {};
@@ -703,7 +708,7 @@ function setupConnection(conn: DataConnection) {
       }
     }
     
-    console.log(`✅ Reconciled ${totalApplied} items from partner since last sync`);
+    log(`✅ Reconciled ${totalApplied} items from partner since last sync`);
     globalSyncInProgress = false;
     window.dispatchEvent(new CustomEvent('reconciliation-complete', { detail: { count: totalApplied } }));
     import('@/lib/queryClient').then(({ queryClient }) => queryClient.invalidateQueries());
@@ -714,10 +719,10 @@ function setupConnection(conn: DataConnection) {
     isPendingDial = false; // Dial succeeded — allow future dials
     if (reconnectStartedAt != null) {
       const latency = Date.now() - reconnectStartedAt;
-      console.log(`⏱️ [RECONNECT] Tunnel re-established in ${latency}ms`);
+      log(`⏱️ [RECONNECT] Tunnel re-established in ${latency}ms`);
       reconnectStartedAt = null;
     }
-    console.log('✨ Persistent Direct P2P connection established with:', conn.peer);
+    log('✨ Persistent Direct P2P connection established with:', conn.peer);
     reconnectAttempt = 0;
     globalSyncCancelled = false; // Reset cancellation on new connection
     clearReconnectTimeout();
@@ -734,13 +739,13 @@ function setupConnection(conn: DataConnection) {
       for (const store of stores) {
         lastSyncedTimestamps[store] = await getLastSynced(store);
       }
-      console.log('📡 Initiating reconciliation with timestamps:', lastSyncedTimestamps);
+      log('📡 Initiating reconciliation with timestamps:', lastSyncedTimestamps);
       conn.send({ type: 'reconcile-init', timestamps: lastSyncedTimestamps });
 
       // PHASE 2: Check for older data to sync in background
       const batch = await getBatchForRestore(stores, lastSyncedTimestamps, 50);
       if (batch.length > 0) {
-        console.log('🔄 [RESTORE] Queueing background batch sync for older data...');
+        log('🔄 [RESTORE] Queueing background batch sync for older data...');
         setTimeout(() => {
           if (conn.open) {
             conn.send({ type: 'restore-batch-init', timestamps: lastSyncedTimestamps });
@@ -768,14 +773,14 @@ function setupConnection(conn: DataConnection) {
 
   conn.on('data', async (data: any) => {
     try {
-    console.log('📩 INCOMING:', data.type || 'unknown');
+    log('📩 INCOMING:', data.type || 'unknown');
     // Any incoming data proves the connection is alive — reset pong timer so media
     // transfers don't trigger a false "no pong" health-check timeout.
     lastPongReceived = Date.now();
 
     if (data.timestamp && firstMessageSentAfterReconnect) {
       const latency = Date.now() - firstMessageSentAfterReconnect;
-      console.log(`⏱️ [LATENCY] First message after reconnect: ${latency}ms`);
+      log(`⏱️ [LATENCY] First message after reconnect: ${latency}ms`);
       firstMessageSentAfterReconnect = null;
     }
 
@@ -786,7 +791,7 @@ function setupConnection(conn: DataConnection) {
       return;
     }
     if (data.type === 'pong') {
-      console.log('✅ Pong received - connection healthy');
+      log('✅ Pong received - connection healthy');
       lastPongReceived = Date.now();
       // Notify listeners to ensure UI reflects 'connected' status immediately
       notifyListeners();
@@ -818,12 +823,12 @@ function setupConnection(conn: DataConnection) {
     }
 
     if (data.type === 'restore-key') {
-      console.log('♾️ [RESTORE] Master key received via restoration tunnel');
+      log('♾️ [RESTORE] Master key received via restoration tunnel');
       
       let payload = data;
       // If encrypted, decrypt first
       if (data.encrypted && data.iv) {
-        console.log('🔓 [RESTORE] Decrypting restoration payload...');
+        log('🔓 [RESTORE] Decrypting restoration payload...');
         // We need the shared key from the tunnel handshake
         // In the current architecture, the tunnel handshake is handled in pairing.tsx
         // but the message comes here. We dispatch the event and let pairing.tsx handle it.
@@ -840,10 +845,10 @@ function setupConnection(conn: DataConnection) {
       const processNextBatch = async () => {
         const batch = await getBatchForRestore(stores, data.timestamps ?? {}, 50);
         if (batch.length > 0) {
-          console.log('📤 Sending older data batch:', batch.length);
+          log('📤 Sending older data batch:', batch.length);
           conn.send({ type: 'restore-batch-data', batch, timestamps: data.timestamps ?? {} });
         } else {
-          console.log('✅ Background restoration complete');
+          log('✅ Background restoration complete');
           conn.send({ type: 'restore-batch-complete' });
         }
       };
@@ -854,10 +859,10 @@ function setupConnection(conn: DataConnection) {
 
     if (data.type === 'restore-batch-data') {
       if (globalSyncCancelled) {
-        console.log('🛑 [SYNC] Restore batch ignored due to cancellation');
+        log('🛑 [SYNC] Restore batch ignored due to cancellation');
         return;
       }
-      console.log('📥 Processing older data batch:', data.batch.length);
+      log('📥 Processing older data batch:', data.batch.length);
       const { saveIncomingItems } = await import('@/lib/storage-encrypted');
       
       const itemsByStore: Record<string, any[]> = {};
@@ -877,7 +882,7 @@ function setupConnection(conn: DataConnection) {
         if (conn.open && !globalSyncCancelled) {
           conn.send({ type: 'restore-batch-init', timestamps: data.timestamps ?? {} });
         } else if (globalSyncCancelled) {
-          console.log('🛑 [SYNC] Batch request skipped due to cancellation');
+          log('🛑 [SYNC] Batch request skipped due to cancellation');
         }
       }, 500);
       return;
@@ -904,7 +909,7 @@ function setupConnection(conn: DataConnection) {
   conn.on('close', () => {
     clearOpenTimeout();
     isPendingDial = false; // Dial ended — allow future dials
-    console.log('XY Connection lost');
+    log('XY Connection lost');
     if (globalConn === conn) globalConn = null;
     clearHealthCheck();
     notifyListeners();
@@ -1011,7 +1016,7 @@ export async function waitForConnection(peer: Peer, timeout: number): Promise<Da
 
 export async function connectToRoom(peer: Peer, remoteId: string, timeout: number): Promise<DataConnection> {
   return new Promise((resolve, reject) => {
-    console.log(`📡 [P2P] Attempting to connect to remote peer: ${remoteId}`);
+    log(`📡 [P2P] Attempting to connect to remote peer: ${remoteId}`);
     // Explicitly set serialization for consistency
     const conn = peer.connect(remoteId, {
       reliable: true,
@@ -1028,7 +1033,7 @@ export async function connectToRoom(peer: Peer, remoteId: string, timeout: numbe
 
     conn.on('open', () => {
       clearTimeout(t);
-      console.log('✅ [P2P] Connection opened with remote peer');
+      log('✅ [P2P] Connection opened with remote peer');
       resolve(conn);
     });
 
@@ -1074,7 +1079,7 @@ export async function sendP2PMessage(message: SyncMessage) {
   if (globalConn && globalConn.open) {
     try {
       globalConn.send(message);
-      console.log('📤 Message sent via P2P:', message.type);
+      log('📤 Message sent via P2P:', message.type);
       const notifyOpts = message.type === 'call-offer'
         ? { type: 'call' as const, callType: (message.data as { callType?: 'audio' | 'video' })?.callType ?? 'audio' }
         : undefined;
@@ -1087,7 +1092,7 @@ export async function sendP2PMessage(message: SyncMessage) {
 
   // Queue the message if offline or send failed
   const msgId = (message.data as any)?.id || `msg-${Date.now()}`;
-  console.log('📥 Connection offline, queuing message:', msgId);
+  log('📥 Connection offline, queuing message:', msgId);
   
   // Check for duplicates in memory queue
   if (!offlineQueue.some(m => (m.data as any)?.id === msgId)) {
@@ -1169,7 +1174,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   useEffect(() => {
     if (pairingStatus !== 'connected' || !userId) {
       if (globalPeer) {
-        console.log('🛑 [P2P] Destroying peer due to disconnection or logout');
+        log('🛑 [P2P] Destroying peer due to disconnection or logout');
         removePeerListeners(globalPeer);
         globalPeer.destroy();
         globalPeer = null;
@@ -1198,8 +1203,8 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       clearHealthCheck();
     }
 
-    console.log('🌐 Starting Private P2P Network Service (No Servers) for:', userId);
-    console.log('📡 Direct device-to-device handshake started');
+    log('🌐 Starting Private P2P Network Service (No Servers) for:', userId);
+    log('📡 Direct device-to-device handshake started');
     
     const peer = new Peer(userId, {
       host: '0.peerjs.com',
@@ -1220,7 +1225,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     globalPeer = peer;
 
     const handleOpen = (id: string) => {
-      console.log('✅ My Peer ID is active:', id);
+      log('✅ My Peer ID is active:', id);
       notifyListeners();
       const target = globalPartnerId ?? partnerIdRef.current;
       if (target) connectToPartner(target);
@@ -1230,7 +1235,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       console.error('PeerJS Error:', err);
       const e = err as { type?: string; message?: string };
       if (e.type === 'unavailable-id' || e.type === 'network' || e.type === 'server-error') {
-        console.log('🔄 Peer error detected, rebuilding peer in 5s...');
+        log('🔄 Peer error detected, rebuilding peer in 5s...');
         setTimeout(() => {
           if (!peer.destroyed) {
             peer.destroy();
@@ -1243,13 +1248,13 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     };
 
     const handleDisconnected = () => {
-      console.log('📡 Disconnected from signaling server. Attempting reconnect...');
+      log('📡 Disconnected from signaling server. Attempting reconnect...');
       notifyListeners();
       peer.reconnect();
       if (disconnectTimeoutId) clearTimeout(disconnectTimeoutId);
       disconnectTimeoutId = setTimeout(() => {
         if (peer.disconnected && !peer.destroyed) {
-          console.log('🔄 Reconnect timed out, rebuilding peer...');
+          log('🔄 Reconnect timed out, rebuilding peer...');
           removePeerListeners(peer);
           peer.destroy();
           if (globalPeer === peer) {
@@ -1271,7 +1276,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
     const handleConnection = (conn: DataConnection) => {
       const label = (conn as DataConnection & { label?: string }).label;
-      console.log('📞 Incoming connection from:', conn.peer, label ? `(label: ${label})` : '');
+      log('📞 Incoming connection from:', conn.peer, label ? `(label: ${label})` : '');
       const expectedPartner = globalPartnerId ?? partnerIdRef.current;
 
       if (conn.metadata?.type === 'wake-up') {
@@ -1280,9 +1285,9 @@ export function usePeerConnection(): UsePeerConnectionReturn {
           conn.close();
           return;
         }
-        console.log('Wake-up ping received – reconnecting');
+        log('Wake-up ping received – reconnecting');
         if (!globalConn || !globalConn.open) {
-          console.log('🌱 Reconnected direct after ping');
+          log('🌱 Reconnected direct after ping');
           connectToPartner(conn.peer);
         } else {
           globalConn.send({ type: 'ping', timestamp: Date.now() });
@@ -1299,7 +1304,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
 
       if (label === 'media') {
         if (globalMediaConn && globalMediaConn.open && globalMediaConn.peer === conn.peer) {
-          console.log('♻️ Reusing existing media connection for:', conn.peer);
+          log('♻️ Reusing existing media connection for:', conn.peer);
           conn.close();
           return;
         }
@@ -1308,7 +1313,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       }
 
       if (globalConn && globalConn.open && globalConn.peer === conn.peer) {
-        console.log('♻️ Reusing existing open connection for:', conn.peer);
+        log('♻️ Reusing existing open connection for:', conn.peer);
         conn.close();
         return;
       }
@@ -1344,7 +1349,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       notifyListeners();
       setTimeout(() => {
         if (!globalConn || !globalConn.open) {
-          console.log('👀 [P2P] App active - connection down, triggering reconnect');
+          log('👀 [P2P] App active - connection down, triggering reconnect');
           reconnectAttempt = 0;
           connectToPartner(pid);
         }
@@ -1363,7 +1368,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
         }).then((listener) => { listenerRef.current = listener.remove; });
       });
       if (partnerId) {
-        console.log('🔗 partnerId changed, connecting to:', partnerId);
+        log('🔗 partnerId changed, connecting to:', partnerId);
         connectToPartner(partnerId);
       }
       return () => { listenerRef.current?.(); };
@@ -1374,17 +1379,17 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     if (!partnerId || !globalPeer || globalPeer.destroyed) {
       return () => document.removeEventListener('visibilitychange', handleVisibility);
     }
-    console.log('🔗 partnerId changed, connecting to:', partnerId);
+    log('🔗 partnerId changed, connecting to:', partnerId);
     connectToPartner(partnerId);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [partnerId]);
 
   const send = useCallback(async (message: SyncMessage) => {
-    console.log('📤 [P2P] Attempting to send message:', message.type);
+    log('📤 [P2P] Attempting to send message:', message.type);
     sendP2PMessage(message);
     if (!globalConn || !globalConn.open) {
       if (partnerId) {
-        console.log('📡 [P2P] Device offline, triggered background connect');
+        log('📡 [P2P] Device offline, triggered background connect');
         connectToPartner(partnerId);
         if (allowWakeUp) {
           sendWakeUpPing(partnerId);
@@ -1405,7 +1410,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       const alreadyQueued = await isInOfflineMediaQueue(mediaId, variant);
       if (!alreadyQueued) {
         await saveToOfflineMediaQueue(mediaId, kind, mime, variant);
-        console.log('🖼️ [MEDIA] Image queued:', mediaId, variant);
+        log('🖼️ [MEDIA] Image queued:', mediaId, variant);
       }
 
       if (globalMediaConn && globalMediaConn.open) {
@@ -1415,7 +1420,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
           if (Date.now() - lastSentAt >= MEDIA_RESEND_COOLDOWN_MS) {
             inFlightMedia.set(cacheKey, Date.now());
             await sendMediaInternal({ mediaId, kind, mime, blob, variant });
-            console.log('🖼️ [MEDIA] Image sent:', mediaId, variant);
+            log('🖼️ [MEDIA] Image sent:', mediaId, variant);
           }
           return;
         } catch (e) {
@@ -1434,7 +1439,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   const reconnect = useCallback((force?: boolean) => {
     if (force) {
       // Full re-init like refresh: destroy peer so effect creates a new one
-      console.log('🔄 [P2P] Force reconnect - full peer re-init');
+      log('🔄 [P2P] Force reconnect - full peer re-init');
       if (globalPeer) {
         removePeerListeners(globalPeer);
         globalPeer.destroy();
@@ -1464,7 +1469,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
   // Handle sync cancellation
   useEffect(() => {
     const handleCancel = () => {
-      console.log('🛑 [SYNC] Global sync cancellation requested');
+      log('🛑 [SYNC] Global sync cancellation requested');
       globalSyncCancelled = true;
       globalSyncInProgress = false;
     };
@@ -1485,7 +1490,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     const interval = setInterval(() => {
       notifyListeners();
       if (globalConn && globalConn.open && isConnectionLikelyDead()) {
-        console.log('📡 [P2P] Periodic check: stale connection - triggering reconnect');
+        log('📡 [P2P] Periodic check: stale connection - triggering reconnect');
         globalConn.close();
         globalConn = null;
         clearHealthCheck();
@@ -1494,7 +1499,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
       }
       if (!globalConn || !globalConn.open) {
         if (partnerId) {
-          console.log(`📡 [${allowWakeUp ? 'ACTIVE' : 'POLLING'}] Attempting P2P connection...`);
+          log(`📡 [${allowWakeUp ? 'ACTIVE' : 'POLLING'}] Attempting P2P connection...`);
           connectToPartner(partnerId);
         }
       }
@@ -1507,7 +1512,7 @@ export function usePeerConnection(): UsePeerConnectionReturn {
     if (pairingStatus !== 'connected' || !partnerId) return;
     
     initializeBackgroundSync(() => {
-      console.log('⏰ Background sync: attempting P2P reconnect');
+      log('⏰ Background sync: attempting P2P reconnect');
       if (!globalConn || !globalConn.open) {
         connectToPartner(partnerId);
       }
