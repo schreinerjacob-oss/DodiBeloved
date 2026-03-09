@@ -701,7 +701,7 @@ export default function CallsPage() {
     }
 
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current.getTracks().forEach((track) => track?.stop());
       localStreamRef.current = null;
     }
     remoteStreamRef.current = null;

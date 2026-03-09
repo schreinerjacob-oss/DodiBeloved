@@ -199,8 +199,8 @@ export default function ChatPage() {
     return () => {
       const recorder = mediaRecorderRef.current;
       const stream = recordingStreamRef.current;
-      if (recorder?.state !== 'inactive') recorder.stop();
-      stream?.getTracks().forEach((t) => t.stop());
+      if (recorder && recorder.state !== 'inactive') recorder.stop();
+      stream?.getTracks().forEach((t) => t?.stop());
       recordingStreamRef.current = null;
       mediaRecorderRef.current = null;
     };
@@ -211,8 +211,8 @@ export default function ChatPage() {
     return () => {
       const recorder = videoRecorderRef.current;
       const stream = videoStreamRef.current;
-      if (recorder?.state !== 'inactive') recorder.stop();
-      stream?.getTracks().forEach((t) => t.stop());
+      if (recorder && recorder.state !== 'inactive') recorder.stop();
+      stream?.getTracks().forEach((t) => t?.stop());
       videoStreamRef.current = null;
       videoRecorderRef.current = null;
       recordingTimerRef.current && clearInterval(recordingTimerRef.current);
@@ -234,7 +234,7 @@ export default function ChatPage() {
           audio: true,
         });
         if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
+          stream.getTracks().forEach((t) => t?.stop());
           return;
         }
         videoStreamRef.current = stream;
@@ -257,7 +257,7 @@ export default function ChatPage() {
     })();
     return () => {
       cancelled = true;
-      videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+      videoStreamRef.current?.getTracks().forEach((t) => t?.stop());
       videoStreamRef.current = null;
       setStreamForPreview(null);
       recordingTimerRef.current && clearInterval(recordingTimerRef.current);
@@ -846,8 +846,8 @@ export default function ChatPage() {
       // Stop recording and send; always release stream so tracks are stopped (avoid leak)
       const recorder = mediaRecorderRef.current;
       const stream = recordingStreamRef.current;
-      if (recorder?.state !== 'inactive') recorder.stop();
-      stream?.getTracks().forEach((t) => t.stop());
+      if (recorder && recorder.state !== 'inactive') recorder.stop();
+      stream?.getTracks().forEach((t) => t?.stop());
       recordingStreamRef.current = null;
       mediaRecorderRef.current = null;
       setIsRecording(false);
@@ -956,8 +956,8 @@ export default function ChatPage() {
   };
 
   const handleVideoDialogClose = () => {
-    if (videoRecorderRef.current?.state !== 'inactive') videoRecorderRef.current.stop();
-    videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+    if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') videoRecorderRef.current.stop();
+    videoStreamRef.current?.getTracks().forEach((t) => t?.stop());
     videoStreamRef.current = null;
     setStreamForPreview(null);
     if (recordedBlobUrl) URL.revokeObjectURL(recordedBlobUrl);
@@ -980,7 +980,7 @@ export default function ChatPage() {
           : { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
         audio: true,
       });
-      videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+      videoStreamRef.current?.getTracks().forEach((t) => t?.stop());
       videoStreamRef.current = stream;
       setStreamForPreview(stream);
       setSelectedVideoDeviceId(deviceId);
@@ -1012,7 +1012,7 @@ export default function ChatPage() {
       if (blob.size === 0) {
         setVideoRecordingError('Recording too short. Try again.');
         setVideoStage('preview');
-        videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+        videoStreamRef.current?.getTracks().forEach((t) => t?.stop());
         videoStreamRef.current = null;
         setStreamForPreview(null);
         return;
@@ -1022,7 +1022,7 @@ export default function ChatPage() {
       setRecordedBlobUrl(url);
       setVideoStage('review');
       setVideoRecordingError(null);
-      videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+      videoStreamRef.current?.getTracks().forEach((t) => t?.stop());
       videoStreamRef.current = null;
       setStreamForPreview(null);
     };
@@ -1036,7 +1036,7 @@ export default function ChatPage() {
   }, []);
 
   const handleStopVideoRecording = useCallback(() => {
-    if (videoRecorderRef.current?.state !== 'inactive') videoRecorderRef.current.stop();
+    if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') videoRecorderRef.current.stop();
   }, []);
 
   const handleVideoRetry = useCallback(async () => {
@@ -1045,7 +1045,7 @@ export default function ChatPage() {
     setRecordedBlobUrl(null);
     setVideoStage('preview');
     setVideoRecordingError(null);
-    videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+    videoStreamRef.current?.getTracks().forEach((t) => t?.stop());
     videoStreamRef.current = null;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -1054,7 +1054,7 @@ export default function ChatPage() {
           : { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
         audio: true,
       });
-      videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+      videoStreamRef.current?.getTracks().forEach((t) => t?.stop());
       videoStreamRef.current = stream;
       setStreamForPreview(stream);
     } catch (e) {
